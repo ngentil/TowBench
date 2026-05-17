@@ -6,18 +6,33 @@ import TowingSection from './components/towing/TowingSection';
 export default function App() {
   const [session,     setSession]     = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
-  const [email,       setEmail]       = useState('');
-  const [password,    setPassword]    = useState('');
-  const [loggingIn,   setLoggingIn]   = useState(false);
-  const [loginErr,    setLoginErr]    = useState('');
+  const [driver,      setDriver]      = useState(null);
+
+  const [name,      setName]      = useState('');
+  const [daLast4,   setDaLast4]   = useState('');
+  const [pin,       setPin]       = useState('');
+  const [loggingIn, setLoggingIn] = useState(false);
+  const [loginErr,  setLoginErr]  = useState('');
+
+  const loadDriver = async (email) => {
+    const { data } = await supabase
+      .from('drivers')
+      .select('*')
+      .eq('auth_email', email)
+      .single();
+    setDriver(data || null);
+  };
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setAuthChecked(true);
+      if (session) loadDriver(session.user.email);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
+      if (session) loadDriver(session.user.email);
+      else setDriver(null);
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -26,12 +41,27 @@ export default function App() {
     e.preventDefault();
     setLoggingIn(true);
     setLoginErr('');
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) setLoginErr(error.message);
+    try {
+      const { data: email, error: rpcErr } = await supabase.rpc('get_driver_auth_email', {
+        p_name:     name.trim(),
+        p_da_last4: daLast4.trim(),
+      });
+      if (rpcErr || !email) {
+        setLoginErr('Driver not found. Check your name and DA number.');
+        setLoggingIn(false);
+        return;
+      }
+      const { error } = await supabase.auth.signInWithPassword({ email, password: pin });
+      if (error) setLoginErr(error.message);
+    } catch (e) {
+      setLoginErr(e.message);
+    }
     setLoggingIn(false);
   };
 
   const signOut = () => supabase.auth.signOut();
+
+  const isAdmin = driver?.role === 'admin';
 
   if (!authChecked) {
     return (
@@ -58,25 +88,40 @@ export default function App() {
 
           <form onSubmit={signIn} style={{ background: SURF, border: '1px solid ' + BRD, borderTop: '2px solid ' + ACC, borderRadius: 3, padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div>
-              <div style={{ fontSize: 9, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}>Email</div>
+              <div style={{ fontSize: 9, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}>Full Name</div>
               <input
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                placeholder="admin@example.com"
+                type="text"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="e.g. Nathan Gentil"
                 required
                 autoFocus
                 style={{ background: '#0a0a0a', border: '1px solid #252525', color: TXT, fontFamily: "'IBM Plex Mono',monospace", fontSize: 12, padding: '8px 10px', borderRadius: 2, width: '100%', outline: 'none', boxSizing: 'border-box' }}
               />
             </div>
             <div>
-              <div style={{ fontSize: 9, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}>Password</div>
+              <div style={{ fontSize: 9, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}>Last 4 of DA Number</div>
+              <input
+                type="text"
+                value={daLast4}
+                onChange={e => setDaLast4(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                placeholder="e.g. 9261"
+                required
+                maxLength={4}
+                inputMode="numeric"
+                style={{ background: '#0a0a0a', border: '1px solid #252525', color: TXT, fontFamily: "'IBM Plex Mono',monospace", fontSize: 12, padding: '8px 10px', borderRadius: 2, width: '100%', outline: 'none', boxSizing: 'border-box' }}
+              />
+            </div>
+            <div>
+              <div style={{ fontSize: 9, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}>6-Digit PIN</div>
               <input
                 type="password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder="••••••••"
+                value={pin}
+                onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="••••••"
                 required
+                maxLength={6}
+                inputMode="numeric"
                 style={{ background: '#0a0a0a', border: '1px solid #252525', color: TXT, fontFamily: "'IBM Plex Mono',monospace", fontSize: 12, padding: '8px 10px', borderRadius: 2, width: '100%', outline: 'none', boxSizing: 'border-box' }}
               />
             </div>
@@ -101,14 +146,26 @@ export default function App() {
           🚛 TowBench
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 9, color: MUT }}>{session.user.email}</span>
+          {driver && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 9, color: MUT }}>
+                {driver.name}
+                {driver.da_last4 && <span style={{ marginLeft: 4 }}>· DA ···{driver.da_last4}</span>}
+              </span>
+              {isAdmin && (
+                <span style={{ fontSize: 7, fontWeight: 700, letterSpacing: '0.1em', padding: '1px 5px', border: `1px solid ${ACC}55`, borderRadius: 2, color: ACC, background: ACC + '15', textTransform: 'uppercase' }}>
+                  Admin
+                </span>
+              )}
+            </div>
+          )}
           <button onClick={signOut} style={{ ...btnG, ...sm, fontSize: 8 }}>Sign Out</button>
         </div>
       </div>
 
       {/* Content */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <TowingSection />
+        <TowingSection isAdmin={isAdmin} />
       </div>
     </div>
   );

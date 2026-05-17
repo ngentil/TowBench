@@ -10,7 +10,7 @@ const TABS = [
   { id: 'fleet',       label: '🚛 Fleet' },
 ];
 
-export default function TowingSection() {
+export default function TowingSection({ isAdmin }) {
   const [tab, setTab] = useState('allocations');
 
   return (
@@ -26,7 +26,7 @@ export default function TowingSection() {
       <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
         {tab === 'allocations' && <TowAllocationsTab />}
         {tab === 'analytics'   && <TowAnalyticsTab />}
-        {tab === 'fleet'       && <FleetTab />}
+        {tab === 'fleet'       && <FleetTab isAdmin={isAdmin} />}
       </div>
     </div>
   );
