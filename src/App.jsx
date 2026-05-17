@@ -93,7 +93,7 @@ export default function App() {
                 type="text"
                 value={name}
                 onChange={e => setName(e.target.value)}
-                placeholder="e.g. Nathan Gentil"
+                placeholder="Your full name"
                 required
                 autoFocus
                 style={{ background: '#0a0a0a', border: '1px solid #252525', color: TXT, fontFamily: "'IBM Plex Mono',monospace", fontSize: 12, padding: '8px 10px', borderRadius: 2, width: '100%', outline: 'none', boxSizing: 'border-box' }}
@@ -105,7 +105,7 @@ export default function App() {
                 type="text"
                 value={daLast4}
                 onChange={e => setDaLast4(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                placeholder="e.g. 9261"
+                placeholder="e.g. 1234"
                 required
                 maxLength={4}
                 inputMode="numeric"
