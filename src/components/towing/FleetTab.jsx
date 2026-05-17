@@ -317,7 +317,7 @@ function AvailabilityModal({ truck, onSave, onCancel }) {
 }
 
 // ── Main Fleet tab ────────────────────────────────────────────────────────────
-export default function FleetTab() {
+export default function FleetTab({ isAdmin }) {
   const [depots,  setDepots]  = useState([]);
   const [trucks,  setTrucks]  = useState([]);
   const [loading, setLoading] = useState(true);
@@ -395,10 +395,12 @@ export default function FleetTab() {
             {onJob > 0     && <span style={{ color: ORANGE, marginLeft: 8 }}>· {onJob} on job</span>}
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 6 }}>
-          <button onClick={() => setDepotForm({})} style={{ ...btnG, ...sm, fontSize: 8 }}>+ Depot</button>
-          <button onClick={() => setTruckForm({})} style={{ ...btnA, ...sm, fontSize: 8 }} disabled={depots.length === 0} title={depots.length === 0 ? 'Add a depot first' : ''}>+ Truck</button>
-        </div>
+        {isAdmin && (
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button onClick={() => setDepotForm({})} style={{ ...btnG, ...sm, fontSize: 8 }}>+ Depot</button>
+            <button onClick={() => setTruckForm({})} style={{ ...btnA, ...sm, fontSize: 8 }} disabled={depots.length === 0} title={depots.length === 0 ? 'Add a depot first' : ''}>+ Truck</button>
+          </div>
+        )}
       </div>
 
       {err && <div style={{ fontSize: 9, color: RED, marginBottom: 12 }}>{err}</div>}
@@ -407,8 +409,8 @@ export default function FleetTab() {
 
       {!loading && depots.length === 0 && (
         <div style={{ fontSize: 10, color: MUT, textAlign: 'center', padding: '32px 0', lineHeight: 1.8 }}>
-          No depots yet.<br />
-          <button onClick={() => setDepotForm({})} style={{ ...btnA, ...sm, marginTop: 8 }}>Add First Depot</button>
+          No depots yet.
+          {isAdmin && <><br /><button onClick={() => setDepotForm({})} style={{ ...btnA, ...sm, marginTop: 8 }}>Add First Depot</button></>}
         </div>
       )}
 
@@ -421,10 +423,12 @@ export default function FleetTab() {
               {depot.suburb && <span style={{ fontSize: 8, color: MUT, marginLeft: 6 }}>{depot.suburb}</span>}
               <span style={{ fontSize: 8, color: MUT, marginLeft: 8 }}>{dTrucks.length} truck{dTrucks.length !== 1 ? 's' : ''}</span>
             </div>
-            <div style={{ display: 'flex', gap: 4 }}>
-              <button onClick={() => setDepotForm(depot)} style={{ ...btnG, ...sm, fontSize: 8 }}>Edit</button>
-              <button onClick={() => handleDeleteDepot(depot)} style={{ ...btnD, ...sm, fontSize: 8 }}>Delete</button>
-            </div>
+            {isAdmin && (
+              <div style={{ display: 'flex', gap: 4 }}>
+                <button onClick={() => setDepotForm(depot)} style={{ ...btnG, ...sm, fontSize: 8 }}>Edit</button>
+                <button onClick={() => handleDeleteDepot(depot)} style={{ ...btnD, ...sm, fontSize: 8 }}>Delete</button>
+              </div>
+            )}
           </div>
 
           {/* Trucks in this depot */}
@@ -434,14 +438,16 @@ export default function FleetTab() {
             </div>
           )}
           {dTrucks.map(truck => (
-            <TruckRow key={truck.id} truck={truck} onEdit={() => setTruckForm(truck)} onDelete={() => handleDeleteTruck(truck)} onAvail={() => setAvailModal(truck)} />
+            <TruckRow key={truck.id} truck={truck} isAdmin={isAdmin} onEdit={() => setTruckForm(truck)} onDelete={() => handleDeleteTruck(truck)} onAvail={() => setAvailModal(truck)} />
           ))}
 
-          <button
-            onClick={() => setTruckForm({ depot_id: depot.id })}
-            style={{ fontSize: 8, color: MUT, border: '1px dashed #2a2a2a', borderRadius: 2, background: 'transparent', padding: '4px 10px', cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", marginTop: 4 }}>
-            + Add truck to {depot.name}
-          </button>
+          {isAdmin && (
+            <button
+              onClick={() => setTruckForm({ depot_id: depot.id })}
+              style={{ fontSize: 8, color: MUT, border: '1px dashed #2a2a2a', borderRadius: 2, background: 'transparent', padding: '4px 10px', cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", marginTop: 4 }}>
+              + Add truck to {depot.name}
+            </button>
+          )}
         </div>
       ))}
 
@@ -449,7 +455,7 @@ export default function FleetTab() {
         <div style={{ marginBottom: 16 }}>
           <div style={{ fontSize: 8, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 6, borderLeft: '2px solid #444', paddingLeft: 8 }}>Unassigned ({unassigned.length})</div>
           {unassigned.map(truck => (
-            <TruckRow key={truck.id} truck={truck} onEdit={() => setTruckForm(truck)} onDelete={() => handleDeleteTruck(truck)} onAvail={() => setAvailModal(truck)} />
+            <TruckRow key={truck.id} truck={truck} isAdmin={isAdmin} onEdit={() => setTruckForm(truck)} onDelete={() => handleDeleteTruck(truck)} onAvail={() => setAvailModal(truck)} />
           ))}
         </div>
       )}
@@ -482,7 +488,7 @@ export default function FleetTab() {
   );
 }
 
-function TruckRow({ truck, onEdit, onDelete, onAvail }) {
+function TruckRow({ truck, isAdmin, onEdit, onDelete, onAvail }) {
   const hasOverride = truck.override_active;
   const hasRelief   = !!(truck.relief_driver_name || truck.relief_da_number);
   const sc = hasOverride && !hasRelief ? RED : statusColor(truck.status);
@@ -533,11 +539,13 @@ function TruckRow({ truck, onEdit, onDelete, onAvail }) {
           <MiniRoster schedule={activeSched} />
         </div>
 
-        <div style={{ display: 'flex', gap: 4, flexShrink: 0, alignSelf: 'flex-start' }}>
-          <button onClick={onAvail}  style={{ ...btnG, ...sm, fontSize: 8, color: hasOverride ? '#cccc44' : MUT, borderColor: hasOverride ? '#5a5a14' : undefined }}>📅</button>
-          <button onClick={onEdit}   style={{ ...btnG, ...sm, fontSize: 8 }}>Edit</button>
-          <button onClick={onDelete} style={{ ...btnD, ...sm, fontSize: 8 }}>Delete</button>
-        </div>
+        {isAdmin && (
+          <div style={{ display: 'flex', gap: 4, flexShrink: 0, alignSelf: 'flex-start' }}>
+            <button onClick={onAvail}  style={{ ...btnG, ...sm, fontSize: 8, color: hasOverride ? '#cccc44' : MUT, borderColor: hasOverride ? '#5a5a14' : undefined }}>📅</button>
+            <button onClick={onEdit}   style={{ ...btnG, ...sm, fontSize: 8 }}>Edit</button>
+            <button onClick={onDelete} style={{ ...btnD, ...sm, fontSize: 8 }}>Delete</button>
+          </div>
+        )}
       </div>
     </div>
   );
