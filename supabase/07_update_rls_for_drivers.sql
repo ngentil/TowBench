@@ -1,0 +1,15 @@
+DROP POLICY IF EXISTS "depots_admin_only" ON depots;
+CREATE POLICY "depots_select"       ON depots FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "depots_admin_insert" ON depots FOR INSERT WITH CHECK (auth.email() = 'da9261@towbench.internal');
+CREATE POLICY "depots_admin_update" ON depots FOR UPDATE USING (auth.email() = 'da9261@towbench.internal');
+CREATE POLICY "depots_admin_delete" ON depots FOR DELETE USING (auth.email() = 'da9261@towbench.internal');
+DROP POLICY IF EXISTS "tow_trucks_admin_only" ON tow_trucks;
+CREATE POLICY "tow_trucks_select"       ON tow_trucks FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "tow_trucks_admin_insert" ON tow_trucks FOR INSERT WITH CHECK (auth.email() = 'da9261@towbench.internal');
+CREATE POLICY "tow_trucks_admin_update" ON tow_trucks FOR UPDATE USING (auth.email() = 'da9261@towbench.internal');
+CREATE POLICY "tow_trucks_admin_delete" ON tow_trucks FOR DELETE USING (auth.email() = 'da9261@towbench.internal');
+DROP POLICY IF EXISTS "tow_log_admin_only" ON tow_allocation_log;
+CREATE POLICY "tow_log_select"       ON tow_allocation_log FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "tow_log_admin_insert" ON tow_allocation_log FOR INSERT WITH CHECK (auth.email() = 'da9261@towbench.internal');
+CREATE POLICY "tow_log_admin_update" ON tow_allocation_log FOR UPDATE USING (auth.email() = 'da9261@towbench.internal');
+CREATE POLICY "tow_log_admin_delete" ON tow_allocation_log FOR DELETE USING (auth.email() = 'da9261@towbench.internal');
