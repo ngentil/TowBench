@@ -13,6 +13,7 @@ export default function App() {
   const [pin,       setPin]       = useState('');
   const [loggingIn, setLoggingIn] = useState(false);
   const [loginErr,  setLoginErr]  = useState('');
+  const [debugLog,  setDebugLog]  = useState([]);
 
   const loadDriver = async (email) => {
     const { data } = await supabase
@@ -41,21 +42,29 @@ export default function App() {
     e.preventDefault();
     setLoggingIn(true);
     setLoginErr('');
+    const log = [];
     try {
+      log.push(`RPC: name="${name.trim()}" da_last4="${daLast4.trim()}"`);
       const { data: email, error: rpcErr } = await supabase.rpc('get_driver_auth_email', {
         p_name:     name.trim(),
         p_da_last4: daLast4.trim(),
       });
+      log.push(`RPC result: email=${JSON.stringify(email)} err=${JSON.stringify(rpcErr)}`);
       if (rpcErr || !email) {
         setLoginErr('Driver not found. Check your name and DA number.');
+        setDebugLog(log);
         setLoggingIn(false);
         return;
       }
+      log.push(`Auth: signing in as ${email}`);
       const { error } = await supabase.auth.signInWithPassword({ email, password: pin });
+      log.push(`Auth result: err=${JSON.stringify(error)}`);
       if (error) setLoginErr(error.message);
     } catch (e) {
+      log.push(`Exception: ${e.message}`);
       setLoginErr(e.message);
     }
+    setDebugLog(log);
     setLoggingIn(false);
   };
 
@@ -127,6 +136,11 @@ export default function App() {
             </div>
             {loginErr && (
               <div style={{ fontSize: 9, color: RED, lineHeight: 1.5 }}>{loginErr}</div>
+            )}
+            {debugLog.length > 0 && (
+              <div style={{ fontSize: 8, color: '#888', background: '#0a0a0a', border: '1px solid #252525', borderRadius: 2, padding: '6px 8px', lineHeight: 1.8, wordBreak: 'break-all' }}>
+                {debugLog.map((l, i) => <div key={i}>{l}</div>)}
+              </div>
             )}
             <button type="submit" disabled={loggingIn}
               style={{ ...btnA, width: '100%', opacity: loggingIn ? 0.5 : 1, marginTop: 4 }}>
