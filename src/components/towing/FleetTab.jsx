@@ -35,7 +35,7 @@ function StatusBadge({ status }) {
   );
 }
 
-// ── Depot form modal ───────────────────────────────────────
+// ── Depot form modal ──────────────────────────────────────────────────────────
 function DepotForm({ depot, onSave, onCancel }) {
   const [name,   setName]   = useState(depot?.name   || '');
   const [suburb, setSuburb] = useState(depot?.suburb || '');
@@ -74,7 +74,7 @@ function DepotForm({ depot, onSave, onCancel }) {
   );
 }
 
-// ── Truck form modal ────────────────────────────────────
+// ── Truck form modal ──────────────────────────────────────────────────
 function TruckForm({ truck, depots, onSave, onCancel }) {
   const [plate,      setPlate]      = useState(truck?.plate       || '');
   const [daNumber,   setDaNumber]   = useState(truck?.da_number   || '');
@@ -171,7 +171,7 @@ function TruckForm({ truck, depots, onSave, onCancel }) {
   );
 }
 
-// ── Availability override modal ────────────────────────────────────────
+// ── Availability override modal ──────────────────────────────────────────────────────────
 function AvailabilityModal({ truck, onSave, onCancel }) {
   const hasRelief = !!(truck.relief_driver_name || truck.relief_da_number);
 
@@ -312,7 +312,7 @@ function AvailabilityModal({ truck, onSave, onCancel }) {
   );
 }
 
-// ── Main Fleet tab ────────────────────────────────────────────
+// ── Main Fleet tab ────────────────────────────────────────────────────────────────
 export default function FleetTab({ isAdmin }) {
   const [depots,  setDepots]  = useState([]);
   const [trucks,  setTrucks]  = useState([]);
@@ -481,7 +481,7 @@ export default function FleetTab({ isAdmin }) {
   );
 }
 
-// ── Access requests panel ─────────────────────────────────────────
+// ── Access requests panel ───────────────────────────────────────────────────────────────
 function AccessRequestsPanel() {
   const [requests,  setRequests]  = useState([]);
   const [loading,   setLoading]   = useState(true);
@@ -568,7 +568,7 @@ function AccessRequestsPanel() {
   );
 }
 
-// ── Access codes panel ────────────────────────────────────────────────
+// ── Access codes panel ────────────────────────────────────────────────────────────────────
 function AccessCodesPanel() {
   const [codes,      setCodes]      = useState([]);
   const [loading,    setLoading]    = useState(true);
