@@ -8,6 +8,10 @@ function normalizePlate(raw) {
   return /^TOW[A-Z0-9]{1,3}$/.test(s) ? s : null;
 }
 
+function plateFromEmail(email) {
+  return email?.split('@')[0]?.toUpperCase() || '';
+}
+
 function getGreeting(name) {
   const h = new Date().getHours();
   const tod = h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
@@ -27,11 +31,12 @@ function requestGPS() {
 }
 
 export default function App() {
-  const [session,      setSession]      = useState(null);
-  const [authChecked,  setAuthChecked]  = useState(false);
-  const [truck,        setTruck]        = useState(null);
-  const [greeting,     setGreeting]     = useState('');
-  const [showGreeting, setShowGreeting] = useState(false);
+  const [session,           setSession]           = useState(null);
+  const [authChecked,       setAuthChecked]       = useState(false);
+  const [truck,             setTruck]             = useState(null);
+  const [driverDisplayName, setDriverDisplayName] = useState('');
+  const [greeting,          setGreeting]          = useState('');
+  const [showGreeting,      setShowGreeting]      = useState(false);
 
   const [step,        setStep]       = useState(1);
   const [plate,       setPlate]      = useState('');
@@ -43,14 +48,16 @@ export default function App() {
   const [loginErr,    setLoginErr]   = useState('');
 
   const loadTruck = async (email, welcome = false) => {
-    const { data } = await supabase
-      .from('tow_trucks')
-      .select('*')
-      .eq('auth_email', email)
-      .single();
-    setTruck(data || null);
-    if (welcome && data?.driver_name) {
-      setGreeting(getGreeting(data.driver_name));
+    const [truckRes, userRes] = await Promise.all([
+      supabase.from('tow_trucks').select('*').eq('auth_email', email).single(),
+      supabase.auth.getUser(),
+    ]);
+    const truckData = truckRes.data || null;
+    const name = truckData?.driver_name || userRes.data?.user?.user_metadata?.driver_name || '';
+    setTruck(truckData);
+    setDriverDisplayName(name);
+    if (welcome && name) {
+      setGreeting(getGreeting(name));
       setShowGreeting(true);
       setTimeout(() => setShowGreeting(false), 3500);
     }
@@ -69,6 +76,7 @@ export default function App() {
         if (event === 'SIGNED_IN') requestGPS();
       } else {
         setTruck(null);
+        setDriverDisplayName('');
       }
     });
     return () => subscription.unsubscribe();
@@ -85,7 +93,7 @@ export default function App() {
     setLoggingIn(true);
     const { data, error } = await supabase.rpc('get_truck_auth_info', { p_plate: normalized });
     setLoggingIn(false);
-    if (error || !data) { setLoginErr('Plate not found. Check your truck number.'); return; }
+    if (error) { setLoginErr('Something went wrong. Try again.'); return; }
     setTruckInfo(data);
     setStep(2);
   };
@@ -103,9 +111,12 @@ export default function App() {
       const { error } = await supabase.auth.signInWithPassword({ email: truckInfo.email, password });
       if (error) { setLoginErr('Incorrect password.'); setLoggingIn(false); return; }
     } else {
-      const { error } = await supabase.auth.signUp({ email: truckInfo.email, password });
+      const { error } = await supabase.auth.signUp({
+        email: truckInfo.email,
+        password,
+        options: { data: { driver_name: driverName.trim() } },
+      });
       if (error) { setLoginErr(error.message); setLoggingIn(false); return; }
-      await supabase.rpc('set_driver_name', { p_name: driverName.trim() });
     }
     setLoggingIn(false);
   };
@@ -117,6 +128,7 @@ export default function App() {
   };
 
   const isAdmin = truck?.is_admin === true;
+  const displayPlate = session ? plateFromEmail(session.user.email) : '';
 
   if (!authChecked) {
     return (
@@ -185,16 +197,8 @@ export default function App() {
                   </div>
                   <div>
                     <div style={labelStyle}>Your Name</div>
-                    <input
-                      type="text"
-                      value={driverName}
-                      onChange={e => setDriverName(e.target.value)}
-                      placeholder="e.g. Nathan"
-                      required
-                      autoFocus
-                      autoCapitalize="words"
-                      style={inputStyle}
-                    />
+                    <input type="text" value={driverName} onChange={e => setDriverName(e.target.value)}
+                      placeholder="e.g. Nathan" required autoFocus autoCapitalize="words" style={inputStyle} />
                   </div>
                   <div>
                     <div style={labelStyle}>Password</div>
@@ -239,11 +243,9 @@ export default function App() {
           <div style={{ fontSize: 26, fontWeight: 700, color: TXT, letterSpacing: '0.02em', fontFamily: "'IBM Plex Mono',monospace" }}>
             {greeting}
           </div>
-          {truck?.plate && (
-            <div style={{ fontSize: 9, color: MUT, marginTop: 10, letterSpacing: '0.16em', textTransform: 'uppercase' }}>
-              {truck.plate}{isAdmin ? ' · Admin' : ''}
-            </div>
-          )}
+          <div style={{ fontSize: 9, color: MUT, marginTop: 10, letterSpacing: '0.16em', textTransform: 'uppercase' }}>
+            {displayPlate}{isAdmin ? ' · Admin' : ''}
+          </div>
         </div>
       </div>
     );
@@ -256,21 +258,19 @@ export default function App() {
           🚛 TowBench
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {truck && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 10, color: TXT, fontWeight: 700, letterSpacing: '0.12em' }}>
-                {truck.plate}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 10, color: TXT, fontWeight: 700, letterSpacing: '0.12em' }}>
+              {displayPlate}
+            </span>
+            {driverDisplayName && (
+              <span style={{ fontSize: 9, color: MUT }}>· {driverDisplayName}</span>
+            )}
+            {isAdmin && (
+              <span style={{ fontSize: 7, fontWeight: 700, letterSpacing: '0.1em', padding: '1px 5px', border: `1px solid ${ACC}55`, borderRadius: 2, color: ACC, background: ACC + '15', textTransform: 'uppercase' }}>
+                Admin
               </span>
-              {truck.driver_name && (
-                <span style={{ fontSize: 9, color: MUT }}>· {truck.driver_name}</span>
-              )}
-              {isAdmin && (
-                <span style={{ fontSize: 7, fontWeight: 700, letterSpacing: '0.1em', padding: '1px 5px', border: `1px solid ${ACC}55`, borderRadius: 2, color: ACC, background: ACC + '15', textTransform: 'uppercase' }}>
-                  Admin
-                </span>
-              )}
-            </div>
-          )}
+            )}
+          </div>
           <button onClick={signOut} style={{ ...btnG, ...sm, fontSize: 8 }}>Sign Out</button>
         </div>
       </div>
