@@ -14,6 +14,16 @@ function getGreeting(name) {
   return `${tod}, ${name}`;
 }
 
+function shouldShowGreeting() {
+  const h = new Date().getHours();
+  const period = h < 12 ? 'morning' : h < 18 ? 'afternoon' : 'evening';
+  const today  = new Date().toISOString().slice(0, 10);
+  const stored = JSON.parse(localStorage.getItem('towbench_greeting') || 'null');
+  if (stored?.date === today && stored?.period === period) return false;
+  localStorage.setItem('towbench_greeting', JSON.stringify({ date: today, period }));
+  return true;
+}
+
 function requestGPS() {
   if (!navigator.geolocation) return;
   const ask = () => navigator.geolocation.getCurrentPosition(() => {}, () => {});
@@ -56,7 +66,7 @@ export default function App() {
     const name = truckData?.driver_name || userRes.data?.user?.user_metadata?.driver_name || '';
     setTruck(truckData);
     setDriverDisplayName(name);
-    if (welcome && name) {
+    if (welcome && name && shouldShowGreeting()) {
       setGreeting(getGreeting(name));
       setShowGreeting(true);
       setTimeout(() => setShowGreeting(false), 5500);
