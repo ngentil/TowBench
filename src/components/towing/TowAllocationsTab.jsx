@@ -62,7 +62,7 @@ function timeIn(iso) {
   return rh > 0 ? `${d}d ${rh}h` : `${d}d`;
 }
 
-const NEARBY_KM = 8;
+const NEARBY_KM = 20;
 
 function haversineKm(lat1, lon1, lat2, lon2) {
   const R = 6371;
@@ -215,7 +215,7 @@ function AllocationCard({ feature, fromLog, userPos }) {
   );
 }
 
-// ── Main tab ──────────────────────────────────────────────────────────────────────────────
+// ── Main tab ──────────────────────────────────────────────────────────────────────────────────
 export default function TowAllocationsTab() {
   const [allFeatures,  setAllFeatures]  = useState([]);
   const [liveIds,      setLiveIds]      = useState(new Set());
@@ -294,7 +294,7 @@ export default function TowAllocationsTab() {
     return () => clearInterval(t);
   }, []);
 
-  // ── PDF Export ─────────────────────────────────────────────────────────────────────────────
+  // ── PDF Export ───────────────────────────────────────────────────────────────────────────────────────
   const handleExport = useCallback(async () => {
     setExporting(true);
     try {
@@ -330,7 +330,7 @@ export default function TowAllocationsTab() {
         ML, 25,
       );
 
-      // ── Summary boxes ────────────────────────────────────
+      // ── Summary boxes ────────────────────────────────────────────
       let y = 35;
       const bw = CW / 3 - 2;
       [
@@ -354,7 +354,7 @@ export default function TowAllocationsTab() {
       });
       y += 18;
 
-      // ── Table ────────────────────────────────────────────
+      // ── Table ────────────────────────────────────────────────────
       const COLS = [
         { label: 'ROAD NAME',    w: 50 },
         { label: 'SUBURB',       w: 38 },
@@ -414,7 +414,7 @@ export default function TowAllocationsTab() {
         y += ROW_H;
       });
 
-      // ── Footer on every page ─────────────────────────────
+      // ── Footer on every page ──────────────────────────────────────────
       const pages = doc.getNumberOfPages();
       for (let pg = 1; pg <= pages; pg++) {
         doc.setPage(pg);
@@ -434,7 +434,7 @@ export default function TowAllocationsTab() {
     }
   }, [exportHours, liveIds]);
 
-  // ── Render ─────────────────────────────────────────────────────────────────────────────
+  // ── Render ─────────────────────────────────────────────────────────────────────────────────────
   const sortFn      = SORT_OPTIONS.find(o => o.key === sortBy)?.fn;
   const sorted      = [...allFeatures].sort(sortFn);
   const active      = sorted.filter(f =>  liveIds.has(String(f.properties?.eventId)));
