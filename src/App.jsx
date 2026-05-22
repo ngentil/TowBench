@@ -8,38 +8,68 @@ function normalizePlate(raw) {
   return /^TOW[A-Z0-9]{1,3}$/.test(s) ? s : null;
 }
 
+function getGreeting(name) {
+  const h = new Date().getHours();
+  const tod = h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+  return `${tod}, ${name}`;
+}
+
+function requestGPS() {
+  if (!navigator.geolocation) return;
+  const ask = () => navigator.geolocation.getCurrentPosition(() => {}, () => {});
+  if (navigator.permissions) {
+    navigator.permissions.query({ name: 'geolocation' })
+      .then(p => { if (p.state !== 'granted') ask(); })
+      .catch(ask);
+  } else {
+    ask();
+  }
+}
+
 export default function App() {
-  const [session,     setSession]     = useState(null);
-  const [authChecked, setAuthChecked] = useState(false);
-  const [truck,       setTruck]       = useState(null);
+  const [session,      setSession]      = useState(null);
+  const [authChecked,  setAuthChecked]  = useState(false);
+  const [truck,        setTruck]        = useState(null);
+  const [greeting,     setGreeting]     = useState('');
+  const [showGreeting, setShowGreeting] = useState(false);
 
-  const [step,        setStep]        = useState(1); // 1=plate, 2=password
-  const [plate,       setPlate]       = useState('');
-  const [truckInfo,   setTruckInfo]   = useState(null); // { email, registered }
-  const [password,    setPassword]    = useState('');
-  const [confirmPwd,  setConfirmPwd]  = useState('');
-  const [loggingIn,   setLoggingIn]   = useState(false);
-  const [loginErr,    setLoginErr]    = useState('');
+  const [step,        setStep]       = useState(1);
+  const [plate,       setPlate]      = useState('');
+  const [truckInfo,   setTruckInfo]  = useState(null);
+  const [driverName,  setDriverName] = useState('');
+  const [password,    setPassword]   = useState('');
+  const [confirmPwd,  setConfirmPwd] = useState('');
+  const [loggingIn,   setLoggingIn]  = useState(false);
+  const [loginErr,    setLoginErr]   = useState('');
 
-  const loadTruck = async (email) => {
+  const loadTruck = async (email, welcome = false) => {
     const { data } = await supabase
       .from('tow_trucks')
       .select('*')
       .eq('auth_email', email)
       .single();
     setTruck(data || null);
+    if (welcome && data?.driver_name) {
+      setGreeting(getGreeting(data.driver_name));
+      setShowGreeting(true);
+      setTimeout(() => setShowGreeting(false), 3500);
+    }
   };
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setAuthChecked(true);
-      if (session) loadTruck(session.user.email);
+      if (session) loadTruck(session.user.email, false);
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
-      if (session) loadTruck(session.user.email);
-      else setTruck(null);
+      if (session) {
+        loadTruck(session.user.email, event === 'SIGNED_IN');
+        if (event === 'SIGNED_IN') requestGPS();
+      } else {
+        setTruck(null);
+      }
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -55,10 +85,7 @@ export default function App() {
     setLoggingIn(true);
     const { data, error } = await supabase.rpc('get_truck_auth_info', { p_plate: normalized });
     setLoggingIn(false);
-    if (error || !data) {
-      setLoginErr('Plate not found. Check your truck number.');
-      return;
-    }
+    if (error || !data) { setLoginErr('Plate not found. Check your truck number.'); return; }
     setTruckInfo(data);
     setStep(2);
   };
@@ -67,28 +94,26 @@ export default function App() {
     e.preventDefault();
     setLoginErr('');
     if (!truckInfo.registered) {
-      if (password.length < 6) { setLoginErr('Password must be at least 6 characters.'); return; }
+      if (!driverName.trim())      { setLoginErr('Please enter your name.'); return; }
+      if (password.length < 6)     { setLoginErr('Password must be at least 6 characters.'); return; }
       if (password !== confirmPwd) { setLoginErr('Passwords do not match.'); return; }
     }
     setLoggingIn(true);
     if (truckInfo.registered) {
       const { error } = await supabase.auth.signInWithPassword({ email: truckInfo.email, password });
-      if (error) setLoginErr('Incorrect password.');
+      if (error) { setLoginErr('Incorrect password.'); setLoggingIn(false); return; }
     } else {
       const { error } = await supabase.auth.signUp({ email: truckInfo.email, password });
-      if (error) setLoginErr(error.message);
+      if (error) { setLoginErr(error.message); setLoggingIn(false); return; }
+      await supabase.rpc('set_driver_name', { p_name: driverName.trim() });
     }
     setLoggingIn(false);
   };
 
   const signOut = () => {
     supabase.auth.signOut();
-    setStep(1);
-    setPlate('');
-    setTruckInfo(null);
-    setPassword('');
-    setConfirmPwd('');
-    setLoginErr('');
+    setStep(1); setPlate(''); setTruckInfo(null);
+    setDriverName(''); setPassword(''); setConfirmPwd(''); setLoginErr('');
   };
 
   const isAdmin = truck?.is_admin === true;
@@ -146,28 +171,50 @@ export default function App() {
                 <span style={{ fontSize: 13, color: ACC, fontWeight: 700, letterSpacing: '0.14em' }}>
                   {normalizePlate(plate) || plate}
                 </span>
-                <button type="button" onClick={() => { setStep(1); setLoginErr(''); setPassword(''); setConfirmPwd(''); }}
+                <button type="button"
+                  onClick={() => { setStep(1); setLoginErr(''); setPassword(''); setConfirmPwd(''); setDriverName(''); }}
                   style={{ fontSize: 8, color: MUT, background: 'none', border: 'none', cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace" }}>
                   ← change
                 </button>
               </div>
-              {!truckInfo?.registered && (
-                <div style={{ fontSize: 8, color: '#5a8a5a', lineHeight: 1.6 }}>
-                  First login — choose a password for this truck.
-                </div>
-              )}
-              <div>
-                <div style={labelStyle}>Password</div>
-                <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-                  placeholder="••••••••" required autoFocus minLength={6} style={inputStyle} />
-              </div>
-              {!truckInfo?.registered && (
+
+              {!truckInfo?.registered ? (
+                <>
+                  <div style={{ fontSize: 8, color: '#5a8a5a', lineHeight: 1.6 }}>
+                    First login — enter your name and choose a password.
+                  </div>
+                  <div>
+                    <div style={labelStyle}>Your Name</div>
+                    <input
+                      type="text"
+                      value={driverName}
+                      onChange={e => setDriverName(e.target.value)}
+                      placeholder="e.g. Nathan"
+                      required
+                      autoFocus
+                      autoCapitalize="words"
+                      style={inputStyle}
+                    />
+                  </div>
+                  <div>
+                    <div style={labelStyle}>Password</div>
+                    <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+                      placeholder="••••••••" required minLength={6} style={inputStyle} />
+                  </div>
+                  <div>
+                    <div style={labelStyle}>Confirm Password</div>
+                    <input type="password" value={confirmPwd} onChange={e => setConfirmPwd(e.target.value)}
+                      placeholder="••••••••" required minLength={6} style={inputStyle} />
+                  </div>
+                </>
+              ) : (
                 <div>
-                  <div style={labelStyle}>Confirm Password</div>
-                  <input type="password" value={confirmPwd} onChange={e => setConfirmPwd(e.target.value)}
-                    placeholder="••••••••" required minLength={6} style={inputStyle} />
+                  <div style={labelStyle}>Password</div>
+                  <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+                    placeholder="••••••••" required autoFocus minLength={6} style={inputStyle} />
                 </div>
               )}
+
               {loginErr && <div style={{ fontSize: 9, color: RED, lineHeight: 1.5 }}>{loginErr}</div>}
               <button type="submit" disabled={loggingIn}
                 style={{ ...btnA, width: '100%', opacity: loggingIn ? 0.5 : 1, marginTop: 4 }}>
@@ -176,6 +223,26 @@ export default function App() {
                   : (truckInfo?.registered ? 'Sign In' : 'Set Password & Sign In')}
               </button>
             </form>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (showGreeting) {
+    return (
+      <div style={{ minHeight: '100vh', background: BG, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="loading-text" style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 11, color: MUT, fontFamily: "'IBM Plex Mono',monospace", letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: 18 }}>
+            🚛 TowBench
+          </div>
+          <div style={{ fontSize: 26, fontWeight: 700, color: TXT, letterSpacing: '0.02em', fontFamily: "'IBM Plex Mono',monospace" }}>
+            {greeting}
+          </div>
+          {truck?.plate && (
+            <div style={{ fontSize: 9, color: MUT, marginTop: 10, letterSpacing: '0.16em', textTransform: 'uppercase' }}>
+              {truck.plate}{isAdmin ? ' · Admin' : ''}
+            </div>
           )}
         </div>
       </div>
@@ -194,6 +261,9 @@ export default function App() {
               <span style={{ fontSize: 10, color: TXT, fontWeight: 700, letterSpacing: '0.12em' }}>
                 {truck.plate}
               </span>
+              {truck.driver_name && (
+                <span style={{ fontSize: 9, color: MUT }}>· {truck.driver_name}</span>
+              )}
               {isAdmin && (
                 <span style={{ fontSize: 7, fontWeight: 700, letterSpacing: '0.1em', padding: '1px 5px', border: `1px solid ${ACC}55`, borderRadius: 2, color: ACC, background: ACC + '15', textTransform: 'uppercase' }}>
                   Admin

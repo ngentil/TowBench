@@ -49,3 +49,14 @@ GRANT EXECUTE ON FUNCTION get_truck_auth_info(text) TO anon;
 
 -- TOW933 is the only admin truck
 UPDATE tow_trucks SET is_admin = true WHERE upper(regexp_replace(trim(plate), '\s+', '')) = 'TOW933';
+
+-- Driver name column (set by driver on first login)
+ALTER TABLE tow_trucks ADD COLUMN IF NOT EXISTS driver_name text;
+
+-- Allows an authenticated driver to set their own name only
+CREATE OR REPLACE FUNCTION set_driver_name(p_name text)
+RETURNS void LANGUAGE sql SECURITY DEFINER AS $$
+  UPDATE tow_trucks SET driver_name = trim(p_name) WHERE auth_email = auth.email();
+$$;
+
+GRANT EXECUTE ON FUNCTION set_driver_name(text) TO authenticated;
