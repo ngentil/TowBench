@@ -4,7 +4,7 @@ ALTER TABLE tow_trucks ADD COLUMN IF NOT EXISTS auth_email text;
 
 -- Populate auth_email from existing plates (idempotent)
 UPDATE tow_trucks
-SET auth_email = lower(regexp_replace(upper(trim(plate)), '\s+', '')) || '@towbench.internal'
+SET auth_email = lower(regexp_replace(upper(trim(plate)), '\s+', '')) || '@towbench.com'
 WHERE auth_email IS NULL;
 
 CREATE INDEX IF NOT EXISTS tow_trucks_auth_email_idx ON tow_trucks (auth_email);
@@ -29,7 +29,7 @@ BEGIN
     RETURN NULL;
   END IF;
 
-  v_email := lower(v_normalized) || '@towbench.internal';
+  v_email := lower(v_normalized) || '@towbench.com';
 
   -- Check whether a Supabase Auth user already exists for this plate
   SELECT EXISTS (
