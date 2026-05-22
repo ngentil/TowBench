@@ -41,7 +41,7 @@ export default function App() {
   const [step,        setStep]       = useState(1);
   const [plate,       setPlate]      = useState('');
   const [truckInfo,   setTruckInfo]  = useState(null);
-  const [inviteCode,  setInviteCode] = useState('');
+  const [accessCode,  setAccessCode] = useState('');
   const [driverName,  setDriverName] = useState('');
   const [password,    setPassword]   = useState('');
   const [confirmPwd,  setConfirmPwd] = useState('');
@@ -105,7 +105,7 @@ export default function App() {
     e.preventDefault();
     setLoginErr('');
     if (!truckInfo.registered) {
-      if (!inviteCode.trim())      { setLoginErr('Enter your invite code.'); return; }
+      if (!accessCode.trim())      { setLoginErr('Enter your access code.'); return; }
       if (!driverName.trim())      { setLoginErr('Please enter your name.'); return; }
       if (password.length < 6)     { setLoginErr('Password must be at least 6 characters.'); return; }
       if (password !== confirmPwd) { setLoginErr('Passwords do not match.'); return; }
@@ -115,15 +115,15 @@ export default function App() {
       const { error } = await supabase.auth.signInWithPassword({ email: truckInfo.email, password });
       if (error) { setLoginErr('Incorrect password.'); setLoggingIn(false); return; }
     } else {
-      const { data: valid } = await supabase.rpc('validate_invite_code', { p_code: inviteCode.trim() });
-      if (!valid) { setLoginErr('Invalid or already used invite code.'); setLoggingIn(false); return; }
+      const { data: valid } = await supabase.rpc('validate_invite_code', { p_code: accessCode.trim() });
+      if (!valid) { setLoginErr('Invalid or already used access code.'); setLoggingIn(false); return; }
       const { error } = await supabase.auth.signUp({
         email: truckInfo.email,
         password,
         options: { data: { driver_name: driverName.trim() } },
       });
       if (error) { setLoginErr(error.message); setLoggingIn(false); return; }
-      await supabase.rpc('consume_invite_code', { p_code: inviteCode.trim(), p_plate: normalizePlate(plate) });
+      await supabase.rpc('consume_invite_code', { p_code: accessCode.trim(), p_plate: normalizePlate(plate) });
     }
     setLoggingIn(false);
   };
@@ -140,7 +140,7 @@ export default function App() {
   const signOut = () => {
     supabase.auth.signOut();
     setStep(1); setPlate(''); setTruckInfo(null);
-    setInviteCode(''); setDriverName(''); setPassword(''); setConfirmPwd(''); setLoginErr('');
+    setAccessCode(''); setDriverName(''); setPassword(''); setConfirmPwd(''); setLoginErr('');
     setRequestSent(false); setRequesting(false);
   };
 
@@ -201,7 +201,7 @@ export default function App() {
                   {normalizePlate(plate) || plate}
                 </span>
                 <button type="button"
-                  onClick={() => { setStep(1); setLoginErr(''); setInviteCode(''); setPassword(''); setConfirmPwd(''); setDriverName(''); setRequestSent(false); }}
+                  onClick={() => { setStep(1); setLoginErr(''); setAccessCode(''); setPassword(''); setConfirmPwd(''); setDriverName(''); setRequestSent(false); }}
                   style={{ fontSize: 8, color: MUT, background: 'none', border: 'none', cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace" }}>
                   ← change
                 </button>
@@ -210,12 +210,12 @@ export default function App() {
               {!truckInfo?.registered ? (
                 <>
                   <div style={{ fontSize: 8, color: '#5a8a5a', lineHeight: 1.6 }}>
-                    First login — enter your invite code, name, and choose a password.
+                    First login — enter your access code, name, and choose a password.
                   </div>
                   <div>
-                    <div style={labelStyle}>Invite Code</div>
-                    <input type="text" value={inviteCode}
-                      onChange={e => setInviteCode(e.target.value.toUpperCase().replace(/\s/g, ''))}
+                    <div style={labelStyle}>Access Code</div>
+                    <input type="text" value={accessCode}
+                      onChange={e => setAccessCode(e.target.value.toUpperCase().replace(/\s/g, ''))}
                       placeholder="XXXXXX" required autoFocus autoCapitalize="characters"
                       style={{ ...inputStyle, letterSpacing: '0.2em', fontSize: 16 }} />
                     <div style={{ marginTop: 6, fontSize: 8, color: MUT, textAlign: 'right' }}>
