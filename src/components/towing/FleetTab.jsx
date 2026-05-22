@@ -35,7 +35,7 @@ function StatusBadge({ status }) {
   );
 }
 
-// ── Depot form modal ──────────────────────────────────────────────
+// ── Depot form modal ───────────────────────────────────────
 function DepotForm({ depot, onSave, onCancel }) {
   const [name,   setName]   = useState(depot?.name   || '');
   const [suburb, setSuburb] = useState(depot?.suburb || '');
@@ -74,7 +74,7 @@ function DepotForm({ depot, onSave, onCancel }) {
   );
 }
 
-// ── Truck form modal ────────────────────────────────────────────
+// ── Truck form modal ────────────────────────────────────
 function TruckForm({ truck, depots, onSave, onCancel }) {
   const [plate,      setPlate]      = useState(truck?.plate       || '');
   const [daNumber,   setDaNumber]   = useState(truck?.da_number   || '');
@@ -171,7 +171,7 @@ function TruckForm({ truck, depots, onSave, onCancel }) {
   );
 }
 
-// ── Availability override modal ───────────────────────────────────────────
+// ── Availability override modal ────────────────────────────────────────
 function AvailabilityModal({ truck, onSave, onCancel }) {
   const hasRelief = !!(truck.relief_driver_name || truck.relief_da_number);
 
@@ -296,7 +296,6 @@ function AvailabilityModal({ truck, onSave, onCancel }) {
 
           {err && <div style={{ fontSize: 9, color: RED }}>{err}</div>}
         </div>
-
         <div style={mdlF}>
           {(truck.override_active || truck.relief_driver_name) && (
             <button style={{ ...btnD, marginRight: 'auto' }} onClick={handleClear} disabled={saving}>
@@ -313,7 +312,7 @@ function AvailabilityModal({ truck, onSave, onCancel }) {
   );
 }
 
-// ── Main Fleet tab ────────────────────────────────────────────────
+// ── Main Fleet tab ────────────────────────────────────────────
 export default function FleetTab({ isAdmin }) {
   const [depots,  setDepots]  = useState([]);
   const [trucks,  setTrucks]  = useState([]);
@@ -486,7 +485,7 @@ export default function FleetTab({ isAdmin }) {
 function AccessRequestsPanel() {
   const [requests,  setRequests]  = useState([]);
   const [loading,   setLoading]   = useState(true);
-  const [ready,     setReady]     = useState({}); // id → generated code (awaiting copy)
+  const [ready,     setReady]     = useState({});
   const [copied,    setCopied]    = useState(null);
   const [working,   setWorking]   = useState(null);
 
@@ -569,7 +568,7 @@ function AccessRequestsPanel() {
   );
 }
 
-// ── Invite codes panel ────────────────────────────────────────────
+// ── Invite codes panel ────────────────────────────────────────────────
 function InviteCodesPanel() {
   const [codes,      setCodes]      = useState([]);
   const [loading,    setLoading]    = useState(true);
