@@ -314,7 +314,7 @@ export default function TowAllocationsTab() {
         return lines.length > 1 ? lines[0].replace(/.$/, '…') : lines[0];
       };
 
-      // ── Page header ────────────────────────────────────────────────
+      // ── Page header ──────────────────────────────────
       doc.setFillColor(15, 15, 15);
       doc.rect(0, 0, W, 30, 'F');
       doc.setFont('helvetica', 'bold');
@@ -330,7 +330,7 @@ export default function TowAllocationsTab() {
         ML, 25,
       );
 
-      // ── Summary boxes ────────────────────────────────────────────────
+      // ── Summary boxes ────────────────────────────────────
       let y = 35;
       const bw = CW / 3 - 2;
       [
@@ -354,7 +354,7 @@ export default function TowAllocationsTab() {
       });
       y += 18;
 
-      // ── Table ──────────────────────────────────────────────────────────
+      // ── Table ────────────────────────────────────────────
       const COLS = [
         { label: 'ROAD NAME',    w: 50 },
         { label: 'SUBURB',       w: 38 },
@@ -414,7 +414,7 @@ export default function TowAllocationsTab() {
         y += ROW_H;
       });
 
-      // ── Footer on every page ───────────────────────────────────────────────
+      // ── Footer on every page ─────────────────────────────
       const pages = doc.getNumberOfPages();
       for (let pg = 1; pg <= pages; pg++) {
         doc.setPage(pg);
