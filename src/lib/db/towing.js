@@ -95,18 +95,28 @@ export async function logAllocations(features) {
   if (error) console.warn('logAllocations failed:', error.message);
 }
 
-export async function getAllocationsForAnalytics(days = 30) {
+export async function markAllocationsCleared(eventIds) {
+  if (!eventIds.length) return;
+  const { error } = await supabase
+    .from('tow_allocation_log')
+    .update({ cleared_at: new Date().toISOString() })
+    .in('event_id', eventIds)
+    .is('cleared_at', null);
+  if (error) console.warn('markAllocationsCleared failed:', error.message);
+}
+
+export async function getAllocationsForAnalytics(days = 31) {
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
   const { data, error } = await supabase
     .from('tow_allocation_log')
-    .select('event_id, road_name, suburb, data, event_created_at, first_seen, last_seen')
+    .select('event_id, road_name, suburb, data, event_created_at, first_seen, last_seen, cleared_at')
     .gte('last_seen', since)
     .order('first_seen', { ascending: true });
   if (error) throw error;
   return data || [];
 }
 
-export async function getRecentAllocations(hours = 24) {
+export async function getRecentAllocations(hours = 744) {
   const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
   const { data, error } = await supabase
     .from('tow_allocation_log')
@@ -114,5 +124,8 @@ export async function getRecentAllocations(hours = 24) {
     .gte('last_seen', since)
     .order('last_seen', { ascending: false });
   if (error) throw error;
-  return (data || []).map(r => ({ ...r.data, _logMeta: { firstSeen: r.first_seen, lastSeen: r.last_seen } }));
+  return (data || []).map(r => ({
+    ...r.data,
+    _logMeta: { firstSeen: r.first_seen, lastSeen: r.last_seen, clearedAt: r.cleared_at },
+  }));
 }

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { jsPDF } from 'jspdf';
 import { ACC, MUT, BRD, TXT, GRN, SURF } from '../../lib/styles';
-import { logAllocations, getRecentAllocations } from '../../lib/db/towing';
+import { logAllocations, markAllocationsCleared, getRecentAllocations } from '../../lib/db/towing';
 
 const API_URL = 'https://api.opendata.transport.vic.gov.au/api/opendata/roads/disruptions/unplanned/v3';
 const API_KEY = import.meta.env.VITE_VICROADS_KEY || 'bb7fc352-3ce6-44d2-9628-63fefb64278d';
@@ -224,6 +224,7 @@ export default function TowAllocationsTab() {
   const [lastFetch,    setLastFetch]    = useState(null);
   const [countdown,    setCountdown]    = useState(POLL_MS / 1000);
   const [userPos,      setUserPos]      = useState(null);
+  const prevLiveIdsRef = useRef(new Set());
 
   useEffect(() => {
     if (!navigator.geolocation) return;
@@ -259,7 +260,7 @@ export default function TowAllocationsTab() {
   };
 
   useEffect(() => {
-    getRecentAllocations(24)
+    getRecentAllocations(744)
       .then(logged => {
         setAllFeatures(prev => mergeFeatures([], [...prev, ...logged]));
         setLoading(false);
@@ -274,7 +275,11 @@ export default function TowAllocationsTab() {
       const data = await res.json();
       const all  = data.data?.features || data.features || [];
       const live = all.filter(f => f.properties?.source?.sourceName === 'TowAllocation');
-      setLiveIds(new Set(live.map(f => String(f.properties?.eventId))));
+      const newLiveIds = new Set(live.map(f => String(f.properties?.eventId)));
+      const justCleared = [...prevLiveIdsRef.current].filter(id => !newLiveIds.has(id));
+      if (justCleared.length) markAllocationsCleared(justCleared).catch(e => console.warn('markAllocationsCleared:', e));
+      prevLiveIdsRef.current = newLiveIds;
+      setLiveIds(newLiveIds);
       logAllocations(live).catch(e => console.warn('logAllocations:', e));
       setAllFeatures(prev => mergeFeatures(live, prev));
       setErr('');
@@ -448,7 +453,7 @@ export default function TowAllocationsTab() {
         <div>
           <div style={{ fontSize: 13, fontWeight: 700, color: TXT, letterSpacing: '0.06em' }}>🚛 Tow Allocations</div>
           <div style={{ fontSize: 9, color: MUT, marginTop: 2 }}>
-            VicRoads feed · last 24 hrs · {allFeatures.length} allocation{allFeatures.length !== 1 ? 's' : ''}
+            VicRoads feed · last 31 days · {allFeatures.length} allocation{allFeatures.length !== 1 ? 's' : ''}
             {active.length > 0 && <span style={{ color: GRN, marginLeft: 8 }}>· {active.length} active · {cleared.length} cleared</span>}
           </div>
         </div>
@@ -518,7 +523,7 @@ export default function TowAllocationsTab() {
       {allFeatures.length > 0 && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 12 }}>
           {[
-            ['24h Total', allFeatures.length, TXT],
+            ['31d Total', allFeatures.length, TXT],
             ['Active',    active.length,      GRN],
             ['Cleared',   cleared.length,     MUT],
           ].map(([l, v, c]) => (
@@ -544,7 +549,7 @@ export default function TowAllocationsTab() {
 
       {!loading && allFeatures.length === 0 && (
         <div style={{ fontSize: 10, color: MUT, textAlign: 'center', padding: '32px 0', lineHeight: 1.8 }}>
-          No tow allocations in the last 24 hours.<br />
+          No tow allocations in the last 31 days.<br />
           <span style={{ fontSize: 8 }}>Feed updates every 60 seconds.</span>
         </div>
       )}
