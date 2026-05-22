@@ -5,8 +5,7 @@ import TowingSection from './components/towing/TowingSection';
 
 function normalizePlate(raw) {
   const s = raw.toUpperCase().replace(/\s+/g, '');
-  const m = s.match(/^(TOW)([A-Z0-9]{1,3})$/);
-  return m ? `${m[1]} ${m[2]}` : null;
+  return /^TOW[A-Z0-9]{1,3}$/.test(s) ? s : null;
 }
 
 export default function App() {
@@ -50,7 +49,7 @@ export default function App() {
     setLoginErr('');
     const normalized = normalizePlate(plate);
     if (!normalized) {
-      setLoginErr('Enter your plate in the format TOW followed by numbers (e.g. TOW 001).');
+      setLoginErr('Enter your plate in the format TOW followed by numbers (e.g. TOW933).');
       return;
     }
     setLoggingIn(true);
@@ -128,7 +127,7 @@ export default function App() {
                   type="text"
                   value={plate}
                   onChange={e => setPlate(e.target.value.toUpperCase())}
-                  placeholder="TOW 001"
+                  placeholder="TOW933"
                   required
                   autoFocus
                   autoCapitalize="characters"
