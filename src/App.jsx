@@ -47,6 +47,8 @@ export default function App() {
   const [confirmPwd,  setConfirmPwd] = useState('');
   const [loggingIn,   setLoggingIn]  = useState(false);
   const [loginErr,    setLoginErr]   = useState('');
+  const [requesting,  setRequesting] = useState(false);
+  const [requestSent, setRequestSent] = useState(false);
 
   const loadTruck = async (email, welcome = false) => {
     const [truckRes, userRes] = await Promise.all([
@@ -126,10 +128,20 @@ export default function App() {
     setLoggingIn(false);
   };
 
+  const handleRequestAccess = async () => {
+    const normalized = normalizePlate(plate);
+    if (!normalized) return;
+    setRequesting(true);
+    await supabase.rpc('request_access', { p_plate: normalized });
+    setRequesting(false);
+    setRequestSent(true);
+  };
+
   const signOut = () => {
     supabase.auth.signOut();
     setStep(1); setPlate(''); setTruckInfo(null);
     setInviteCode(''); setDriverName(''); setPassword(''); setConfirmPwd(''); setLoginErr('');
+    setRequestSent(false); setRequesting(false);
   };
 
   const isAdmin = truck?.is_admin === true;
@@ -189,7 +201,7 @@ export default function App() {
                   {normalizePlate(plate) || plate}
                 </span>
                 <button type="button"
-                  onClick={() => { setStep(1); setLoginErr(''); setInviteCode(''); setPassword(''); setConfirmPwd(''); setDriverName(''); }}
+                  onClick={() => { setStep(1); setLoginErr(''); setInviteCode(''); setPassword(''); setConfirmPwd(''); setDriverName(''); setRequestSent(false); }}
                   style={{ fontSize: 8, color: MUT, background: 'none', border: 'none', cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace" }}>
                   ← change
                 </button>
@@ -206,11 +218,24 @@ export default function App() {
                       onChange={e => setInviteCode(e.target.value.toUpperCase().replace(/\s/g, ''))}
                       placeholder="XXXXXX" required autoFocus autoCapitalize="characters"
                       style={{ ...inputStyle, letterSpacing: '0.2em', fontSize: 16 }} />
+                    <div style={{ marginTop: 6, fontSize: 8, color: MUT, textAlign: 'right' }}>
+                      {requestSent ? (
+                        <span style={{ color: '#5a8a5a' }}>✓ Request sent — your admin will share a code with you.</span>
+                      ) : (
+                        <>
+                          Don&apos;t have one?{' '}
+                          <button type="button" onClick={handleRequestAccess} disabled={requesting}
+                            style={{ background: 'none', border: 'none', color: ACC, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", fontSize: 8, padding: 0, textDecoration: 'underline', opacity: requesting ? 0.5 : 1 }}>
+                            {requesting ? 'Sending…' : 'Request one from admin'}
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
                   <div>
                     <div style={labelStyle}>Your Name</div>
                     <input type="text" value={driverName} onChange={e => setDriverName(e.target.value)}
-                      placeholder="e.g. Nathan" required autoCapitalize="words" style={inputStyle} />
+                      placeholder="e.g. Alex" required autoCapitalize="words" style={inputStyle} />
                   </div>
                   <div>
                     <div style={labelStyle}>Password</div>
