@@ -46,3 +46,6 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION get_truck_auth_info(text) TO anon;
+
+-- TOW 933 is the only admin truck
+UPDATE tow_trucks SET is_admin = true WHERE upper(trim(plate)) = 'TOW 933';
