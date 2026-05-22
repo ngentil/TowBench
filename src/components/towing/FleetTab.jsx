@@ -453,6 +453,7 @@ export default function FleetTab({ isAdmin }) {
         </div>
       )}
 
+      {isAdmin && <AccessRequestsPanel />}
       {isAdmin && <InviteCodesPanel />}
 
       {depotForm !== null && (
@@ -477,6 +478,93 @@ export default function FleetTab({ isAdmin }) {
           onCancel={() => setAvailModal(null)}
         />
       )}
+    </div>
+  );
+}
+
+// ── Access requests panel ─────────────────────────────────────────
+function AccessRequestsPanel() {
+  const [requests,  setRequests]  = useState([]);
+  const [loading,   setLoading]   = useState(true);
+  const [ready,     setReady]     = useState({}); // id → generated code (awaiting copy)
+  const [copied,    setCopied]    = useState(null);
+  const [working,   setWorking]   = useState(null);
+
+  useEffect(() => {
+    supabase.from('access_requests')
+      .select('*').eq('status', 'pending').order('requested_at', { ascending: false })
+      .then(({ data }) => { setRequests(data || []); setLoading(false); });
+  }, []);
+
+  const generateFor = async (req) => {
+    setWorking(req.id);
+    const { data: code, error } = await supabase.rpc('generate_invite_code');
+    if (error) { alert(error.message); setWorking(null); return; }
+    await supabase.from('access_requests').update({ status: 'fulfilled' }).eq('id', req.id);
+    setRequests(prev => prev.filter(r => r.id !== req.id));
+    setReady(prev => ({ ...prev, [req.id]: { plate: req.plate, code } }));
+    setWorking(null);
+  };
+
+  const dismiss = async (req) => {
+    setWorking(req.id);
+    await supabase.from('access_requests').update({ status: 'dismissed' }).eq('id', req.id);
+    setRequests(prev => prev.filter(r => r.id !== req.id));
+    setWorking(null);
+  };
+
+  const copy = (code) => {
+    navigator.clipboard?.writeText(code);
+    setCopied(code);
+    setTimeout(() => setCopied(null), 2000);
+  };
+
+  const readyCodes = Object.values(ready);
+  if (loading || (requests.length === 0 && readyCodes.length === 0)) return null;
+
+  return (
+    <div style={{ marginTop: 24, borderTop: `2px solid ${ACC}44`, paddingTop: 16, marginBottom: 4 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: TXT, letterSpacing: '0.06em' }}>🔔 Access Requests</div>
+        {requests.length > 0 && (
+          <span style={{ fontSize: 8, fontWeight: 700, background: ACC, color: '#000', padding: '1px 6px', borderRadius: 8, letterSpacing: '0.05em' }}>
+            {requests.length}
+          </span>
+        )}
+        <div style={{ fontSize: 8, color: MUT }}>Drivers waiting for an invite code</div>
+      </div>
+
+      {requests.map(req => (
+        <div key={req.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', background: '#0d0d0d', border: `1px solid ${ACC}33`, borderRadius: 2, marginBottom: 4 }}>
+          <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.14em', color: TXT, fontFamily: "'IBM Plex Mono',monospace", flex: 1 }}>
+            {req.plate}
+          </span>
+          <span style={{ fontSize: 8, color: MUT }}>
+            {new Date(req.requested_at).toLocaleString('en-AU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+          </span>
+          <button onClick={() => generateFor(req)} disabled={!!working}
+            style={{ ...btnA, ...sm, fontSize: 8, opacity: working ? 0.5 : 1 }}>
+            Generate Code
+          </button>
+          <button onClick={() => dismiss(req)} disabled={!!working}
+            style={{ ...btnG, ...sm, fontSize: 8, opacity: working ? 0.5 : 1 }}>
+            Dismiss
+          </button>
+        </div>
+      ))}
+
+      {readyCodes.map(({ plate, code }) => (
+        <div key={code} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', background: '#0a100a', border: `1px solid ${GRN}33`, borderRadius: 2, marginBottom: 4 }}>
+          <span style={{ fontSize: 8, color: MUT }}>{plate}</span>
+          <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: '0.2em', color: GRN, fontFamily: "'IBM Plex Mono',monospace", flex: 1 }}>
+            {code}
+          </span>
+          <button onClick={() => copy(code)}
+            style={{ ...btnG, ...sm, fontSize: 8, color: copied === code ? GRN : MUT, borderColor: copied === code ? GRN + '55' : undefined }}>
+            {copied === code ? '✓ Copied' : 'Copy'}
+          </button>
+        </div>
+      ))}
     </div>
   );
 }
