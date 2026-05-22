@@ -1,6 +1,6 @@
 import { supabase } from '../supabase';
 
-// ── Depots ───────────────────────────────────────────────────────────────────
+// ── Depots ────────────────────────────────────────────────────────────────────────────────
 
 export async function getDepots() {
   const { data, error } = await supabase
@@ -31,7 +31,7 @@ export async function deleteDepot(id) {
   if (error) throw error;
 }
 
-// ── Tow Trucks ───────────────────────────────────────────────────────────────
+// ── Tow Trucks ─────────────────────────────────────────────────────────────────────────
 
 export async function getTrucks() {
   const { data, error } = await supabase
@@ -63,7 +63,7 @@ export async function deleteTruck(id) {
   if (error) throw error;
 }
 
-// ── Allocation log ────────────────────────────────────────────────────────────
+// ── Allocation log ────────────────────────────────────────────────────────────────────────────
 
 export async function logAllocations(features) {
   if (!features.length) return;

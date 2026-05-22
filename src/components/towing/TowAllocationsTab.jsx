@@ -186,6 +186,7 @@ function AllocationCard({ feature, fromLog, userPos }) {
               ...(logMeta ? [
                 ['First Seen', fmt(logMeta.firstSeen)],
                 ['Last Seen',  fmt(logMeta.lastSeen)],
+                ...(logMeta.clearedAt ? [['Cleared', fmt(logMeta.clearedAt)]] : []),
               ] : []),
               ...(coords ? [['Coordinates', `${coords[1].toFixed(5)}, ${coords[0].toFixed(5)}`]] : []),
             ].map(([label, val]) => (
@@ -215,7 +216,7 @@ function AllocationCard({ feature, fromLog, userPos }) {
   );
 }
 
-// ── Main tab ──────────────────────────────────────────────────────────────────────────────────
+// ── Main tab ────────────────────────────────────────────────────────────────────────────────────────
 export default function TowAllocationsTab() {
   const [allFeatures,  setAllFeatures]  = useState([]);
   const [liveIds,      setLiveIds]      = useState(new Set());
@@ -319,7 +320,6 @@ export default function TowAllocationsTab() {
         return lines.length > 1 ? lines[0].replace(/.$/, '…') : lines[0];
       };
 
-      // ── Page header ──────────────────────────────────
       doc.setFillColor(15, 15, 15);
       doc.rect(0, 0, W, 30, 'F');
       doc.setFont('helvetica', 'bold');
@@ -335,7 +335,6 @@ export default function TowAllocationsTab() {
         ML, 25,
       );
 
-      // ── Summary boxes ────────────────────────────────────────────
       let y = 35;
       const bw = CW / 3 - 2;
       [
@@ -359,7 +358,6 @@ export default function TowAllocationsTab() {
       });
       y += 18;
 
-      // ── Table ────────────────────────────────────────────────────
       const COLS = [
         { label: 'ROAD NAME',    w: 50 },
         { label: 'SUBURB',       w: 38 },
@@ -368,7 +366,6 @@ export default function TowAllocationsTab() {
         { label: 'LANES',        w: 13 },
         { label: 'LAST UPDATED', w: 45 },
       ];
-      // compute x offsets
       let cx = ML;
       COLS.forEach(c => { c.x = cx; cx += c.w; });
       const ROW_H = 7;
@@ -419,7 +416,6 @@ export default function TowAllocationsTab() {
         y += ROW_H;
       });
 
-      // ── Footer on every page ──────────────────────────────────────────
       const pages = doc.getNumberOfPages();
       for (let pg = 1; pg <= pages; pg++) {
         doc.setPage(pg);
@@ -448,7 +444,6 @@ export default function TowAllocationsTab() {
 
   return (
     <div style={{ padding: 16, flex: 1, overflowY: 'auto' }}>
-      {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
         <div>
           <div style={{ fontSize: 13, fontWeight: 700, color: TXT, letterSpacing: '0.06em' }}>🚛 Tow Allocations</div>
@@ -465,7 +460,6 @@ export default function TowAllocationsTab() {
             </span>
           )}
 
-          {/* Sort picker */}
           <div ref={sortRef} style={{ position: 'relative' }}>
             <button onClick={() => setShowSort(s => !s)}
               style={{ fontSize: 8, color: showSort ? ACC : MUT, border: `1px solid ${showSort ? ACC + '66' : '#2a2a2a'}`, background: showSort ? ACC + '11' : '#0d0d0d', padding: '3px 8px', borderRadius: 2, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -484,7 +478,6 @@ export default function TowAllocationsTab() {
             )}
           </div>
 
-          {/* Export PDF picker */}
           <div ref={exportRef} style={{ position: 'relative' }}>
             <button onClick={() => setShowExport(s => !s)}
               style={{ fontSize: 8, color: showExport ? ACC : MUT, border: `1px solid ${showExport ? ACC + '66' : '#2a2a2a'}`, background: showExport ? ACC + '11' : '#0d0d0d', padding: '3px 8px', borderRadius: 2, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", fontWeight: 700 }}>
@@ -519,7 +512,6 @@ export default function TowAllocationsTab() {
         </div>
       </div>
 
-      {/* Summary strip */}
       {allFeatures.length > 0 && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 12 }}>
           {[
