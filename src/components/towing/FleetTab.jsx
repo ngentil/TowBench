@@ -453,7 +453,7 @@ export default function FleetTab({ isAdmin }) {
       )}
 
       {isAdmin && <AccessRequestsPanel />}
-      {isAdmin && <InviteCodesPanel />}
+      {isAdmin && <AccessCodesPanel />}
 
       {depotForm !== null && (
         <DepotForm
@@ -530,7 +530,7 @@ function AccessRequestsPanel() {
             {requests.length}
           </span>
         )}
-        <div style={{ fontSize: 8, color: MUT }}>Drivers waiting for an invite code</div>
+        <div style={{ fontSize: 8, color: MUT }}>Drivers waiting for an access code</div>
       </div>
 
       {requests.map(req => (
@@ -568,8 +568,8 @@ function AccessRequestsPanel() {
   );
 }
 
-// ── Invite codes panel ────────────────────────────────────────────────
-function InviteCodesPanel() {
+// ── Access codes panel ────────────────────────────────────────────────
+function AccessCodesPanel() {
   const [codes,      setCodes]      = useState([]);
   const [loading,    setLoading]    = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -598,7 +598,7 @@ function InviteCodesPanel() {
     <div style={{ marginTop: 24, borderTop: '1px solid #1a1a1a', paddingTop: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
         <div>
-          <div style={{ fontSize: 10, fontWeight: 700, color: TXT, letterSpacing: '0.06em' }}>🔑 Invite Codes</div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: TXT, letterSpacing: '0.06em' }}>🔑 Access Codes</div>
           <div style={{ fontSize: 8, color: MUT, marginTop: 2 }}>Share with a driver before their first login</div>
         </div>
         <button onClick={generate} disabled={generating}
