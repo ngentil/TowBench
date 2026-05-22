@@ -112,7 +112,7 @@ export default function App() {
     setLoggingIn(true);
     if (truckInfo.registered) {
       const { error } = await supabase.auth.signInWithPassword({ email: truckInfo.email, password });
-      if (error) { setLoginErr('Incorrect password.'); setLoggingIn(false); return; }
+      if (error) { setLoginErr(error.message); setLoggingIn(false); return; }
     } else {
       if (!truckInfo.is_admin) {
         const { data: valid } = await supabase.rpc('validate_invite_code', { p_code: accessCode.trim() });
