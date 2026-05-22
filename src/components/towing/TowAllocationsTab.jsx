@@ -62,6 +62,17 @@ function timeIn(iso) {
   return rh > 0 ? `${d}d ${rh}h` : `${d}d`;
 }
 
+const NEARBY_KM = 8;
+
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 function StatusBadge({ live }) {
   const color = live ? GRN : '#555';
   return (
@@ -71,7 +82,7 @@ function StatusBadge({ live }) {
   );
 }
 
-function AllocationCard({ feature, fromLog }) {
+function AllocationCard({ feature, fromLog, userPos }) {
   const [open, setOpen] = useState(false);
   const p          = feature.properties || {};
   const road       = p.closedRoadName || '—';
@@ -90,12 +101,21 @@ function AllocationCard({ feature, fromLog }) {
   const elapsed    = timeIn(logMeta?.firstSeen || p.lastUpdated);
   const isLive     = !fromLog;
 
+  const distKm = (userPos && coords)
+    ? haversineKm(userPos.lat, userPos.lng, coords[1], coords[0])
+    : null;
+  const isNearby = distKm !== null && distKm <= NEARBY_KM;
+
   const mapsUrl = coords
     ? `https://www.google.com/maps?q=${coords[1]},${coords[0]}`
     : null;
 
+  const borderLeft = isNearby ? '3px solid #cc2222' : `3px solid ${isLive ? GRN : '#333'}`;
+  const border     = isNearby ? '1px solid #cc2222' : '1px solid #252525';
+
   return (
-    <div style={{ background: '#0d0d0d', border: '1px solid #252525', borderLeft: `3px solid ${isLive ? GRN : '#333'}`, borderRadius: 2, marginBottom: 6, overflow: 'hidden' }}>
+    <div className={isNearby ? 'nearby-pulse' : ''}
+      style={{ background: '#0d0d0d', border, borderLeft, borderRadius: 2, marginBottom: 6, overflow: 'hidden' }}>
       <div onClick={() => setOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', cursor: 'pointer' }}>
         <span style={{ fontSize: 16, flexShrink: 0 }}>🚛</span>
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -116,6 +136,11 @@ function AllocationCard({ feature, fromLog }) {
           </div>
           {!open && (
             <div style={{ marginTop: 3, display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
+              {isNearby && (
+                <span style={{ fontSize: 7, fontWeight: 700, color: '#cc2222', border: '1px solid #cc222255', borderRadius: 2, padding: '1px 4px', fontFamily: "'IBM Plex Mono',monospace" }}>
+                  📍 {distKm.toFixed(1)}km away
+                </span>
+              )}
               {elapsed && (
                 <span style={{ fontSize: 7, color: ORANGE, border: `1px solid ${ORANGE}44`, borderRadius: 2, padding: '1px 4px', fontFamily: "'IBM Plex Mono',monospace", fontWeight: 700 }}>
                   ⏱ {elapsed}
@@ -190,7 +215,7 @@ function AllocationCard({ feature, fromLog }) {
   );
 }
 
-// ── Main tab ──────────────────────────────────────────────────────────────────
+// ── Main tab ──────────────────────────────────────────────────────────────────────────────
 export default function TowAllocationsTab() {
   const [allFeatures,  setAllFeatures]  = useState([]);
   const [liveIds,      setLiveIds]      = useState(new Set());
@@ -198,6 +223,17 @@ export default function TowAllocationsTab() {
   const [err,          setErr]          = useState('');
   const [lastFetch,    setLastFetch]    = useState(null);
   const [countdown,    setCountdown]    = useState(POLL_MS / 1000);
+  const [userPos,      setUserPos]      = useState(null);
+
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    const id = navigator.geolocation.watchPosition(
+      p => setUserPos({ lat: p.coords.latitude, lng: p.coords.longitude }),
+      () => {},
+      { enableHighAccuracy: true }
+    );
+    return () => navigator.geolocation.clearWatch(id);
+  }, []);
   const [sortBy,       setSortBy]       = useState('recent');
   const [showSort,     setShowSort]     = useState(false);
   const [showExport,   setShowExport]   = useState(false);
@@ -258,7 +294,7 @@ export default function TowAllocationsTab() {
     return () => clearInterval(t);
   }, []);
 
-  // ── PDF Export ───────────────────────────────────────────────────────────────
+  // ── PDF Export ─────────────────────────────────────────────────────────────────────────────
   const handleExport = useCallback(async () => {
     setExporting(true);
     try {
@@ -278,7 +314,7 @@ export default function TowAllocationsTab() {
         return lines.length > 1 ? lines[0].replace(/.$/, '…') : lines[0];
       };
 
-      // ── Page header ──────────────────────────────────
+      // ── Page header ────────────────────────────────────────────────
       doc.setFillColor(15, 15, 15);
       doc.rect(0, 0, W, 30, 'F');
       doc.setFont('helvetica', 'bold');
@@ -294,7 +330,7 @@ export default function TowAllocationsTab() {
         ML, 25,
       );
 
-      // ── Summary boxes ────────────────────────────────
+      // ── Summary boxes ────────────────────────────────────────────────
       let y = 35;
       const bw = CW / 3 - 2;
       [
@@ -318,7 +354,7 @@ export default function TowAllocationsTab() {
       });
       y += 18;
 
-      // ── Table ────────────────────────────────────────
+      // ── Table ──────────────────────────────────────────────────────────
       const COLS = [
         { label: 'ROAD NAME',    w: 50 },
         { label: 'SUBURB',       w: 38 },
@@ -378,7 +414,7 @@ export default function TowAllocationsTab() {
         y += ROW_H;
       });
 
-      // ── Footer on every page ─────────────────────────
+      // ── Footer on every page ───────────────────────────────────────────────
       const pages = doc.getNumberOfPages();
       for (let pg = 1; pg <= pages; pg++) {
         doc.setPage(pg);
@@ -398,7 +434,7 @@ export default function TowAllocationsTab() {
     }
   }, [exportHours, liveIds]);
 
-  // ── Render ───────────────────────────────────────────────────────────────────
+  // ── Render ─────────────────────────────────────────────────────────────────────────────
   const sortFn      = SORT_OPTIONS.find(o => o.key === sortBy)?.fn;
   const sorted      = [...allFeatures].sort(sortFn);
   const active      = sorted.filter(f =>  liveIds.has(String(f.properties?.eventId)));
@@ -519,7 +555,7 @@ export default function TowAllocationsTab() {
             Active ({active.length})
           </div>
           {active.map((f, i) => (
-            <AllocationCard key={f.properties?.eventId || i} feature={f} fromLog={false} />
+            <AllocationCard key={f.properties?.eventId || i} feature={f} fromLog={false} userPos={userPos} />
           ))}
           {cleared.length > 0 && <div style={{ marginTop: 12 }} />}
         </>
@@ -531,7 +567,7 @@ export default function TowAllocationsTab() {
             Cleared ({cleared.length})
           </div>
           {cleared.map((f, i) => (
-            <AllocationCard key={f.properties?.eventId || i} feature={f} fromLog={true} />
+            <AllocationCard key={f.properties?.eventId || i} feature={f} fromLog={true} userPos={userPos} />
           ))}
         </>
       )}

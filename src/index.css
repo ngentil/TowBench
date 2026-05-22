@@ -25,3 +25,9 @@ body { background: #0e0e0e; font-family: 'IBM Plex Mono', monospace; }
 
 .tab-bar { scrollbar-width: none; }
 .tab-bar::-webkit-scrollbar { display: none; }
+
+@keyframes pulseRed {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  50%       { box-shadow: 0 0 10px 2px #cc222255; }
+}
+.nearby-pulse { animation: pulseRed 1.2s ease-in-out infinite; }
