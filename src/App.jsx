@@ -8,10 +8,6 @@ function normalizePlate(raw) {
   return /^TOW[A-Z0-9]{1,3}$/.test(s) ? s : null;
 }
 
-function plateFromEmail(email) {
-  return email?.split('@')[0]?.toUpperCase() || '';
-}
-
 function getGreeting(name) {
   const h = new Date().getHours();
   const tod = h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
@@ -41,6 +37,7 @@ export default function App() {
   const [step,        setStep]       = useState(1);
   const [plate,       setPlate]      = useState('');
   const [truckInfo,   setTruckInfo]  = useState(null);
+  const [email,       setEmail]      = useState('');
   const [accessCode,  setAccessCode] = useState('');
   const [driverName,  setDriverName] = useState('');
   const [password,    setPassword]   = useState('');
@@ -50,9 +47,9 @@ export default function App() {
   const [requesting,  setRequesting] = useState(false);
   const [requestSent, setRequestSent] = useState(false);
 
-  const loadTruck = async (email, welcome = false) => {
+  const loadTruck = async (userEmail, welcome = false) => {
     const [truckRes, userRes] = await Promise.all([
-      supabase.from('tow_trucks').select('*').eq('auth_email', email).single(),
+      supabase.from('tow_trucks').select('*').eq('auth_email', userEmail).single(),
       supabase.auth.getUser(),
     ]);
     const truckData = truckRes.data || null;
@@ -90,7 +87,7 @@ export default function App() {
     setLoginErr('');
     const normalized = normalizePlate(plate);
     if (!normalized) {
-      setLoginErr('Enter your plate in the format TOW followed by numbers (e.g. TOW933).');
+      setLoginErr('Enter your plate in the format TOW followed by letters/numbers (e.g. TOW933).');
       return;
     }
     setLoggingIn(true);
@@ -98,6 +95,7 @@ export default function App() {
     setLoggingIn(false);
     if (error) { setLoginErr('Something went wrong. Try again.'); return; }
     setTruckInfo(data);
+    setEmail(data?.email || '');
     setStep(2);
   };
 
@@ -105,25 +103,31 @@ export default function App() {
     e.preventDefault();
     setLoginErr('');
     if (!truckInfo.registered) {
-      if (!accessCode.trim())      { setLoginErr('Enter your access code.'); return; }
-      if (!driverName.trim())      { setLoginErr('Please enter your name.'); return; }
-      if (password.length < 6)     { setLoginErr('Password must be at least 6 characters.'); return; }
-      if (password !== confirmPwd) { setLoginErr('Passwords do not match.'); return; }
+      if (!email.trim() || !/\S+@\S+\.\S+/.test(email)) { setLoginErr('Enter a valid email address.'); return; }
+      if (!truckInfo.is_admin && !accessCode.trim())     { setLoginErr('Enter your access code.'); return; }
+      if (!driverName.trim())                            { setLoginErr('Please enter your name.'); return; }
+      if (password.length < 6)                           { setLoginErr('Password must be at least 6 characters.'); return; }
+      if (password !== confirmPwd)                       { setLoginErr('Passwords do not match.'); return; }
     }
     setLoggingIn(true);
     if (truckInfo.registered) {
       const { error } = await supabase.auth.signInWithPassword({ email: truckInfo.email, password });
       if (error) { setLoginErr('Incorrect password.'); setLoggingIn(false); return; }
     } else {
-      const { data: valid } = await supabase.rpc('validate_invite_code', { p_code: accessCode.trim() });
-      if (!valid) { setLoginErr('Invalid or already used access code.'); setLoggingIn(false); return; }
+      if (!truckInfo.is_admin) {
+        const { data: valid } = await supabase.rpc('validate_invite_code', { p_code: accessCode.trim() });
+        if (!valid) { setLoginErr('Invalid or already used access code.'); setLoggingIn(false); return; }
+      }
       const { error } = await supabase.auth.signUp({
-        email: truckInfo.email,
+        email: email.trim(),
         password,
-        options: { data: { driver_name: driverName.trim() } },
+        options: { data: { driver_name: driverName.trim(), plate: normalizePlate(plate) } },
       });
       if (error) { setLoginErr(error.message); setLoggingIn(false); return; }
-      await supabase.rpc('consume_invite_code', { p_code: accessCode.trim(), p_plate: normalizePlate(plate) });
+      await supabase.rpc('link_plate_to_email', { p_plate: normalizePlate(plate), p_email: email.trim() });
+      if (!truckInfo.is_admin) {
+        await supabase.rpc('consume_invite_code', { p_code: accessCode.trim(), p_plate: normalizePlate(plate) });
+      }
     }
     setLoggingIn(false);
   };
@@ -140,12 +144,12 @@ export default function App() {
   const signOut = () => {
     supabase.auth.signOut();
     setStep(1); setPlate(''); setTruckInfo(null);
-    setAccessCode(''); setDriverName(''); setPassword(''); setConfirmPwd(''); setLoginErr('');
+    setEmail(''); setAccessCode(''); setDriverName(''); setPassword(''); setConfirmPwd(''); setLoginErr('');
     setRequestSent(false); setRequesting(false);
   };
 
   const isAdmin = truck?.is_admin === true;
-  const displayPlate = session ? plateFromEmail(session.user.email) : '';
+  const displayPlate = truck?.plate?.toUpperCase() || session?.user?.user_metadata?.plate?.toUpperCase() || '';
 
   if (!authChecked) {
     return (
@@ -201,7 +205,7 @@ export default function App() {
                   {normalizePlate(plate) || plate}
                 </span>
                 <button type="button"
-                  onClick={() => { setStep(1); setLoginErr(''); setAccessCode(''); setPassword(''); setConfirmPwd(''); setDriverName(''); setRequestSent(false); }}
+                  onClick={() => { setStep(1); setLoginErr(''); setEmail(''); setAccessCode(''); setPassword(''); setConfirmPwd(''); setDriverName(''); setRequestSent(false); }}
                   style={{ fontSize: 8, color: MUT, background: 'none', border: 'none', cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace" }}>
                   ← change
                 </button>
@@ -210,28 +214,35 @@ export default function App() {
               {!truckInfo?.registered ? (
                 <>
                   <div style={{ fontSize: 8, color: '#5a8a5a', lineHeight: 1.6 }}>
-                    First login — enter your access code, name, and choose a password.
+                    First login — enter your details and choose a password.
                   </div>
                   <div>
-                    <div style={labelStyle}>Access Code</div>
-                    <input type="text" value={accessCode}
-                      onChange={e => setAccessCode(e.target.value.toUpperCase().replace(/\s/g, ''))}
-                      placeholder="XXXXXX" required autoFocus autoCapitalize="characters"
-                      style={{ ...inputStyle, letterSpacing: '0.2em', fontSize: 16 }} />
-                    <div style={{ marginTop: 6, fontSize: 8, color: MUT, textAlign: 'right' }}>
-                      {requestSent ? (
-                        <span style={{ color: '#5a8a5a' }}>✓ Request sent — your admin will share a code with you.</span>
-                      ) : (
-                        <>
-                          Don&apos;t have one?{' '}
-                          <button type="button" onClick={handleRequestAccess} disabled={requesting}
-                            style={{ background: 'none', border: 'none', color: ACC, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", fontSize: 8, padding: 0, textDecoration: 'underline', opacity: requesting ? 0.5 : 1 }}>
-                            {requesting ? 'Sending…' : 'Request one from admin'}
-                          </button>
-                        </>
-                      )}
-                    </div>
+                    <div style={labelStyle}>Email</div>
+                    <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+                      placeholder="you@example.com" required autoFocus style={inputStyle} />
                   </div>
+                  {!truckInfo?.is_admin && (
+                    <div>
+                      <div style={labelStyle}>Access Code</div>
+                      <input type="text" value={accessCode}
+                        onChange={e => setAccessCode(e.target.value.toUpperCase().replace(/\s/g, ''))}
+                        placeholder="XXXXXX" required autoCapitalize="characters"
+                        style={{ ...inputStyle, letterSpacing: '0.2em', fontSize: 16 }} />
+                      <div style={{ marginTop: 6, fontSize: 8, color: MUT, textAlign: 'right' }}>
+                        {requestSent ? (
+                          <span style={{ color: '#5a8a5a' }}>✓ Request sent — your admin will share a code with you.</span>
+                        ) : (
+                          <>
+                            Don&apos;t have one?{' '}
+                            <button type="button" onClick={handleRequestAccess} disabled={requesting}
+                              style={{ background: 'none', border: 'none', color: ACC, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", fontSize: 8, padding: 0, textDecoration: 'underline', opacity: requesting ? 0.5 : 1 }}>
+                              {requesting ? 'Sending…' : 'Request one from admin'}
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )}
                   <div>
                     <div style={labelStyle}>Your Name</div>
                     <input type="text" value={driverName} onChange={e => setDriverName(e.target.value)}
@@ -261,7 +272,7 @@ export default function App() {
                 style={{ ...btnA, width: '100%', opacity: loggingIn ? 0.5 : 1, marginTop: 4 }}>
                 {loggingIn
                   ? (truckInfo?.registered ? 'Signing in…' : 'Creating account…')
-                  : (truckInfo?.registered ? 'Sign In' : 'Set Password & Sign In')}
+                  : (truckInfo?.registered ? 'Sign In' : 'Create Account & Sign In')}
               </button>
             </form>
           )}
