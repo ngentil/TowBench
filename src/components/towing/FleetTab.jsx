@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { ACC, MUT, BRD, TXT, GRN, RED, SURF, inp, sel, txa, btnA, btnG, btnD, sm, ovly, mdl, mdlH, mdlB, mdlF } from '../../lib/styles';
 import { FL } from '../ui/shared';
+import { supabase } from '../../lib/supabase';
 import { getDepots, upsertDepot, deleteDepot, getTrucks, upsertTruck, deleteTruck } from '../../lib/db/towing';
 import { RosterCalendar, MiniRoster } from './RosterCalendar';
 
@@ -34,7 +35,7 @@ function StatusBadge({ status }) {
   );
 }
 
-// ── Depot form modal ──────────────────────────────────────────────────────────
+// ── Depot form modal ──────────────────────────────────────────────
 function DepotForm({ depot, onSave, onCancel }) {
   const [name,   setName]   = useState(depot?.name   || '');
   const [suburb, setSuburb] = useState(depot?.suburb || '');
@@ -73,7 +74,7 @@ function DepotForm({ depot, onSave, onCancel }) {
   );
 }
 
-// ── Truck form modal ──────────────────────────────────────────────────────────
+// ── Truck form modal ────────────────────────────────────────────
 function TruckForm({ truck, depots, onSave, onCancel }) {
   const [plate,      setPlate]      = useState(truck?.plate       || '');
   const [daNumber,   setDaNumber]   = useState(truck?.da_number   || '');
@@ -115,7 +116,6 @@ function TruckForm({ truck, depots, onSave, onCancel }) {
         </div>
         <div style={{ ...mdlB, display: 'flex', flexDirection: 'column', gap: 10 }}>
 
-          {/* Truck details */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div>
               <FL t="Tow Plate *" />
@@ -148,7 +148,6 @@ function TruckForm({ truck, depots, onSave, onCancel }) {
             </div>
           </div>
 
-          {/* Schedule */}
           <div style={{ borderTop: '1px solid #1a1a1a', paddingTop: 10 }}>
             <div style={{ fontSize: 8, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 6 }}>Availability Roster</div>
             <RosterCalendar value={schedule} onChange={setSchedule} />
@@ -172,7 +171,7 @@ function TruckForm({ truck, depots, onSave, onCancel }) {
   );
 }
 
-// ── Availability override modal ───────────────────────────────────────────────
+// ── Availability override modal ───────────────────────────────────────────
 function AvailabilityModal({ truck, onSave, onCancel }) {
   const hasRelief = !!(truck.relief_driver_name || truck.relief_da_number);
 
@@ -233,7 +232,6 @@ function AvailabilityModal({ truck, onSave, onCancel }) {
 
         <div style={{ ...mdlB, display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-          {/* Unavailable toggle */}
           <div style={{ background: unavailable ? RED + '11' : '#0a0a0a', border: `1px solid ${unavailable ? RED + '44' : '#252525'}`, borderRadius: 2, padding: '10px 12px' }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
               <div
@@ -265,7 +263,6 @@ function AvailabilityModal({ truck, onSave, onCancel }) {
             )}
           </div>
 
-          {/* Relief driver */}
           <div style={{ border: '1px solid #252525', borderRadius: 2, overflow: 'hidden' }}>
             <div
               onClick={() => setShowRelief(s => !s)}
@@ -316,7 +313,7 @@ function AvailabilityModal({ truck, onSave, onCancel }) {
   );
 }
 
-// ── Main Fleet tab ────────────────────────────────────────────────────────────
+// ── Main Fleet tab ────────────────────────────────────────────────
 export default function FleetTab({ isAdmin }) {
   const [depots,  setDepots]  = useState([]);
   const [trucks,  setTrucks]  = useState([]);
@@ -385,7 +382,6 @@ export default function FleetTab({ isAdmin }) {
 
   return (
     <div style={{ padding: 16, flex: 1, overflowY: 'auto' }}>
-      {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, gap: 8, flexWrap: 'wrap' }}>
         <div>
           <div style={{ fontSize: 13, fontWeight: 700, color: TXT, letterSpacing: '0.06em' }}>🚛 Fleet</div>
@@ -404,7 +400,6 @@ export default function FleetTab({ isAdmin }) {
       </div>
 
       {err && <div style={{ fontSize: 9, color: RED, marginBottom: 12 }}>{err}</div>}
-
       {loading && <div style={{ fontSize: 10, color: MUT, textAlign: 'center', padding: '32px 0' }}>Loading fleet…</div>}
 
       {!loading && depots.length === 0 && (
@@ -416,7 +411,6 @@ export default function FleetTab({ isAdmin }) {
 
       {trucksByDepot.map(({ depot, trucks: dTrucks }) => (
         <div key={depot.id} style={{ marginBottom: 16 }}>
-          {/* Depot header */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, borderLeft: `2px solid ${ACC}`, paddingLeft: 8 }}>
             <div>
               <span style={{ fontSize: 10, fontWeight: 700, color: TXT }}>{depot.name}</span>
@@ -431,7 +425,6 @@ export default function FleetTab({ isAdmin }) {
             )}
           </div>
 
-          {/* Trucks in this depot */}
           {dTrucks.length === 0 && (
             <div style={{ fontSize: 9, color: MUT, padding: '8px 10px', background: '#0a0a0a', border: '1px solid #1a1a1a', borderRadius: 2, marginBottom: 4 }}>
               No trucks assigned to this depot.
@@ -460,6 +453,8 @@ export default function FleetTab({ isAdmin }) {
         </div>
       )}
 
+      {isAdmin && <InviteCodesPanel />}
+
       {depotForm !== null && (
         <DepotForm
           depot={depotForm?.id ? depotForm : undefined}
@@ -467,7 +462,6 @@ export default function FleetTab({ isAdmin }) {
           onCancel={() => setDepotForm(null)}
         />
       )}
-
       {truckForm !== null && (
         <TruckForm
           truck={truckForm?.id ? truckForm : truckForm}
@@ -476,7 +470,6 @@ export default function FleetTab({ isAdmin }) {
           onCancel={() => setTruckForm(null)}
         />
       )}
-
       {availModal !== null && (
         <AvailabilityModal
           truck={availModal}
@@ -484,6 +477,70 @@ export default function FleetTab({ isAdmin }) {
           onCancel={() => setAvailModal(null)}
         />
       )}
+    </div>
+  );
+}
+
+// ── Invite codes panel ────────────────────────────────────────────
+function InviteCodesPanel() {
+  const [codes,      setCodes]      = useState([]);
+  const [loading,    setLoading]    = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [copied,     setCopied]     = useState(null);
+
+  useEffect(() => {
+    supabase.from('invite_codes').select('*').order('created_at', { ascending: false })
+      .then(({ data }) => { setCodes(data || []); setLoading(false); });
+  }, []);
+
+  const generate = async () => {
+    setGenerating(true);
+    const { data, error } = await supabase.rpc('generate_invite_code');
+    setGenerating(false);
+    if (error) { alert(error.message); return; }
+    setCodes(prev => [{ code: data, created_at: new Date().toISOString(), used_by: null, used_at: null, id: data }, ...prev]);
+  };
+
+  const copy = (code) => {
+    navigator.clipboard?.writeText(code);
+    setCopied(code);
+    setTimeout(() => setCopied(null), 2000);
+  };
+
+  return (
+    <div style={{ marginTop: 24, borderTop: '1px solid #1a1a1a', paddingTop: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+        <div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: TXT, letterSpacing: '0.06em' }}>🔑 Invite Codes</div>
+          <div style={{ fontSize: 8, color: MUT, marginTop: 2 }}>Share with a driver before their first login</div>
+        </div>
+        <button onClick={generate} disabled={generating}
+          style={{ ...btnA, ...sm, fontSize: 8, opacity: generating ? 0.5 : 1 }}>
+          {generating ? 'Generating…' : '+ New Code'}
+        </button>
+      </div>
+
+      {loading && <div style={{ fontSize: 9, color: MUT }}>Loading…</div>}
+      {!loading && codes.length === 0 && (
+        <div style={{ fontSize: 9, color: MUT, padding: '8px 0' }}>No codes yet.</div>
+      )}
+      {codes.map(c => (
+        <div key={c.id || c.code} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', background: '#0d0d0d', border: `1px solid ${c.used_at ? '#1a1a1a' : '#2a2a2a'}`, borderRadius: 2, marginBottom: 4, opacity: c.used_at ? 0.45 : 1 }}>
+          <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: '0.2em', color: c.used_at ? MUT : TXT, fontFamily: "'IBM Plex Mono',monospace", flex: 1 }}>
+            {c.code}
+          </span>
+          {c.used_at ? (
+            <span style={{ fontSize: 8, color: MUT, textAlign: 'right' }}>
+              {c.used_by} · {new Date(c.used_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}
+            </span>
+          ) : (
+            <button onClick={() => copy(c.code)}
+              style={{ ...btnG, ...sm, fontSize: 8, color: copied === c.code ? GRN : MUT, borderColor: copied === c.code ? GRN + '55' : undefined }}>
+              {copied === c.code ? '✓ Copied' : 'Copy'}
+            </button>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
