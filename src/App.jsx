@@ -106,7 +106,7 @@ export default function App() {
       if (!email.trim() || !/\S+@\S+\.\S+/.test(email)) { setLoginErr('Enter a valid email address.'); return; }
       if (!truckInfo.is_admin && !accessCode.trim())     { setLoginErr('Enter your access code.'); return; }
       if (!driverName.trim())                            { setLoginErr('Please enter your name.'); return; }
-      if (password.length < 6)                           { setLoginErr('Password must be at least 6 characters.'); return; }
+      if (password.length < 8)                           { setLoginErr('Password must be at least 8 characters.'); return; }
       if (password !== confirmPwd)                       { setLoginErr('Passwords do not match.'); return; }
     }
     setLoggingIn(true);
@@ -251,19 +251,19 @@ export default function App() {
                   <div>
                     <div style={labelStyle}>Password</div>
                     <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-                      placeholder="••••••••" required minLength={6} style={inputStyle} />
+                      placeholder="········" required minLength={8} style={inputStyle} />
                   </div>
                   <div>
                     <div style={labelStyle}>Confirm Password</div>
                     <input type="password" value={confirmPwd} onChange={e => setConfirmPwd(e.target.value)}
-                      placeholder="••••••••" required minLength={6} style={inputStyle} />
+                      placeholder="········" required minLength={8} style={inputStyle} />
                   </div>
                 </>
               ) : (
                 <div>
                   <div style={labelStyle}>Password</div>
                   <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-                    placeholder="••••••••" required autoFocus minLength={6} style={inputStyle} />
+                    placeholder="········" required autoFocus minLength={8} style={inputStyle} />
                 </div>
               )}
 
