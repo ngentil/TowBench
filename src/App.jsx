@@ -59,7 +59,7 @@ export default function App() {
     if (welcome && name) {
       setGreeting(getGreeting(name));
       setShowGreeting(true);
-      setTimeout(() => setShowGreeting(false), 3500);
+      setTimeout(() => setShowGreeting(false), 5500);
     }
   };
 

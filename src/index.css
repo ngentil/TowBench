@@ -6,12 +6,19 @@ body { background: #0e0e0e; font-family: 'IBM Plex Mono', monospace; }
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+@keyframes greetingCycle {
+  0%   { opacity: 0; transform: translateY(10px); }
+  18%  { opacity: 1; transform: translateY(0); }
+  75%  { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-6px); }
+}
 @keyframes blink {
   0%, 100% { opacity: 1; }
   50%       { opacity: 0; }
 }
 
-.loading-text { animation: fadeUp 0.4s ease both; animation-delay: 0.3s; opacity: 0; }
+.loading-text  { animation: greetingCycle 5.5s ease forwards; opacity: 0; }
+.loading-text-sm { animation: fadeUp 0.4s ease both; animation-delay: 0.3s; opacity: 0; }
 .loading-dot  { animation: blink 1s step-start infinite; }
 .loading-dot:nth-child(2) { animation-delay: 0.2s; }
 .loading-dot:nth-child(3) { animation-delay: 0.4s; }
