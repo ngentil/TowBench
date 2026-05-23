@@ -62,7 +62,7 @@ function timeIn(iso) {
   return rh > 0 ? `${d}d ${rh}h` : `${d}d`;
 }
 
-const NEARBY_KM = 20;
+const NEARBY_KM = 10;
 
 function haversineKm(lat1, lon1, lat2, lon2) {
   const R = 6371;
@@ -104,7 +104,7 @@ function AllocationCard({ feature, fromLog, userPos }) {
   const distKm = (userPos && coords)
     ? haversineKm(userPos.lat, userPos.lng, coords[1], coords[0])
     : null;
-  const isNearby = distKm !== null && distKm <= NEARBY_KM;
+  const isNearby = distKm !== null && distKm <= NEARBY_KM && isLive;
 
   const mapsUrl = coords
     ? `https://www.google.com/maps?q=${coords[1]},${coords[0]}`
