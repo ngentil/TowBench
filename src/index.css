@@ -93,6 +93,10 @@ body[data-theme="night"] [style*="border-left: 3px"],
 body[data-theme="night"] [style*="border-left: 2px"] {
   border-left-color: #cc1111 !important;
 }
+/* Active allocation cards: faint orange stripe, distinct from cleared (red) */
+body[data-theme="night"] [style*="border-left: 3px solid #3d9e50"] {
+  border-left-color: #8a3d00 !important;
+}
 
 /* Links */
 body[data-theme="night"] a { color: #ee2222 !important; }
