@@ -32,12 +32,82 @@ body { background: #0e0e0e; font-family: 'IBM Plex Mono', monospace; }
 }
 .nearby-pulse { animation: pulseRed 0.85s ease-in-out infinite; }
 
-/* Night shift skin */
+/* ─── Night Shift Skin — Red phosphor CRT monochrome ─── */
 body[data-theme="night"] { background: #000 !important; }
-body[data-theme="night"] * { animation: none !important; transition: none !important; }
-body[data-theme="night"] button { min-height: 36px; }
+
+/* Kill all motion */
+body[data-theme="night"] *,
+body[data-theme="night"] *::before,
+body[data-theme="night"] *::after {
+  animation: none !important;
+  transition: none !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+/* Blanket: all text → red */
+body[data-theme="night"],
+body[data-theme="night"] * { color: #cc2222 !important; }
+
+/* Blanket: all surfaces → black, borders → dark red */
+body[data-theme="night"] div,
+body[data-theme="night"] span,
+body[data-theme="night"] section,
+body[data-theme="night"] header,
+body[data-theme="night"] main,
+body[data-theme="night"] nav,
+body[data-theme="night"] ul,
+body[data-theme="night"] li {
+  background-color: #000 !important;
+  border-color: #1a0303 !important;
+}
+
+/* Inputs + textareas: slightly tinted so they read as "fields" */
 body[data-theme="night"] input,
-body[data-theme="night"] textarea { min-height: 36px; font-size: 13px !important; }
+body[data-theme="night"] textarea,
+body[data-theme="night"] select {
+  background-color: #060000 !important;
+  color: #cc2222 !important;
+  border-color: #2e0606 !important;
+  min-height: 36px;
+  font-size: 13px !important;
+  caret-color: #ff2222;
+}
+body[data-theme="night"] ::placeholder { color: #3a0808 !important; }
+
+/* Buttons */
+body[data-theme="night"] button {
+  background-color: #060000 !important;
+  color: #cc2222 !important;
+  border-color: #2e0606 !important;
+  min-height: 36px;
+}
+
+/* Structural accent borders (2 px, 3 px) → brighter red so they read as dividers */
+body[data-theme="night"] [style*="border-bottom: 2px"],
+body[data-theme="night"] [style*="border-top: 2px"] {
+  border-top-color:    #cc1111 !important;
+  border-bottom-color: #cc1111 !important;
+}
+body[data-theme="night"] [style*="border-left: 3px"],
+body[data-theme="night"] [style*="border-left: 2px"] {
+  border-left-color: #cc1111 !important;
+}
+
+/* Links */
+body[data-theme="night"] a { color: #ee2222 !important; }
+
+/* Leaflet map container — red phosphor tint via CSS filter */
+body[data-theme="night"] .leaflet-container {
+  background: #000 !important;
+  filter: grayscale(1) sepia(1) hue-rotate(310deg) saturate(6) brightness(0.4) !important;
+}
+/* Leaflet popup in night mode */
+body[data-theme="night"] .towbench-popup .leaflet-popup-content-wrapper {
+  background: #060000 !important;
+  border-color: #2e0606 !important;
+  border-top-color: #cc1111 !important;
+}
 
 /* Leaflet popup dark theme */
 .towbench-popup .leaflet-popup-content-wrapper {
