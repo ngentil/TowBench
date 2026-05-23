@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import 'leaflet/dist/leaflet.css';
 import { ACC, MUT, BRD, TXT, GRN, SURF } from '../../lib/styles';
+import { supabase } from '../../lib/supabase';
 
 const ORANGE = '#e8870a';
 const PERIODS = [
@@ -9,8 +10,6 @@ const PERIODS = [
   { label: '31d', ms: Infinity },
 ];
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function useWindowWidth() {
   const [w, setW] = useState(() => window.innerWidth);
@@ -68,8 +67,6 @@ function fmtShort(iso) {
     day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true,
   });
 }
-
-// ── Sub-components ────────────────────────────────────────────────────────────
 
 function KpiCard({ label, value, sub, color = TXT }) {
   return (
@@ -133,32 +130,33 @@ function DowChart({ counts }) {
   );
 }
 
-// ── Map ───────────────────────────────────────────────────────────────────────
-
-function HeatMap({ points, activeFeatures, showHotspots, showActive, traceMode }) {
+function HeatMap({ points, activeFeatures, showHotspots, showActive, traceMode, annotations, showNotes, onMapClick }) {
   const containerRef   = useRef(null);
   const mapRef         = useRef(null);
   const hotLayerRef    = useRef(null);
   const activeLayerRef = useRef(null);
   const traceLayerRef  = useRef(null);
+  const noteLayerRef   = useRef(null);
+  const leafletRef     = useRef(null);
 
-  // Refs always carry latest prop values into async / event-handler closures
   const showHotspotsRef  = useRef(showHotspots);
   const showActiveRef    = useRef(showActive);
   const traceModeRef     = useRef(traceMode);
+  const onMapClickRef    = useRef(onMapClick);
   const traceStateRef    = useRef({ selected: [], highlights: [] });
 
   showHotspotsRef.current = showHotspots;
   showActiveRef.current   = showActive;
   traceModeRef.current    = traceMode;
+  onMapClickRef.current   = onMapClick;
 
-  // Rebuild markers when underlying data changes
   useEffect(() => {
     if (!containerRef.current) return;
     traceStateRef.current = { selected: [], highlights: [] };
 
     import('leaflet').then(mod => {
       const L = mod.default || mod;
+      leafletRef.current = L;
       if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
 
       const map = L.map(containerRef.current, {
@@ -174,20 +172,22 @@ function HeatMap({ points, activeFeatures, showHotspots, showActive, traceMode }
       const hotLayer    = L.layerGroup().addTo(map);
       const activeLayer = L.layerGroup().addTo(map);
       const traceLayer  = L.layerGroup().addTo(map);
+      const noteLayer   = L.layerGroup().addTo(map);
 
-      // Orange hotspot blobs
+      map.on('click', e => {
+        if (onMapClickRef.current) onMapClickRef.current(e.latlng.lat, e.latlng.lng);
+      });
+
       points.forEach(([lat, lng]) => {
         L.circleMarker([lat, lng], { radius: 28, fillColor: ORANGE, fillOpacity: 0.07, stroke: false }).addTo(hotLayer);
         L.circleMarker([lat, lng], { radius: 10, fillColor: ORANGE, fillOpacity: 0.22, stroke: false }).addTo(hotLayer);
         L.circleMarker([lat, lng], { radius: 4,  fillColor: '#ffcc66', fillOpacity: 0.6,  stroke: false }).addTo(hotLayer);
       });
 
-      // ── Trace handler ──────────────────────────────────────────────────────
       const handleTraceClick = async (feature, lat, lng, innerM, outerM) => {
         const state = traceStateRef.current;
 
         if (state.selected.length >= 2) {
-          // Reset selection and route
           traceLayerRef.current?.clearLayers();
           state.highlights.forEach(h => {
             h.inner.setStyle({ radius: 5, fillColor: GRN, fillOpacity: 0.9, color: GRN, weight: 1 });
@@ -197,7 +197,6 @@ function HeatMap({ points, activeFeatures, showHotspots, showActive, traceMode }
           state.highlights = [];
         }
 
-        // Mark this point as selected
         innerM.setStyle({ radius: 7, fillColor: '#cc2222', fillOpacity: 1, color: '#ff6644', weight: 2 });
         outerM.setStyle({ fillColor: '#cc2222', fillOpacity: 0.22 });
         state.selected.push({ feature, lat, lng });
@@ -205,7 +204,6 @@ function HeatMap({ points, activeFeatures, showHotspots, showActive, traceMode }
 
         if (state.selected.length < 2) return;
 
-        // Draw route between the two points
         const [a, b] = state.selected;
         try {
           const res = await fetch(
@@ -235,7 +233,6 @@ function HeatMap({ points, activeFeatures, showHotspots, showActive, traceMode }
           }).addTo(traceLayer);
 
         } catch {
-          // Fallback: straight dashed line + haversine distance
           L.polyline([[a.lat, a.lng], [b.lat, b.lng]], {
             color: '#cc2222', weight: 3, className: 'trace-route',
           }).addTo(traceLayer);
@@ -252,9 +249,8 @@ function HeatMap({ points, activeFeatures, showHotspots, showActive, traceMode }
         }
       };
 
-      // ── Active allocation markers (green) ──────────────────────────────────
       activeFeatures.forEach(feature => {
-        const coords = feature.geometry.coordinates; // [lng, lat]
+        const coords = feature.geometry.coordinates;
         const lat = coords[1], lng = coords[0];
         const p = feature.properties || {};
         const logMeta = feature._logMeta;
@@ -268,7 +264,6 @@ function HeatMap({ points, activeFeatures, showHotspots, showActive, traceMode }
         outerM.addTo(activeLayer);
         innerM.addTo(activeLayer);
 
-        // Popup content (only shown in non-trace mode)
         const road    = p.closedRoadName || '—';
         const sub     = p.reference?.startIntersectionLocality || '';
         const cross   = p.reference?.startIntersectionRoadName || '';
@@ -328,9 +323,26 @@ function HeatMap({ points, activeFeatures, showHotspots, showActive, traceMode }
         outerM.on('click', handleClick);
       });
 
+      (annotations || []).forEach(ann => {
+        if (!ann.lat || !ann.lng) return;
+        L.marker([ann.lat, ann.lng], {
+          icon: L.divIcon({
+            className: '',
+            html: `<div style="font-size:16px;line-height:1;text-shadow:0 1px 4px #000a">📌</div>`,
+            iconSize: [20, 20], iconAnchor: [10, 20],
+          }),
+        }).bindPopup(`
+          <div style="font-family:'IBM Plex Mono',monospace;min-width:160px;padding:8px 10px;background:#0d0c00;color:#c8a84b">
+            <div style="font-size:9px;line-height:1.5">${ann.note}</div>
+            <div style="font-size:7px;color:#6a5a20;margin-top:5px">${ann.created_by?.split('@')[0] || ''} · expires ${new Date(ann.expires_at).toLocaleDateString('en-AU')}</div>
+          </div>`, { className: 'towbench-popup', closeButton: true })
+        .addTo(noteLayer);
+      });
+
       hotLayerRef.current    = hotLayer;
       activeLayerRef.current = activeLayer;
       traceLayerRef.current  = traceLayer;
+      noteLayerRef.current   = noteLayer;
       mapRef.current         = map;
 
       if (!showHotspotsRef.current) map.removeLayer(hotLayer);
@@ -356,17 +368,35 @@ function HeatMap({ points, activeFeatures, showHotspots, showActive, traceMode }
     };
   }, [points, activeFeatures]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Toggle hotspot / active layer visibility
+  useEffect(() => {
+    const L  = leafletRef.current;
+    const nl = noteLayerRef.current;
+    if (!L || !nl) return;
+    nl.clearLayers();
+    (annotations || []).forEach(ann => {
+      if (!ann.lat || !ann.lng) return;
+      L.marker([ann.lat, ann.lng], {
+        icon: L.divIcon({ className: '', html: `<div style="font-size:16px;line-height:1;text-shadow:0 1px 4px #000a">📌</div>`, iconSize: [20, 20], iconAnchor: [10, 20] }),
+      }).bindPopup(`
+        <div style="font-family:'IBM Plex Mono',monospace;min-width:160px;padding:8px 10px;background:#0d0c00;color:#c8a84b">
+          <div style="font-size:9px;line-height:1.5">${ann.note}</div>
+          <div style="font-size:7px;color:#6a5a20;margin-top:5px">${ann.created_by?.split('@')[0] || ''} · expires ${new Date(ann.expires_at).toLocaleDateString('en-AU')}</div>
+        </div>`, { className: 'towbench-popup', closeButton: true })
+      .addTo(nl);
+    });
+  }, [annotations]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     const map = mapRef.current;
     const hot = hotLayerRef.current;
     const act = activeLayerRef.current;
+    const nts = noteLayerRef.current;
     if (!map || !hot || !act) return;
     if (showHotspots) map.addLayer(hot); else map.removeLayer(hot);
     if (showActive)   map.addLayer(act); else map.removeLayer(act);
-  }, [showHotspots, showActive]);
+    if (nts) { if (showNotes) map.addLayer(nts); else map.removeLayer(nts); }
+  }, [showHotspots, showActive, showNotes]);
 
-  // Clear trace when trace mode is toggled off; update cursor
   useEffect(() => {
     const map = mapRef.current;
     if (map) map.getContainer().style.cursor = traceMode ? 'crosshair' : '';
@@ -385,17 +415,52 @@ function HeatMap({ points, activeFeatures, showHotspots, showActive, traceMode }
   return <div ref={containerRef} style={{ width: '100%', height: '100%', borderRadius: 2 }} />;
 }
 
-// ── Main tab ──────────────────────────────────────────────────────────────────
-
-export default function TowAnalyticsTab({ allFeatures, liveIds, loading }) {
+export default function TowAnalyticsTab({ allFeatures, liveIds, loading, userEmail }) {
   const [periodMs,     setPeriodMs]     = useState(Infinity);
   const [showHotspots, setShowHotspots] = useState(true);
   const [showActive,   setShowActive]   = useState(true);
+  const [showNotes,    setShowNotes]    = useState(true);
   const [traceMode,    setTraceMode]    = useState(false);
+  const [annotations,  setAnnotations]  = useState([]);
+  const [pinMode,      setPinMode]      = useState(false);
+  const [pinDraft,     setPinDraft]     = useState(null);
+  const [pinNote,      setPinNote]      = useState('');
+  const [pinExpiry,    setPinExpiry]    = useState('1d');
   const winW     = useWindowWidth();
   const isMobile = winW < 640;
 
-  // ── Client-side period filter ────────────────────────────────────────────────
+  const fetchAnnotations = useCallback(async () => {
+    try {
+      const { data } = await supabase
+        .from('map_notes')
+        .select('id, lat, lng, note, created_by, expires_at')
+        .is('allocation_id', null)
+        .gt('expires_at', new Date().toISOString());
+      if (data) setAnnotations(data);
+    } catch { /* table may not exist yet */ }
+  }, []);
+
+  useEffect(() => { fetchAnnotations(); }, [fetchAnnotations]);
+
+  const saveAnnotation = useCallback(async () => {
+    if (!pinDraft || !pinNote.trim()) return;
+    const EXPIRY_MS = { '1d': 864e5, '3d': 3 * 864e5, '7d': 7 * 864e5 };
+    const expires_at = new Date(Date.now() + (EXPIRY_MS[pinExpiry] || 864e5)).toISOString();
+    await supabase.from('map_notes').insert({
+      lat: pinDraft.lat, lng: pinDraft.lng,
+      note: pinNote.trim(),
+      created_by: userEmail,
+      expires_at,
+    });
+    setPinDraft(null); setPinNote(''); setPinMode(false);
+    fetchAnnotations();
+  }, [pinDraft, pinNote, pinExpiry, userEmail, fetchAnnotations]);
+
+  const handleMapClick = useCallback((lat, lng) => {
+    if (!pinMode) return;
+    setPinDraft({ lat, lng });
+  }, [pinMode]);
+
   const features = useMemo(() => {
     const cutoff = Date.now() - periodMs;
     return allFeatures.filter(f => {
@@ -405,11 +470,9 @@ export default function TowAnalyticsTab({ allFeatures, liveIds, loading }) {
     });
   }, [allFeatures, periodMs]);
 
-  // ── Active / Cleared split ───────────────────────────────────────────────────
   const activeCount  = features.filter(f =>  liveIds.has(String(f.properties?.eventId))).length;
   const clearedCount = features.length - activeCount;
 
-  // ── Time-of-day / day-of-week ────────────────────────────────────────────────
   const hourCounts = Array(24).fill(0);
   const dowCounts  = Array(7).fill(0);
   features.forEach(f => {
@@ -422,13 +485,11 @@ export default function TowAnalyticsTab({ allFeatures, liveIds, loading }) {
     ? `${String(peakHourIdx).padStart(2, '0')}:00–${String(peakHourIdx + 1).padStart(2, '0')}:00`
     : '—';
 
-  // ── Tallies ──────────────────────────────────────────────────────────────────
   const topSuburbs = tally(features, f => f.properties?.reference?.startIntersectionLocality);
   const topRoads   = tally(features, f => f.properties?.closedRoadName);
   const incTypes   = tally(features, f => f.properties?.eventSubType);
   const impTypes   = tally(features, f => f.properties?.impact?.impactType);
 
-  // ── Duration ─────────────────────────────────────────────────────────────────
   const durations = features
     .filter(f => f._logMeta?.firstSeen)
     .map(f => {
@@ -439,13 +500,11 @@ export default function TowAnalyticsTab({ allFeatures, liveIds, loading }) {
     .filter(m => m > 0 && m < 60 * 24);
   const avgDuration = durations.length ? durations.reduce((a, b) => a + b, 0) / durations.length : null;
 
-  // ── Lanes ────────────────────────────────────────────────────────────────────
   const laneValues = features.map(f => f.properties?.numberLanesImpacted).filter(n => n != null && n > 0);
   const avgLanes   = laneValues.length
     ? (laneValues.reduce((a, b) => a + b, 0) / laneValues.length).toFixed(1)
     : '—';
 
-  // ── Map point sets ───────────────────────────────────────────────────────────
   const mapPoints = useMemo(() =>
     features.filter(f => f.geometry?.coordinates)
       .map(f => [f.geometry.coordinates[1], f.geometry.coordinates[0]]),
@@ -455,7 +514,6 @@ export default function TowAnalyticsTab({ allFeatures, liveIds, loading }) {
     features.filter(f => f.geometry?.coordinates && liveIds.has(String(f.properties?.eventId))),
     [features, liveIds]);
 
-  // ── Summary ──────────────────────────────────────────────────────────────────
   const days        = periodMs === Infinity ? 31 : Math.round(periodMs / 864e5);
   const avgPerDay   = features.length ? (features.length / days).toFixed(1) : '0';
   const topSuburb   = topSuburbs[0]?.[0] || '—';
@@ -473,7 +531,6 @@ export default function TowAnalyticsTab({ allFeatures, liveIds, loading }) {
   return (
     <div style={{ padding: 16, flex: 1, overflowY: 'auto' }}>
 
-      {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
         <div>
           <div style={{ fontSize: 13, fontWeight: 700, color: TXT, letterSpacing: '0.06em' }}>📊 Tow Analytics</div>
@@ -493,7 +550,6 @@ export default function TowAnalyticsTab({ allFeatures, liveIds, loading }) {
         </div>
       </div>
 
-      {/* KPI row */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
         <KpiCard label="Total"        value={features.length}           color={TXT}    />
         <KpiCard label="Active"       value={activeCount}               color={GRN}    />
@@ -505,10 +561,8 @@ export default function TowAnalyticsTab({ allFeatures, liveIds, loading }) {
         <KpiCard label="Avg Lanes"    value={avgLanes}                  color={ORANGE} sub={laneValues.length ? `${laneValues.length} jobs` : undefined} />
       </div>
 
-      {/* Map + side stats */}
       <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 320px', gap: 12, marginBottom: 14 }}>
 
-        {/* Map */}
         <div style={{ background: SURF, border: '1px solid ' + BRD, borderRadius: 2, overflow: 'hidden', minHeight: 340 }}>
           <div style={{ padding: '8px 12px', borderBottom: '1px solid ' + BRD, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <span style={{ fontSize: 8, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700 }}>
@@ -520,6 +574,12 @@ export default function TowAnalyticsTab({ allFeatures, liveIds, loading }) {
               </button>
               <button onClick={() => setShowActive(s => !s)} style={legendBtn(showActive, GRN)}>
                 <span style={{ fontSize: 10, lineHeight: 1 }}>●</span> Active
+              </button>
+              <button onClick={() => setShowNotes(s => !s)} style={legendBtn(showNotes, '#c8a84b')}>
+                📌 Notes
+              </button>
+              <button onClick={() => { setPinMode(s => !s); if (pinMode) setPinDraft(null); }} style={legendBtn(pinMode, '#c8a84b')}>
+                + Pin
               </button>
               <button onClick={() => setTraceMode(s => !s)} style={legendBtn(traceMode, '#cc2222')}>
                 ↔ Trace
@@ -534,6 +594,38 @@ export default function TowAnalyticsTab({ allFeatures, liveIds, loading }) {
                 </div>
               </div>
             )}
+            {pinMode && !pinDraft && (
+              <div style={{ position: 'absolute', top: 8, left: 0, right: 0, zIndex: 500, display: 'flex', justifyContent: 'center', pointerEvents: 'none' }}>
+                <div style={{ background: '#c8a84b99', color: '#000', fontSize: 7, fontFamily: "'IBM Plex Mono',monospace", padding: '3px 9px', borderRadius: 2, letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700 }}>
+                  Tap map to drop annotation pin
+                </div>
+              </div>
+            )}
+            {pinDraft && (
+              <div style={{ position: 'absolute', bottom: 8, left: 8, right: 8, zIndex: 500, background: '#0d0c00', border: '1px solid #3a3000', borderRadius: 2, padding: '10px 12px' }}>
+                <textarea value={pinNote} onChange={e => setPinNote(e.target.value)} placeholder="Annotation note…"
+                  style={{ width: '100%', background: '#080800', border: '1px solid #2a2a00', color: '#c8a84b', fontFamily: "'IBM Plex Mono',monospace", fontSize: 10, padding: '5px 7px', borderRadius: 2, outline: 'none', resize: 'none', height: 50, boxSizing: 'border-box' }} />
+                <div style={{ display: 'flex', gap: 6, marginTop: 6, alignItems: 'center' }}>
+                  {['1d', '3d', '7d'].map(d => (
+                    <button key={d} onClick={() => setPinExpiry(d)}
+                      style={{ fontSize: 8, padding: '2px 7px', borderRadius: 2, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", fontWeight: 700,
+                        border: `1px solid ${pinExpiry === d ? '#c8a84b' : '#2a2a00'}`,
+                        color: pinExpiry === d ? '#c8a84b' : '#6a5a20',
+                        background: pinExpiry === d ? '#c8a84b22' : 'none' }}>
+                      {d}
+                    </button>
+                  ))}
+                  <button onClick={saveAnnotation}
+                    style={{ fontSize: 8, padding: '2px 9px', borderRadius: 2, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", fontWeight: 700, background: '#c8a84b', color: '#000', border: 'none', marginLeft: 'auto' }}>
+                    Save
+                  </button>
+                  <button onClick={() => setPinDraft(null)}
+                    style={{ fontSize: 8, padding: '2px 7px', borderRadius: 2, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", background: 'none', border: '1px solid #2a2a00', color: '#6a5a20' }}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
             {loading && allFeatures.length === 0
               ? <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', fontSize: 9, color: MUT }}>Loading…</div>
               : mapPoints.length === 0 && activeFeatures.length === 0
@@ -544,12 +636,14 @@ export default function TowAnalyticsTab({ allFeatures, liveIds, loading }) {
                     showHotspots={showHotspots}
                     showActive={showActive}
                     traceMode={traceMode}
+                    annotations={annotations}
+                    showNotes={showNotes}
+                    onMapClick={handleMapClick}
                   />
             }
           </div>
         </div>
 
-        {/* Side stats */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ background: SURF, border: '1px solid ' + BRD, borderRadius: 2, padding: '10px 12px', flex: 1 }}>
             <div style={{ fontSize: 8, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 10 }}>Incident Type</div>
@@ -562,7 +656,6 @@ export default function TowAnalyticsTab({ allFeatures, liveIds, loading }) {
         </div>
       </div>
 
-      {/* Peak hours + day of week */}
       <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12, marginBottom: 14 }}>
         <div style={{ background: SURF, border: '1px solid ' + BRD, borderRadius: 2, padding: '10px 12px' }}>
           <div style={{ fontSize: 8, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 10 }}>Jobs by Hour of Day</div>
@@ -574,7 +667,6 @@ export default function TowAnalyticsTab({ allFeatures, liveIds, loading }) {
         </div>
       </div>
 
-      {/* Top suburbs + top roads */}
       <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
         <div style={{ background: SURF, border: '1px solid ' + BRD, borderRadius: 2, padding: '10px 12px' }}>
           <div style={{ fontSize: 8, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 10 }}>Hot Suburbs</div>
