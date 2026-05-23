@@ -31,3 +31,21 @@ body { background: #0e0e0e; font-family: 'IBM Plex Mono', monospace; }
   50%       { box-shadow: 0 0 28px 10px #cc2222bb; }
 }
 .nearby-pulse { animation: pulseRed 0.85s ease-in-out infinite; }
+
+/* Leaflet popup dark theme */
+.towbench-popup .leaflet-popup-content-wrapper {
+  background: #0d0d0d;
+  border: 1px solid #252525;
+  border-top: 2px solid #3a8a5a;
+  border-radius: 2px;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.85);
+  padding: 0;
+}
+.towbench-popup .leaflet-popup-content { margin: 0; }
+.towbench-popup .leaflet-popup-tip-container { display: none; }
+.towbench-popup .leaflet-popup-close-button { color: #555 !important; font-size: 16px; top: 5px; right: 7px; }
+.towbench-popup .leaflet-popup-close-button:hover { color: #ccc !important; background: none !important; }
+
+/* Trace route marching-ants animation */
+.trace-route { stroke-dasharray: 14 5; animation: traceDash 0.7s linear infinite; }
+@keyframes traceDash { to { stroke-dashoffset: -19; } }
