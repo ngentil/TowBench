@@ -1,0 +1,18 @@
+{
+  "name": "TowBench",
+  "short_name": "TowBench",
+  "description": "Live tow allocation monitoring for Victoria",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0e0e0e",
+  "theme_color": "#e8670a",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%230e0e0e'/><text y='.9em' font-size='80' x='10'>🚛</text></svg>",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
