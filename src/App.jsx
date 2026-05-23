@@ -147,6 +147,7 @@ export default function App() {
   };
 
   const signOut = () => {
+    if (session?.user?.id) sessionStorage.removeItem(`towbench_greeted_${session.user.id}`);
     supabase.auth.signOut();
     setStep(1); setPlate(''); setTruckInfo(null);
     setEmail(''); setAccessCode(''); setDriverName(''); setPassword(''); setConfirmPwd(''); setLoginErr('');
