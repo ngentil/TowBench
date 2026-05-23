@@ -1,14 +1,12 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import 'leaflet/dist/leaflet.css';
 import { ACC, MUT, BRD, TXT, GRN, SURF } from '../../lib/styles';
-import { getAllocationsForAnalytics } from '../../lib/db/towing';
 
 const ORANGE = '#e8870a';
 const PERIODS = [
-  { label: '7d',  days: 7   },
-  { label: '30d', days: 30  },
-  { label: '90d', days: 90  },
-  { label: '1yr', days: 365 },
+  { label: '24h', ms: 864e5   },
+  { label: '7d',  ms: 6048e5  },
+  { label: '31d', ms: Infinity },
 ];
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -51,7 +49,7 @@ function BarList({ data, color = ORANGE, maxBars = 10, labelWidth = 110 }) {
       {data.slice(0, maxBars).map(([label, val]) => (
         <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <div style={{ width: labelWidth, fontSize: 8, color: MUT, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'right' }} title={label}>{label}</div>
-          <div style={{ flex: 1, background: '#1a1a1a', borderRadius: 1, height: 13, overflow: 'hidden', position: 'relative' }}>
+          <div style={{ flex: 1, background: '#1a1a1a', borderRadius: 1, height: 13, overflow: 'hidden' }}>
             <div style={{ width: `${(val / max) * 100}%`, height: '100%', background: color, borderRadius: 1, transition: 'width 0.5s ease' }} />
           </div>
           <div style={{ width: 26, fontSize: 8, color: TXT, fontFamily: "'IBM Plex Mono',monospace", flexShrink: 0 }}>{val}</div>
@@ -156,29 +154,26 @@ function HeatMap({ points }) {
 
 // ── Main tab ──────────────────────────────────────────────────────────────────
 
-export default function TowAnalyticsTab() {
-  const [days,    setDays]    = useState(30);
-  const [rows,    setRows]    = useState([]);
-  const [loading, setLoading] = useState(true);
+export default function TowAnalyticsTab({ allFeatures, liveIds, loading }) {
+  const [periodMs, setPeriodMs] = useState(Infinity);
 
-  useEffect(() => {
-    setLoading(true);
-    getAllocationsForAnalytics(days)
-      .then(r  => { setRows(r);   setLoading(false); })
-      .catch(e => { console.warn('analytics:', e.message); setLoading(false); });
-  }, [days]);
+  // ── Client-side period filter ────────────────────────────────────────────────
+  const since    = Date.now() - periodMs;
+  const features = allFeatures.filter(f => {
+    if (periodMs === Infinity) return true;
+    const t = new Date(f._logMeta?.firstSeen || f.properties?.lastUpdated || 0).getTime();
+    return t >= since;
+  });
 
-  // ── Derived ─────────────────────────────────────────────────────────────────
-  const features = rows.map(r => ({
-    ...r,
-    props:  r.data?.properties || {},
-    coords: r.data?.geometry?.coordinates, // [lng, lat]
-  }));
+  // ── Active / Cleared split ───────────────────────────────────────────────────
+  const activeCount  = features.filter(f =>  liveIds.has(String(f.properties?.eventId))).length;
+  const clearedCount = features.length - activeCount;
 
+  // ── Time-of-day / day-of-week ────────────────────────────────────────────────
   const hourCounts = Array(24).fill(0);
   const dowCounts  = Array(7).fill(0);
   features.forEach(f => {
-    const d = new Date(f.first_seen || f.event_created_at);
+    const d = new Date(f._logMeta?.firstSeen || f.properties?.lastUpdated);
     if (!isNaN(d)) { hourCounts[d.getHours()]++; dowCounts[d.getDay()]++; }
   });
 
@@ -187,22 +182,40 @@ export default function TowAnalyticsTab() {
     ? `${String(peakHourIdx).padStart(2, '0')}:00–${String(peakHourIdx + 1).padStart(2, '0')}:00`
     : '—';
 
-  const topSuburbs  = tally(features, f => f.suburb);
-  const topRoads    = tally(features, f => f.road_name);
-  const incTypes    = tally(features, f => f.props.eventSubType);
-  const impTypes    = tally(features, f => f.props.impact?.impactType);
+  // ── Tallies ──────────────────────────────────────────────────────────────────
+  const topSuburbs = tally(features, f => f.properties?.reference?.startIntersectionLocality);
+  const topRoads   = tally(features, f => f.properties?.closedRoadName);
+  const incTypes   = tally(features, f => f.properties?.eventSubType);
+  const impTypes   = tally(features, f => f.properties?.impact?.impactType);
 
+  // ── Duration (firstSeen → clearedAt or lastSeen) ─────────────────────────────
   const durations = features
-    .filter(f => f.first_seen && f.last_seen)
-    .map(f => (new Date(f.last_seen) - new Date(f.first_seen)) / 60000)
+    .filter(f => f._logMeta?.firstSeen)
+    .map(f => {
+      const start = new Date(f._logMeta.firstSeen);
+      const end   = new Date(f._logMeta.clearedAt || f._logMeta.lastSeen);
+      return (end - start) / 60000;
+    })
     .filter(m => m > 0 && m < 60 * 24);
   const avgDuration = durations.length
     ? durations.reduce((a, b) => a + b, 0) / durations.length
     : null;
 
-  const avgPerDay  = features.length ? (features.length / days).toFixed(1) : '0';
-  const topSuburb  = topSuburbs[0]?.[0] || '—';
-  const mapPoints  = features.filter(f => f.coords).map(f => [f.coords[1], f.coords[0]]);
+  // ── Lanes impacted ───────────────────────────────────────────────────────────
+  const laneValues = features.map(f => f.properties?.numberLanesImpacted).filter(n => n != null && n > 0);
+  const avgLanes   = laneValues.length
+    ? (laneValues.reduce((a, b) => a + b, 0) / laneValues.length).toFixed(1)
+    : '—';
+
+  // ── Summary ──────────────────────────────────────────────────────────────────
+  const days      = periodMs === Infinity ? 31 : Math.round(periodMs / 864e5);
+  const avgPerDay = features.length ? (features.length / days).toFixed(1) : '0';
+  const topSuburb = topSuburbs[0]?.[0] || '—';
+  const mapPoints = features
+    .filter(f => f.geometry?.coordinates)
+    .map(f => [f.geometry.coordinates[1], f.geometry.coordinates[0]]);
+
+  const periodLabel = PERIODS.find(p => p.ms === periodMs)?.label || '31d';
 
   return (
     <div style={{ padding: 16, flex: 1, overflowY: 'auto' }}>
@@ -212,13 +225,15 @@ export default function TowAnalyticsTab() {
         <div>
           <div style={{ fontSize: 13, fontWeight: 700, color: TXT, letterSpacing: '0.06em' }}>📊 Tow Analytics</div>
           <div style={{ fontSize: 9, color: MUT, marginTop: 2 }}>
-            {loading ? 'Loading…' : `${features.length} allocation${features.length !== 1 ? 's' : ''} · last ${days} day${days !== 1 ? 's' : ''}`}
+            {loading && allFeatures.length === 0
+              ? 'Loading…'
+              : `${features.length} allocation${features.length !== 1 ? 's' : ''} · ${periodMs === Infinity ? 'last 31 days' : `last ${periodLabel}`}`}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 4 }}>
           {PERIODS.map(p => (
-            <button key={p.days} onClick={() => setDays(p.days)}
-              style={{ fontSize: 8, fontWeight: 700, padding: '3px 9px', borderRadius: 2, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", letterSpacing: '0.06em', border: `1px solid ${p.days === days ? ACC + '88' : '#2a2a2a'}`, color: p.days === days ? ACC : MUT, background: p.days === days ? ACC + '11' : '#0d0d0d' }}>
+            <button key={p.label} onClick={() => setPeriodMs(p.ms)}
+              style={{ fontSize: 8, fontWeight: 700, padding: '3px 9px', borderRadius: 2, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", letterSpacing: '0.06em', border: `1px solid ${p.ms === periodMs ? ACC + '88' : '#2a2a2a'}`, color: p.ms === periodMs ? ACC : MUT, background: p.ms === periodMs ? ACC + '11' : '#0d0d0d' }}>
               {p.label}
             </button>
           ))}
@@ -227,11 +242,14 @@ export default function TowAnalyticsTab() {
 
       {/* KPI row */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
-        <KpiCard label="Total Jobs"    value={features.length}       color={TXT}    />
-        <KpiCard label="Avg / Day"     value={avgPerDay}             color={ACC}    />
-        <KpiCard label="Peak Hour"     value={peakHour}              color={ORANGE} sub={hourCounts[peakHourIdx] > 0 ? `${hourCounts[peakHourIdx]} jobs` : undefined} />
-        <KpiCard label="Top Suburb"    value={topSuburb}             color={GRN}    sub={topSuburbs[0] ? `${topSuburbs[0][1]} jobs` : undefined} />
-        <KpiCard label="Avg Duration"  value={fmtDuration(avgDuration)} color={MUT} sub={durations.length ? `from ${durations.length} jobs` : 'insufficient data'} />
+        <KpiCard label="Total"        value={features.length}           color={TXT}    />
+        <KpiCard label="Active"       value={activeCount}               color={GRN}    />
+        <KpiCard label="Cleared"      value={clearedCount}              color={MUT}    />
+        <KpiCard label="Avg / Day"    value={avgPerDay}                 color={ACC}    />
+        <KpiCard label="Peak Hour"    value={peakHour}                  color={ORANGE} sub={hourCounts[peakHourIdx] > 0 ? `${hourCounts[peakHourIdx]} jobs` : undefined} />
+        <KpiCard label="Top Suburb"   value={topSuburb}                 color={GRN}    sub={topSuburbs[0] ? `${topSuburbs[0][1]} jobs` : undefined} />
+        <KpiCard label="Avg Duration" value={fmtDuration(avgDuration)}  color={MUT}    sub={durations.length ? `from ${durations.length} jobs` : 'insufficient data'} />
+        <KpiCard label="Avg Lanes"    value={avgLanes}                  color={ORANGE} sub={laneValues.length ? `${laneValues.length} jobs` : undefined} />
       </div>
 
       {/* Map + side stats */}
@@ -243,7 +261,7 @@ export default function TowAnalyticsTab() {
             Incident Heat Map · {mapPoints.length} plotted
           </div>
           <div style={{ height: 300, position: 'relative' }}>
-            {loading
+            {loading && allFeatures.length === 0
               ? <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', fontSize: 9, color: MUT }}>Loading…</div>
               : mapPoints.length === 0
                 ? <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', fontSize: 9, color: MUT }}>No coordinate data yet</div>
