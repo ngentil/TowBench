@@ -35,7 +35,6 @@ function StatusBadge({ status }) {
   );
 }
 
-// ── Depot form modal ───────────────────────────────────────
 function DepotForm({ depot, onSave, onCancel }) {
   const [name,   setName]   = useState(depot?.name   || '');
   const [suburb, setSuburb] = useState(depot?.suburb || '');
@@ -74,7 +73,6 @@ function DepotForm({ depot, onSave, onCancel }) {
   );
 }
 
-// ── Truck form modal ────────────────────────────────────
 function TruckForm({ truck, depots, onSave, onCancel }) {
   const [plate,      setPlate]      = useState(truck?.plate       || '');
   const [daNumber,   setDaNumber]   = useState(truck?.da_number   || '');
@@ -115,49 +113,20 @@ function TruckForm({ truck, depots, onSave, onCancel }) {
           <button style={{ ...btnG, ...sm }} onClick={onCancel}>✕</button>
         </div>
         <div style={{ ...mdlB, display: 'flex', flexDirection: 'column', gap: 10 }}>
-
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            <div>
-              <FL t="Tow Plate *" />
-              <input style={fld} value={plate} onChange={e => setPlate(e.target.value)} placeholder="TOW XXX" autoFocus />
-            </div>
-            <div>
-              <FL t="DA Number" />
-              <input style={fld} value={daNumber} onChange={e => setDaNumber(e.target.value)} placeholder="e.g. 12345" />
-            </div>
+            <div><FL t="Tow Plate *" /><input style={fld} value={plate} onChange={e => setPlate(e.target.value)} placeholder="TOW XXX" autoFocus /></div>
+            <div><FL t="DA Number" /><input style={fld} value={daNumber} onChange={e => setDaNumber(e.target.value)} placeholder="e.g. 12345" /></div>
           </div>
-
-          <div>
-            <FL t="Driver Name" />
-            <input style={fld} value={driverName} onChange={e => setDriverName(e.target.value)} placeholder="e.g. John Smith" />
-          </div>
-
+          <div><FL t="Driver Name" /><input style={fld} value={driverName} onChange={e => setDriverName(e.target.value)} placeholder="e.g. John Smith" /></div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            <div>
-              <FL t="Depot *" />
-              <select style={{ ...sel, width: '100%' }} value={depotId} onChange={e => setDepotId(e.target.value)}>
-                <option value="">— select depot —</option>
-                {depots.map(d => <option key={d.id} value={d.id}>{d.name}{d.suburb ? ` — ${d.suburb}` : ''}</option>)}
-              </select>
-            </div>
-            <div>
-              <FL t="Status" />
-              <select style={{ ...sel, width: '100%' }} value={status} onChange={e => setStatus(e.target.value)}>
-                {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
+            <div><FL t="Depot *" /><select style={{ ...sel, width: '100%' }} value={depotId} onChange={e => setDepotId(e.target.value)}><option value="">— select depot —</option>{depots.map(d => <option key={d.id} value={d.id}>{d.name}{d.suburb ? ` — ${d.suburb}` : ''}</option>)}</select></div>
+            <div><FL t="Status" /><select style={{ ...sel, width: '100%' }} value={status} onChange={e => setStatus(e.target.value)}>{STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
           </div>
-
           <div style={{ borderTop: '1px solid #1a1a1a', paddingTop: 10 }}>
             <div style={{ fontSize: 8, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 6 }}>Availability Roster</div>
             <RosterCalendar value={schedule} onChange={setSchedule} />
           </div>
-
-          <div>
-            <FL t="Notes" />
-            <textarea style={{ ...txa, minHeight: 56 }} value={notes} onChange={e => setNotes(e.target.value)} placeholder="e.g. Every second weekend on call day and night…" />
-          </div>
-
+          <div><FL t="Notes" /><textarea style={{ ...txa, minHeight: 56 }} value={notes} onChange={e => setNotes(e.target.value)} placeholder="e.g. Every second weekend on call day and night…" /></div>
           {err && <div style={{ fontSize: 9, color: RED }}>{err}</div>}
         </div>
         <div style={mdlF}>
@@ -171,10 +140,8 @@ function TruckForm({ truck, depots, onSave, onCancel }) {
   );
 }
 
-// ── Availability override modal ────────────────────────────────────────
 function AvailabilityModal({ truck, onSave, onCancel }) {
   const hasRelief = !!(truck.relief_driver_name || truck.relief_da_number);
-
   const [unavailable,  setUnavailable]  = useState(!!truck.override_active);
   const [reason,       setReason]       = useState(truck.override_reason      || OVERRIDE_REASONS[0]);
   const [returnDate,   setReturnDate]   = useState(truck.override_return_date || '');
@@ -184,23 +151,12 @@ function AvailabilityModal({ truck, onSave, onCancel }) {
   const [showRelief,   setShowRelief]   = useState(hasRelief);
   const [saving,       setSaving]       = useState(false);
   const [err,          setErr]          = useState('');
-
   const fld = { background: '#0a0a0a', border: '1px solid #252525', color: TXT, fontFamily: "'IBM Plex Mono',monospace", fontSize: 11, padding: '6px 8px', borderRadius: 2, outline: 'none', boxSizing: 'border-box', width: '100%' };
 
   const handleClear = async () => {
     setSaving(true);
-    try {
-      await onSave({
-        ...truck,
-        override_active:      false,
-        override_reason:      null,
-        override_return_date: null,
-        relief_driver_name:   null,
-        relief_da_number:     null,
-        relief_schedule:      {},
-        status: 'available',
-      });
-    } catch (e) { setErr(e.message); setSaving(false); }
+    try { await onSave({ ...truck, override_active: false, override_reason: null, override_return_date: null, relief_driver_name: null, relief_da_number: null, relief_schedule: {}, status: 'available' }); }
+    catch (e) { setErr(e.message); setSaving(false); }
   };
 
   const handleSave = async () => {
@@ -229,14 +185,10 @@ function AvailabilityModal({ truck, onSave, onCancel }) {
           </div>
           <button style={{ ...btnG, ...sm }} onClick={onCancel}>✕</button>
         </div>
-
         <div style={{ ...mdlB, display: 'flex', flexDirection: 'column', gap: 12 }}>
-
           <div style={{ background: unavailable ? RED + '11' : '#0a0a0a', border: `1px solid ${unavailable ? RED + '44' : '#252525'}`, borderRadius: 2, padding: '10px 12px' }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
-              <div
-                onClick={() => setUnavailable(u => !u)}
-                style={{ width: 36, height: 20, borderRadius: 10, background: unavailable ? RED : '#2a2a2a', position: 'relative', flexShrink: 0, transition: 'background 0.2s', cursor: 'pointer' }}>
+              <div onClick={() => setUnavailable(u => !u)} style={{ width: 36, height: 20, borderRadius: 10, background: unavailable ? RED : '#2a2a2a', position: 'relative', flexShrink: 0, transition: 'background 0.2s', cursor: 'pointer' }}>
                 <div style={{ width: 14, height: 14, borderRadius: 7, background: '#fff', position: 'absolute', top: 3, left: unavailable ? 19 : 3, transition: 'left 0.2s' }} />
               </div>
               <div>
@@ -244,81 +196,52 @@ function AvailabilityModal({ truck, onSave, onCancel }) {
                 <div style={{ fontSize: 8, color: MUT, marginTop: 1 }}>Holiday, sick leave, truck in service, etc.</div>
               </div>
             </label>
-
             {unavailable && (
               <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                  <div>
-                    <FL t="Reason" />
-                    <select style={{ ...sel, width: '100%' }} value={reason} onChange={e => setReason(e.target.value)}>
-                      {OVERRIDE_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <FL t="Return Date (optional)" />
-                    <input type="date" style={fld} value={returnDate} onChange={e => setReturnDate(e.target.value)} />
-                  </div>
+                  <div><FL t="Reason" /><select style={{ ...sel, width: '100%' }} value={reason} onChange={e => setReason(e.target.value)}>{OVERRIDE_REASONS.map(r => <option key={r} value={r}>{r}</option>)}</select></div>
+                  <div><FL t="Return Date (optional)" /><input type="date" style={fld} value={returnDate} onChange={e => setReturnDate(e.target.value)} /></div>
                 </div>
               </div>
             )}
           </div>
-
           <div style={{ border: '1px solid #252525', borderRadius: 2, overflow: 'hidden' }}>
-            <div
-              onClick={() => setShowRelief(s => !s)}
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: showRelief ? ACC + '11' : '#0a0a0a', cursor: 'pointer', borderBottom: showRelief ? '1px solid #1a1a1a' : 'none' }}>
+            <div onClick={() => setShowRelief(s => !s)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: showRelief ? ACC + '11' : '#0a0a0a', cursor: 'pointer', borderBottom: showRelief ? '1px solid #1a1a1a' : 'none' }}>
               <div>
                 <span style={{ fontSize: 10, fontWeight: 700, color: showRelief ? ACC : TXT }}>Relief Driver</span>
                 <span style={{ fontSize: 8, color: MUT, marginLeft: 8 }}>Different driver covering this truck</span>
               </div>
               <span style={{ fontSize: 9, color: MUT }}>{showRelief ? '▲' : '▼'}</span>
             </div>
-
             {showRelief && (
               <div style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                  <div>
-                    <FL t="Driver Name" />
-                    <input style={fld} value={reliefName} onChange={e => setReliefName(e.target.value)} placeholder="e.g. Jane Smith" />
-                  </div>
-                  <div>
-                    <FL t="DA Number" />
-                    <input style={fld} value={reliefDA} onChange={e => setReliefDA(e.target.value)} placeholder="e.g. 99999" />
-                  </div>
+                  <div><FL t="Driver Name" /><input style={fld} value={reliefName} onChange={e => setReliefName(e.target.value)} placeholder="e.g. Jane Smith" /></div>
+                  <div><FL t="DA Number" /><input style={fld} value={reliefDA} onChange={e => setReliefDA(e.target.value)} placeholder="e.g. 99999" /></div>
                 </div>
-                <div>
-                  <FL t="Availability Roster" />
-                  <RosterCalendar value={reliefSched} onChange={setReliefSched} />
-                </div>
+                <div><FL t="Availability Roster" /><RosterCalendar value={reliefSched} onChange={setReliefSched} /></div>
               </div>
             )}
           </div>
-
           {err && <div style={{ fontSize: 9, color: RED }}>{err}</div>}
         </div>
         <div style={mdlF}>
           {(truck.override_active || truck.relief_driver_name) && (
-            <button style={{ ...btnD, marginRight: 'auto' }} onClick={handleClear} disabled={saving}>
-              Clear Override
-            </button>
+            <button style={{ ...btnD, marginRight: 'auto' }} onClick={handleClear} disabled={saving}>Clear Override</button>
           )}
           <button style={btnG} onClick={onCancel}>Cancel</button>
-          <button style={{ ...btnA, opacity: saving ? 0.4 : 1 }} disabled={saving} onClick={handleSave}>
-            {saving ? 'Saving…' : 'Save'}
-          </button>
+          <button style={{ ...btnA, opacity: saving ? 0.4 : 1 }} disabled={saving} onClick={handleSave}>{saving ? 'Saving…' : 'Save'}</button>
         </div>
       </div>
     </div>
   );
 }
 
-// ── Main Fleet tab ────────────────────────────────────────────
 export default function FleetTab({ isAdmin }) {
   const [depots,  setDepots]  = useState([]);
   const [trucks,  setTrucks]  = useState([]);
   const [loading, setLoading] = useState(true);
   const [err,     setErr]     = useState('');
-
   const [depotForm,  setDepotForm]  = useState(null);
   const [truckForm,  setTruckForm]  = useState(null);
   const [availModal, setAvailModal] = useState(null);
@@ -326,30 +249,21 @@ export default function FleetTab({ isAdmin }) {
   const load = useCallback(async () => {
     try {
       const [ds, ts] = await Promise.all([getDepots(), getTrucks()]);
-      setDepots(ds);
-      setTrucks(ts);
-      setErr('');
-    } catch (e) {
-      setErr(e.message);
-    } finally {
-      setLoading(false);
-    }
+      setDepots(ds); setTrucks(ts); setErr('');
+    } catch (e) { setErr(e.message); }
+    finally { setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
   const handleSaveDepot = async (depot) => {
     const saved = await upsertDepot(depot);
-    setDepots(prev => {
-      const idx = prev.findIndex(d => d.id === saved.id);
-      return idx >= 0 ? prev.map(d => d.id === saved.id ? saved : d) : [...prev, saved];
-    });
+    setDepots(prev => { const idx = prev.findIndex(d => d.id === saved.id); return idx >= 0 ? prev.map(d => d.id === saved.id ? saved : d) : [...prev, saved]; });
     setDepotForm(null);
   };
 
   const handleDeleteDepot = async (depot) => {
-    const hasTrucks = trucks.some(t => t.depot_id === depot.id);
-    if (hasTrucks) { alert('Remove all trucks from this depot first.'); return; }
+    if (trucks.some(t => t.depot_id === depot.id)) { alert('Remove all trucks from this depot first.'); return; }
     if (!confirm(`Delete depot "${depot.name}"?`)) return;
     await deleteDepot(depot.id);
     setDepots(prev => prev.filter(d => d.id !== depot.id));
@@ -357,10 +271,7 @@ export default function FleetTab({ isAdmin }) {
 
   const handleSaveTruck = async (truck) => {
     const saved = await upsertTruck(truck);
-    setTrucks(prev => {
-      const idx = prev.findIndex(t => t.id === saved.id);
-      return idx >= 0 ? prev.map(t => t.id === saved.id ? saved : t) : [...prev, saved];
-    });
+    setTrucks(prev => { const idx = prev.findIndex(t => t.id === saved.id); return idx >= 0 ? prev.map(t => t.id === saved.id ? saved : t) : [...prev, saved]; });
     setTruckForm(null);
   };
 
@@ -370,12 +281,8 @@ export default function FleetTab({ isAdmin }) {
     setTrucks(prev => prev.filter(t => t.id !== truck.id));
   };
 
-  const trucksByDepot = depots.map(d => ({
-    depot: d,
-    trucks: trucks.filter(t => t.depot_id === d.id),
-  }));
+  const trucksByDepot = depots.map(d => ({ depot: d, trucks: trucks.filter(t => t.depot_id === d.id) }));
   const unassigned = trucks.filter(t => !t.depot_id);
-
   const available = trucks.filter(t => t.status === 'available').length;
   const onJob     = trucks.filter(t => t.status === 'on job').length;
 
@@ -397,17 +304,14 @@ export default function FleetTab({ isAdmin }) {
           </div>
         )}
       </div>
-
       {err && <div style={{ fontSize: 9, color: RED, marginBottom: 12 }}>{err}</div>}
       {loading && <div style={{ fontSize: 10, color: MUT, textAlign: 'center', padding: '32px 0' }}>Loading fleet…</div>}
-
       {!loading && depots.length === 0 && (
         <div style={{ fontSize: 10, color: MUT, textAlign: 'center', padding: '32px 0', lineHeight: 1.8 }}>
           No depots yet.
           {isAdmin && <><br /><button onClick={() => setDepotForm({})} style={{ ...btnA, ...sm, marginTop: 8 }}>Add First Depot</button></>}
         </div>
       )}
-
       {trucksByDepot.map(({ depot, trucks: dTrucks }) => (
         <div key={depot.id} style={{ marginBottom: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, borderLeft: `2px solid ${ACC}`, paddingLeft: 8 }}>
@@ -423,26 +327,15 @@ export default function FleetTab({ isAdmin }) {
               </div>
             )}
           </div>
-
-          {dTrucks.length === 0 && (
-            <div style={{ fontSize: 9, color: MUT, padding: '8px 10px', background: '#0a0a0a', border: '1px solid #1a1a1a', borderRadius: 2, marginBottom: 4 }}>
-              No trucks assigned to this depot.
-            </div>
-          )}
+          {dTrucks.length === 0 && <div style={{ fontSize: 9, color: MUT, padding: '8px 10px', background: '#0a0a0a', border: '1px solid #1a1a1a', borderRadius: 2, marginBottom: 4 }}>No trucks assigned to this depot.</div>}
           {dTrucks.map(truck => (
             <TruckRow key={truck.id} truck={truck} isAdmin={isAdmin} onEdit={() => setTruckForm(truck)} onDelete={() => handleDeleteTruck(truck)} onAvail={() => setAvailModal(truck)} />
           ))}
-
           {isAdmin && (
-            <button
-              onClick={() => setTruckForm({ depot_id: depot.id })}
-              style={{ fontSize: 8, color: MUT, border: '1px dashed #2a2a2a', borderRadius: 2, background: 'transparent', padding: '4px 10px', cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", marginTop: 4 }}>
-              + Add truck to {depot.name}
-            </button>
+            <button onClick={() => setTruckForm({ depot_id: depot.id })} style={{ fontSize: 8, color: MUT, border: '1px dashed #2a2a2a', borderRadius: 2, background: 'transparent', padding: '4px 10px', cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", marginTop: 4 }}>+ Add truck to {depot.name}</button>
           )}
         </div>
       ))}
-
       {unassigned.length > 0 && (
         <div style={{ marginBottom: 16 }}>
           <div style={{ fontSize: 8, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 6, borderLeft: '2px solid #444', paddingLeft: 8 }}>Unassigned ({unassigned.length})</div>
@@ -451,47 +344,24 @@ export default function FleetTab({ isAdmin }) {
           ))}
         </div>
       )}
-
       {isAdmin && <AccessRequestsPanel />}
       {isAdmin && <AccessCodesPanel />}
-
-      {depotForm !== null && (
-        <DepotForm
-          depot={depotForm?.id ? depotForm : undefined}
-          onSave={handleSaveDepot}
-          onCancel={() => setDepotForm(null)}
-        />
-      )}
-      {truckForm !== null && (
-        <TruckForm
-          truck={truckForm?.id ? truckForm : truckForm}
-          depots={depots}
-          onSave={handleSaveTruck}
-          onCancel={() => setTruckForm(null)}
-        />
-      )}
-      {availModal !== null && (
-        <AvailabilityModal
-          truck={availModal}
-          onSave={async (updated) => { await handleSaveTruck(updated); setAvailModal(null); }}
-          onCancel={() => setAvailModal(null)}
-        />
-      )}
+      {depotForm !== null && <DepotForm depot={depotForm?.id ? depotForm : undefined} onSave={handleSaveDepot} onCancel={() => setDepotForm(null)} />}
+      {truckForm !== null && <TruckForm truck={truckForm?.id ? truckForm : truckForm} depots={depots} onSave={handleSaveTruck} onCancel={() => setTruckForm(null)} />}
+      {availModal !== null && <AvailabilityModal truck={availModal} onSave={async (updated) => { await handleSaveTruck(updated); setAvailModal(null); }} onCancel={() => setAvailModal(null)} />}
     </div>
   );
 }
 
-// ── Access requests panel ─────────────────────────────────────────
 function AccessRequestsPanel() {
-  const [requests,  setRequests]  = useState([]);
-  const [loading,   setLoading]   = useState(true);
-  const [ready,     setReady]     = useState({});
-  const [copied,    setCopied]    = useState(null);
-  const [working,   setWorking]   = useState(null);
+  const [requests, setRequests] = useState([]);
+  const [loading,  setLoading]  = useState(true);
+  const [ready,    setReady]    = useState({});
+  const [copied,   setCopied]   = useState(null);
+  const [working,  setWorking]  = useState(null);
 
   useEffect(() => {
-    supabase.from('access_requests')
-      .select('*').eq('status', 'pending').order('requested_at', { ascending: false })
+    supabase.from('access_requests').select('*').eq('status', 'pending').order('requested_at', { ascending: false })
       .then(({ data }) => { setRequests(data || []); setLoading(false); });
   }, []);
 
@@ -512,11 +382,7 @@ function AccessRequestsPanel() {
     setWorking(null);
   };
 
-  const copy = (code) => {
-    navigator.clipboard?.writeText(code);
-    setCopied(code);
-    setTimeout(() => setCopied(null), 2000);
-  };
+  const copy = (code) => { navigator.clipboard?.writeText(code); setCopied(code); setTimeout(() => setCopied(null), 2000); };
 
   const readyCodes = Object.values(ready);
   if (loading || (requests.length === 0 && readyCodes.length === 0)) return null;
@@ -525,50 +391,28 @@ function AccessRequestsPanel() {
     <div style={{ marginTop: 24, borderTop: `2px solid ${ACC}44`, paddingTop: 16, marginBottom: 4 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
         <div style={{ fontSize: 10, fontWeight: 700, color: TXT, letterSpacing: '0.06em' }}>🔔 Access Requests</div>
-        {requests.length > 0 && (
-          <span style={{ fontSize: 8, fontWeight: 700, background: ACC, color: '#000', padding: '1px 6px', borderRadius: 8, letterSpacing: '0.05em' }}>
-            {requests.length}
-          </span>
-        )}
+        {requests.length > 0 && <span style={{ fontSize: 8, fontWeight: 700, background: ACC, color: '#000', padding: '1px 6px', borderRadius: 8, letterSpacing: '0.05em' }}>{requests.length}</span>}
         <div style={{ fontSize: 8, color: MUT }}>Drivers waiting for an access code</div>
       </div>
-
       {requests.map(req => (
         <div key={req.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', background: '#0d0d0d', border: `1px solid ${ACC}33`, borderRadius: 2, marginBottom: 4 }}>
-          <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.14em', color: TXT, fontFamily: "'IBM Plex Mono',monospace", flex: 1 }}>
-            {req.plate}
-          </span>
-          <span style={{ fontSize: 8, color: MUT }}>
-            {new Date(req.requested_at).toLocaleString('en-AU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-          </span>
-          <button onClick={() => generateFor(req)} disabled={!!working}
-            style={{ ...btnA, ...sm, fontSize: 8, opacity: working ? 0.5 : 1 }}>
-            Generate Code
-          </button>
-          <button onClick={() => dismiss(req)} disabled={!!working}
-            style={{ ...btnG, ...sm, fontSize: 8, opacity: working ? 0.5 : 1 }}>
-            Dismiss
-          </button>
+          <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.14em', color: TXT, fontFamily: "'IBM Plex Mono',monospace", flex: 1 }}>{req.plate}</span>
+          <span style={{ fontSize: 8, color: MUT }}>{new Date(req.requested_at).toLocaleString('en-AU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+          <button onClick={() => generateFor(req)} disabled={!!working} style={{ ...btnA, ...sm, fontSize: 8, opacity: working ? 0.5 : 1 }}>Generate Code</button>
+          <button onClick={() => dismiss(req)} disabled={!!working} style={{ ...btnG, ...sm, fontSize: 8, opacity: working ? 0.5 : 1 }}>Dismiss</button>
         </div>
       ))}
-
       {readyCodes.map(({ plate, code }) => (
         <div key={code} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', background: '#0a100a', border: `1px solid ${GRN}33`, borderRadius: 2, marginBottom: 4 }}>
           <span style={{ fontSize: 8, color: MUT }}>{plate}</span>
-          <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: '0.2em', color: GRN, fontFamily: "'IBM Plex Mono',monospace", flex: 1 }}>
-            {code}
-          </span>
-          <button onClick={() => copy(code)}
-            style={{ ...btnG, ...sm, fontSize: 8, color: copied === code ? GRN : MUT, borderColor: copied === code ? GRN + '55' : undefined }}>
-            {copied === code ? '✓ Copied' : 'Copy'}
-          </button>
+          <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: '0.2em', color: GRN, fontFamily: "'IBM Plex Mono',monospace", flex: 1 }}>{code}</span>
+          <button onClick={() => copy(code)} style={{ ...btnG, ...sm, fontSize: 8, color: copied === code ? GRN : MUT, borderColor: copied === code ? GRN + '55' : undefined }}>{copied === code ? '✓ Copied' : 'Copy'}</button>
         </div>
       ))}
     </div>
   );
 }
 
-// ── Access codes panel ────────────────────────────────────────────────
 function AccessCodesPanel() {
   const [codes,      setCodes]      = useState([]);
   const [loading,    setLoading]    = useState(true);
@@ -588,11 +432,7 @@ function AccessCodesPanel() {
     setCodes(prev => [{ code: data, created_at: new Date().toISOString(), used_by: null, used_at: null, id: data }, ...prev]);
   };
 
-  const copy = (code) => {
-    navigator.clipboard?.writeText(code);
-    setCopied(code);
-    setTimeout(() => setCopied(null), 2000);
-  };
+  const copy = (code) => { navigator.clipboard?.writeText(code); setCopied(code); setTimeout(() => setCopied(null), 2000); };
 
   return (
     <div style={{ marginTop: 24, borderTop: '1px solid #1a1a1a', paddingTop: 16 }}>
@@ -601,30 +441,17 @@ function AccessCodesPanel() {
           <div style={{ fontSize: 10, fontWeight: 700, color: TXT, letterSpacing: '0.06em' }}>🔑 Access Codes</div>
           <div style={{ fontSize: 8, color: MUT, marginTop: 2 }}>Share with a driver before their first login</div>
         </div>
-        <button onClick={generate} disabled={generating}
-          style={{ ...btnA, ...sm, fontSize: 8, opacity: generating ? 0.5 : 1 }}>
-          {generating ? 'Generating…' : '+ New Code'}
-        </button>
+        <button onClick={generate} disabled={generating} style={{ ...btnA, ...sm, fontSize: 8, opacity: generating ? 0.5 : 1 }}>{generating ? 'Generating…' : '+ New Code'}</button>
       </div>
-
       {loading && <div style={{ fontSize: 9, color: MUT }}>Loading…</div>}
-      {!loading && codes.length === 0 && (
-        <div style={{ fontSize: 9, color: MUT, padding: '8px 0' }}>No codes yet.</div>
-      )}
+      {!loading && codes.length === 0 && <div style={{ fontSize: 9, color: MUT, padding: '8px 0' }}>No codes yet.</div>}
       {codes.map(c => (
         <div key={c.id || c.code} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', background: '#0d0d0d', border: `1px solid ${c.used_at ? '#1a1a1a' : '#2a2a2a'}`, borderRadius: 2, marginBottom: 4, opacity: c.used_at ? 0.45 : 1 }}>
-          <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: '0.2em', color: c.used_at ? MUT : TXT, fontFamily: "'IBM Plex Mono',monospace", flex: 1 }}>
-            {c.code}
-          </span>
+          <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: '0.2em', color: c.used_at ? MUT : TXT, fontFamily: "'IBM Plex Mono',monospace", flex: 1 }}>{c.code}</span>
           {c.used_at ? (
-            <span style={{ fontSize: 8, color: MUT, textAlign: 'right' }}>
-              {c.used_by} · {new Date(c.used_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}
-            </span>
+            <span style={{ fontSize: 8, color: MUT, textAlign: 'right' }}>{c.used_by} · {new Date(c.used_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}</span>
           ) : (
-            <button onClick={() => copy(c.code)}
-              style={{ ...btnG, ...sm, fontSize: 8, color: copied === c.code ? GRN : MUT, borderColor: copied === c.code ? GRN + '55' : undefined }}>
-              {copied === c.code ? '✓ Copied' : 'Copy'}
-            </button>
+            <button onClick={() => copy(c.code)} style={{ ...btnG, ...sm, fontSize: 8, color: copied === c.code ? GRN : MUT, borderColor: copied === c.code ? GRN + '55' : undefined }}>{copied === c.code ? '✓ Copied' : 'Copy'}</button>
           )}
         </div>
       ))}
@@ -636,10 +463,9 @@ function TruckRow({ truck, isAdmin, onEdit, onDelete, onAvail }) {
   const hasOverride = truck.override_active;
   const hasRelief   = !!(truck.relief_driver_name || truck.relief_da_number);
   const sc = hasOverride && !hasRelief ? RED : statusColor(truck.status);
-
-  const activeDriver   = hasRelief ? truck.relief_driver_name : truck.driver_name;
-  const activeDA       = hasRelief ? truck.relief_da_number   : truck.da_number;
-  const activeSched    = hasRelief ? truck.relief_schedule     : truck.schedule;
+  const activeDriver = hasRelief ? truck.relief_driver_name : truck.driver_name;
+  const activeDA     = hasRelief ? truck.relief_da_number   : truck.da_number;
+  const activeSched  = hasRelief ? truck.relief_schedule    : truck.schedule;
 
   return (
     <div style={{ padding: '8px 10px', background: '#0d0d0d', border: `1px solid ${hasOverride ? (hasRelief ? '#3a3a1a' : '#2a1a1a') : '#252525'}`, borderLeft: `3px solid ${sc}`, borderRadius: 2, marginBottom: 4 }}>
@@ -649,40 +475,15 @@ function TruckRow({ truck, isAdmin, onEdit, onDelete, onAvail }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 11, fontWeight: 700, color: TXT, fontFamily: "'IBM Plex Mono',monospace" }}>{truck.plate}</span>
             <StatusBadge status={hasOverride && !hasRelief ? 'unavailable' : truck.status} />
-            {hasOverride && !hasRelief && (
-              <span style={{ fontSize: 7, fontWeight: 700, letterSpacing: '0.1em', padding: '1px 5px', border: `1px solid ${RED}55`, borderRadius: 2, color: RED, background: RED + '15', textTransform: 'uppercase' }}>
-                {truck.override_reason || 'Away'}
-              </span>
-            )}
-            {hasRelief && (
-              <span style={{ fontSize: 7, fontWeight: 700, letterSpacing: '0.1em', padding: '1px 5px', border: '1px solid #6a6a1a', borderRadius: 2, color: '#cccc44', background: '#cccc4411', textTransform: 'uppercase' }}>
-                Relief
-              </span>
-            )}
-            {activeDA && (
-              <span style={{ fontSize: 7, color: hasRelief ? '#cccc44' : MUT, fontFamily: "'IBM Plex Mono',monospace", border: `1px solid ${hasRelief ? '#5a5a14' : '#2a2a2a'}`, borderRadius: 2, padding: '1px 4px' }}>
-                DA {activeDA}
-              </span>
-            )}
+            {hasOverride && !hasRelief && <span style={{ fontSize: 7, fontWeight: 700, letterSpacing: '0.1em', padding: '1px 5px', border: `1px solid ${RED}55`, borderRadius: 2, color: RED, background: RED + '15', textTransform: 'uppercase' }}>{truck.override_reason || 'Away'}</span>}
+            {hasRelief && <span style={{ fontSize: 7, fontWeight: 700, letterSpacing: '0.1em', padding: '1px 5px', border: '1px solid #6a6a1a', borderRadius: 2, color: '#cccc44', background: '#cccc4411', textTransform: 'uppercase' }}>Relief</span>}
+            {activeDA && <span style={{ fontSize: 7, color: hasRelief ? '#cccc44' : MUT, fontFamily: "'IBM Plex Mono',monospace", border: `1px solid ${hasRelief ? '#5a5a14' : '#2a2a2a'}`, borderRadius: 2, padding: '1px 4px' }}>DA {activeDA}</span>}
           </div>
-
-          {activeDriver && (
-            <div style={{ fontSize: 9, color: hasRelief ? '#cccc44' : TXT, marginTop: 2 }}>{activeDriver}</div>
-          )}
-
-          {hasOverride && truck.override_return_date && (
-            <div style={{ fontSize: 8, color: MUT, marginTop: 2 }}>
-              Returns {fmtDate(truck.override_return_date)}
-            </div>
-          )}
-
-          {truck.notes && !hasOverride && (
-            <div style={{ fontSize: 8, color: MUT, marginTop: 2 }}>{truck.notes}</div>
-          )}
-
+          {activeDriver && <div style={{ fontSize: 9, color: hasRelief ? '#cccc44' : TXT, marginTop: 2 }}>{activeDriver}</div>}
+          {hasOverride && truck.override_return_date && <div style={{ fontSize: 8, color: MUT, marginTop: 2 }}>Returns {fmtDate(truck.override_return_date)}</div>}
+          {truck.notes && !hasOverride && <div style={{ fontSize: 8, color: MUT, marginTop: 2 }}>{truck.notes}</div>}
           <MiniRoster schedule={activeSched} />
         </div>
-
         {isAdmin && (
           <div style={{ display: 'flex', gap: 4, flexShrink: 0, alignSelf: 'flex-start' }}>
             <button onClick={onAvail}  style={{ ...btnG, ...sm, fontSize: 8, color: hasOverride ? '#cccc44' : MUT, borderColor: hasOverride ? '#5a5a14' : undefined }}>📅</button>
