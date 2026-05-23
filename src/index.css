@@ -32,6 +32,13 @@ body { background: #0e0e0e; font-family: 'IBM Plex Mono', monospace; }
 }
 .nearby-pulse { animation: pulseRed 0.85s ease-in-out infinite; }
 
+/* Night shift skin */
+body[data-theme="night"] { background: #000 !important; }
+body[data-theme="night"] * { animation: none !important; transition: none !important; }
+body[data-theme="night"] button { min-height: 36px; }
+body[data-theme="night"] input,
+body[data-theme="night"] textarea { min-height: 36px; font-size: 13px !important; }
+
 /* Leaflet popup dark theme */
 .towbench-popup .leaflet-popup-content-wrapper {
   background: #0d0d0d;

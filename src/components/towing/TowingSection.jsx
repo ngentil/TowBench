@@ -4,28 +4,56 @@ import TowAllocationsTab from './TowAllocationsTab';
 import TowAnalyticsTab from './TowAnalyticsTab';
 import FleetTab from './FleetTab';
 import { logAllocations, markAllocationsCleared, getRecentAllocations } from '../../lib/db/towing';
+import { supabase } from '../../lib/supabase';
+import AdminSettings from '../admin/AdminSettings';
 
 const API_URL = 'https://api.opendata.transport.vic.gov.au/api/opendata/roads/disruptions/unplanned/v3';
 const API_KEY = import.meta.env.VITE_VICROADS_KEY || 'bb7fc352-3ce6-44d2-9628-63fefb64278d';
 const POLL_MS = 60_000;
 
-const TABS = [
+const BASE_TABS = [
   { id: 'allocations', label: '🚦 Tow Allocations' },
   { id: 'analytics',   label: '📊 Analytics' },
   { id: 'fleet',       label: '🚛 Fleet' },
 ];
 
-export default function TowingSection({ isAdmin }) {
+export default function TowingSection({ isAdmin, userEmail, companyConfig, setCompanyConfig }) {
+  const TABS = isAdmin ? [...BASE_TABS, { id: 'settings', label: '⚙ Settings' }] : BASE_TABS;
   const [tab, setTab] = useState('allocations');
 
-  // ── Shared allocation state ────────────────────────────────────────────────
-  const [allFeatures, setAllFeatures] = useState([]);
-  const [liveIds,     setLiveIds]     = useState(new Set());
-  const [loading,     setLoading]     = useState(true);
-  const [err,         setErr]         = useState('');
-  const [lastFetch,   setLastFetch]   = useState(null);
-  const [countdown,   setCountdown]   = useState(POLL_MS / 1000);
+  const [allFeatures,  setAllFeatures]  = useState([]);
+  const [liveIds,      setLiveIds]      = useState(new Set());
+  const [loading,      setLoading]      = useState(true);
+  const [err,          setErr]          = useState('');
+  const [lastFetch,    setLastFetch]    = useState(null);
+  const [countdown,    setCountdown]    = useState(POLL_MS / 1000);
+  const [acceptedJobs, setAcceptedJobs] = useState(new Map());
   const prevLiveIdsRef = useRef(new Set());
+
+  const fetchAcceptedJobs = useCallback(async () => {
+    try {
+      const { data } = await supabase
+        .from('job_accepted')
+        .select('id, event_id, accepted_by, accepted_at')
+        .is('released_at', null);
+      if (data) {
+        const map = new Map();
+        data.forEach(row => map.set(String(row.event_id), row));
+        setAcceptedJobs(map);
+      }
+    } catch (e) { console.warn('fetchAcceptedJobs:', e.message); }
+  }, []);
+
+  const onAcceptJob = useCallback(async (eventId) => {
+    if (!userEmail) return;
+    await supabase.from('job_accepted').insert({ event_id: String(eventId), accepted_by: userEmail });
+    fetchAcceptedJobs();
+  }, [userEmail, fetchAcceptedJobs]);
+
+  const onReleaseJob = useCallback(async (acceptanceId) => {
+    await supabase.from('job_accepted').update({ released_at: new Date().toISOString() }).eq('id', acceptanceId);
+    fetchAcceptedJobs();
+  }, [fetchAcceptedJobs]);
 
   const mergeFeatures = (live, logged) => {
     const map = new Map();
@@ -40,13 +68,14 @@ export default function TowingSection({ isAdmin }) {
   };
 
   useEffect(() => {
+    fetchAcceptedJobs();
     getRecentAllocations(744)
       .then(logged => {
         setAllFeatures(prev => mergeFeatures([], [...prev, ...logged]));
         setLoading(false);
       })
       .catch(e => { console.warn('getRecentAllocations:', e.message); setLoading(false); });
-  }, []);
+  }, [fetchAcceptedJobs]);
 
   const fetchAllocations = useCallback(async () => {
     try {
@@ -57,7 +86,14 @@ export default function TowingSection({ isAdmin }) {
       const live = all.filter(f => f.properties?.source?.sourceName === 'TowAllocation');
       const newLiveIds  = new Set(live.map(f => String(f.properties?.eventId)));
       const justCleared = [...prevLiveIdsRef.current].filter(id => !newLiveIds.has(id));
-      if (justCleared.length) markAllocationsCleared(justCleared).catch(e => console.warn('markAllocationsCleared:', e));
+      if (justCleared.length) {
+        markAllocationsCleared(justCleared).catch(e => console.warn('markAllocationsCleared:', e));
+        supabase.from('job_accepted')
+          .update({ released_at: new Date().toISOString() })
+          .in('event_id', justCleared).is('released_at', null)
+          .then(() => fetchAcceptedJobs())
+          .catch(e => console.warn('auto-release:', e));
+      }
       prevLiveIdsRef.current = newLiveIds;
       setLiveIds(newLiveIds);
       logAllocations(live).catch(e => console.warn('logAllocations:', e));
@@ -65,8 +101,9 @@ export default function TowingSection({ isAdmin }) {
       setErr('');
       setLastFetch(new Date());
       setCountdown(POLL_MS / 1000);
+      fetchAcceptedJobs();
     } catch (e) { setErr(e.message); }
-  }, []);
+  }, [fetchAcceptedJobs]);
 
   useEffect(() => {
     fetchAllocations();
@@ -95,12 +132,16 @@ export default function TowingSection({ isAdmin }) {
             allFeatures={allFeatures} liveIds={liveIds} loading={loading}
             err={err} lastFetch={lastFetch} countdown={countdown}
             fetchAllocations={fetchAllocations}
+            isStale={lastFetch ? (Date.now() - lastFetch.getTime()) > 3 * POLL_MS : false}
+            acceptedJobs={acceptedJobs} userEmail={userEmail}
+            onAcceptJob={onAcceptJob} onReleaseJob={onReleaseJob}
           />
         )}
         {tab === 'analytics' && (
-          <TowAnalyticsTab allFeatures={allFeatures} liveIds={liveIds} loading={loading} />
+          <TowAnalyticsTab allFeatures={allFeatures} liveIds={liveIds} loading={loading} userEmail={userEmail} />
         )}
         {tab === 'fleet' && <FleetTab isAdmin={isAdmin} />}
+        {tab === 'settings' && isAdmin && <AdminSettings companyConfig={companyConfig} setCompanyConfig={setCompanyConfig} />}
       </div>
     </div>
   );
