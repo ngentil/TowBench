@@ -20,7 +20,7 @@ create policy "admin write"
   using (
     exists (
       select 1 from tow_trucks
-      where email = auth.jwt() ->> 'email'
+      where auth_email = auth.jwt() ->> 'email'
         and is_admin = true
     )
   );
