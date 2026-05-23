@@ -33,6 +33,8 @@ export default function App() {
   const [driverDisplayName, setDriverDisplayName] = useState('');
   const [greeting,          setGreeting]          = useState('');
   const [showGreeting,      setShowGreeting]      = useState(false);
+  const [showOrigin,        setShowOrigin]        = useState(false);
+  const logoClickRef = React.useRef({ count: 0, timer: null });
 
   const [step,        setStep]       = useState(1);
   const [plate,       setPlate]      = useState('');
@@ -302,7 +304,15 @@ export default function App() {
   return (
     <div style={{ minHeight: '100vh', background: BG, color: TXT, fontFamily: "'IBM Plex Mono',monospace", display: 'flex', flexDirection: 'column' }}>
       <div style={{ background: SURF, borderBottom: '2px solid ' + ACC, padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-        <div style={{ fontSize: 15, fontWeight: 700, color: ACC, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+        <div
+          onClick={() => {
+            const ref = logoClickRef.current;
+            ref.count += 1;
+            clearTimeout(ref.timer);
+            if (ref.count >= 5) { ref.count = 0; setShowOrigin(true); }
+            else { ref.timer = setTimeout(() => { ref.count = 0; }, 1200); }
+          }}
+          style={{ fontSize: 15, fontWeight: 700, color: ACC, letterSpacing: '0.06em', textTransform: 'uppercase', cursor: 'default', userSelect: 'none' }}>
           🚛 TowBench
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -325,6 +335,23 @@ export default function App() {
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <TowingSection isAdmin={isAdmin} />
       </div>
+
+      {showOrigin && (
+        <div onClick={() => setShowOrigin(false)}
+          style={{ position: 'fixed', inset: 0, background: '#000000cc', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ background: '#0d0d0d', border: '1px solid #2a2a2a', borderTop: `2px solid ${ACC}`, borderRadius: 2, padding: '28px 32px', maxWidth: 520, width: '100%', fontFamily: "'IBM Plex Mono',monospace", position: 'relative' }}>
+            <div style={{ fontSize: 7, color: ACC, letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: 18 }}>Origin</div>
+            <p style={{ fontSize: 10, color: '#aaa', lineHeight: 1.9, margin: 0 }}>
+              TowBench began as a module inside <span style={{ color: TXT }}>RAT BENCH</span> — a small engine workshop management tool built for a different business entirely. During a late night development session in May 2026, a towing allocations feed was wired into RAT BENCH as a convenient place to prototype. One tab became six: live VicRoads tow dispatches, a pager feed, Waze alerts, traffic incidents, fleet management, and a full analytics dashboard with an incident map. It outgrew its host. <span style={{ color: ACC }}>TowBench</span> is what that module became when it was given a name and a home of its own.
+            </p>
+            <button onClick={() => setShowOrigin(false)}
+              style={{ marginTop: 22, fontSize: 8, color: MUT, background: 'none', border: '1px solid #2a2a2a', borderRadius: 2, padding: '4px 10px', cursor: 'pointer', letterSpacing: '0.1em', textTransform: 'uppercase', fontFamily: "'IBM Plex Mono',monospace" }}>
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
