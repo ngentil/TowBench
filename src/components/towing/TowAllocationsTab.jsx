@@ -34,8 +34,6 @@ const EXPORT_PERIODS = [
   { label: 'Last 31 days', hours: 744  },
 ];
 
-const NEARBY_OPTS = [0, 5, 10, 15, 20, 30]; // 0 = off
-
 function fmt(iso) {
   if (!iso) return '—';
   return new Date(iso).toLocaleString('en-AU', {
@@ -63,6 +61,8 @@ function timeIn(iso) {
   const rh = h % 24;
   return rh > 0 ? `${d}d ${rh}h` : `${d}d`;
 }
+
+const NEARBY_OPTS = [0, 5, 10, 15, 20, 30]; // 0 = off
 
 function haversineKm(lat1, lon1, lat2, lon2) {
   const R = 6371;
@@ -216,7 +216,7 @@ function AllocationCard({ feature, fromLog, userPos, nearbyKm }) {
   );
 }
 
-// ── Main tab ────────────────────────────────────────────────────────────────────────────────────────────────
+// ── Main tab ──────────────────────────────────────────────────────────────────────────────────────────
 export default function TowAllocationsTab() {
   const [allFeatures,  setAllFeatures]  = useState([]);
   const [liveIds,      setLiveIds]      = useState(new Set());
@@ -236,7 +236,6 @@ export default function TowAllocationsTab() {
     );
     return () => navigator.geolocation.clearWatch(id);
   }, []);
-
   const [nearbyKm,     setNearbyKm]     = useState(() => Number(localStorage.getItem('towbench_nearby_km') ?? 10));
   const [timeRange,    setTimeRange]    = useState('31d');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -313,7 +312,7 @@ export default function TowAllocationsTab() {
     return () => clearInterval(t);
   }, []);
 
-  // ── PDF Export ───────────────────────────────────────────────────────────────────────────────────────────────
+  // ── PDF Export ───────────────────────────────────────────────────────────────────────────────────────────────────────
   const handleExport = useCallback(async () => {
     setExporting(true);
     try {
@@ -448,7 +447,7 @@ export default function TowAllocationsTab() {
     }
   }, [exportHours, liveIds]);
 
-  // ── Render ──────────────────────────────────────────────────────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────────────────────────────────────────
   const sortFn = SORT_OPTIONS.find(o => o.key === sortBy)?.fn;
 
   const TIME_MS = { '24h': 864e5, '7d': 6048e5, '31d': Infinity };
