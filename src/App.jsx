@@ -74,7 +74,10 @@ export default function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
       if (session) {
-        loadTruck(session.user.email, event === 'SIGNED_IN');
+        const greetKey = `towbench_greeted_${session.user.id}`;
+        const firstSignIn = event === 'SIGNED_IN' && !sessionStorage.getItem(greetKey);
+        if (firstSignIn) sessionStorage.setItem(greetKey, '1');
+        loadTruck(session.user.email, firstSignIn);
         if (event === 'SIGNED_IN') requestGPS();
       } else {
         setTruck(null);
@@ -253,19 +256,19 @@ export default function App() {
                   <div>
                     <div style={labelStyle}>Password</div>
                     <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-                      placeholder="••••••••" required minLength={6} style={inputStyle} />
+                      placeholder="········" required minLength={6} style={inputStyle} />
                   </div>
                   <div>
                     <div style={labelStyle}>Confirm Password</div>
                     <input type="password" value={confirmPwd} onChange={e => setConfirmPwd(e.target.value)}
-                      placeholder="••••••••" required minLength={6} style={inputStyle} />
+                      placeholder="········" required minLength={6} style={inputStyle} />
                   </div>
                 </>
               ) : (
                 <div>
                   <div style={labelStyle}>Password</div>
                   <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-                    placeholder="••••••••" required autoFocus minLength={6} style={inputStyle} />
+                    placeholder="········" required autoFocus minLength={6} style={inputStyle} />
                 </div>
               )}
 
