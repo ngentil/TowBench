@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from './lib/supabase';
 import { BG, SURF, BRD, TXT, MUT, ACC, RED, btnA, btnG, sm } from './lib/styles';
 import TowingSection from './components/towing/TowingSection';
+import { ThemeContext } from './lib/ThemeContext';
 
 function normalizePlate(raw) {
   const s = raw.toUpperCase().replace(/\s+/g, '');
@@ -34,6 +35,7 @@ export default function App() {
   const [greeting,          setGreeting]          = useState('');
   const [showGreeting,      setShowGreeting]      = useState(false);
   const [showOrigin,        setShowOrigin]        = useState(false);
+  const [companyConfig,     setCompanyConfig]     = useState({ company_name: 'TowBench', accent_color: '#e8670a', logo_url: null });
   const logoClickRef = React.useRef({ count: 0, timer: null });
 
   const [step,        setStep]       = useState(1);
@@ -156,6 +158,35 @@ export default function App() {
 
   const isAdmin = truck?.is_admin === true;
   const displayPlate = truck?.plate?.toUpperCase() || session?.user?.user_metadata?.plate?.toUpperCase() || '';
+
+  const [nightMode, setNightMode] = useState(() => localStorage.getItem('towbench_night') === '1');
+  useEffect(() => {
+    document.body.setAttribute('data-theme', nightMode ? 'night' : '');
+    localStorage.setItem('towbench_night', nightMode ? '1' : '0');
+  }, [nightMode]);
+
+  // Register service worker for PWA installability
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+  }, []);
+
+  // Company config: load once + subscribe to realtime changes
+  useEffect(() => {
+    const applyConfig = cfg => {
+      setCompanyConfig(cfg);
+      if (cfg.accent_color) document.documentElement.style.setProperty('--acc', cfg.accent_color);
+    };
+    supabase.from('company_config').select('*').limit(1).single()
+      .then(({ data }) => { if (data) applyConfig(data); })
+      .catch(() => {});
+    const chan = supabase.channel('company_config_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'company_config' },
+          payload => { if (payload.new) applyConfig(payload.new); })
+      .subscribe();
+    return () => supabase.removeChannel(chan);
+  }, []);
 
   if (!authChecked) {
     return (
@@ -316,8 +347,11 @@ export default function App() {
             if (ref.count >= 5) { ref.count = 0; setShowOrigin(true); }
             else { ref.timer = setTimeout(() => { ref.count = 0; }, 1200); }
           }}
-          style={{ fontSize: 15, fontWeight: 700, color: ACC, letterSpacing: '0.06em', textTransform: 'uppercase', cursor: 'default', userSelect: 'none' }}>
-          🚛 TowBench
+          style={{ fontSize: 15, fontWeight: 700, color: ACC, letterSpacing: '0.06em', textTransform: 'uppercase', cursor: 'default', userSelect: 'none', display: 'flex', alignItems: 'center', gap: 8 }}>
+          {companyConfig.logo_url
+            ? <img src={companyConfig.logo_url} alt="" style={{ height: 22, borderRadius: 2, objectFit: 'contain' }} />
+            : '🚛'}
+          {companyConfig.company_name}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -333,11 +367,18 @@ export default function App() {
               </span>
             )}
           </div>
+          <button onClick={() => setNightMode(n => !n)}
+            title={nightMode ? 'Exit night mode' : 'Night shift mode'}
+            style={{ ...btnG, ...sm, fontSize: 10, padding: '3px 8px', letterSpacing: 0 }}>
+            {nightMode ? '☀' : '🌙'}
+          </button>
           <button onClick={signOut} style={{ ...btnG, ...sm, fontSize: 8 }}>Sign Out</button>
         </div>
       </div>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <TowingSection isAdmin={isAdmin} />
+        <ThemeContext.Provider value={nightMode}>
+          <TowingSection isAdmin={isAdmin} userEmail={session?.user?.email} companyConfig={companyConfig} setCompanyConfig={setCompanyConfig} />
+        </ThemeContext.Provider>
       </div>
 
       {showOrigin && (
