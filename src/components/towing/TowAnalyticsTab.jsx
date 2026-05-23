@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import 'leaflet/dist/leaflet.css';
 import { ACC, MUT, BRD, TXT, GRN, SURF } from '../../lib/styles';
 
@@ -11,6 +11,16 @@ const PERIODS = [
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+function useWindowWidth() {
+  const [w, setW] = useState(() => window.innerWidth);
+  useEffect(() => {
+    const h = () => setW(window.innerWidth);
+    window.addEventListener('resize', h);
+    return () => window.removeEventListener('resize', h);
+  }, []);
+  return w;
+}
 
 function tally(arr, keyFn) {
   const map = {};
@@ -95,75 +105,100 @@ function DowChart({ counts }) {
 
 // ── Map ───────────────────────────────────────────────────────────────────────
 
-function HeatMap({ points }) {
-  const containerRef = useRef(null);
-  const mapRef       = useRef(null);
+function HeatMap({ points, activePoints, showHotspots, showActive }) {
+  const containerRef   = useRef(null);
+  const mapRef         = useRef(null);
+  const hotLayerRef    = useRef(null);
+  const activeLayerRef = useRef(null);
+  // Refs so the async Leaflet callback always reads the latest toggle state
+  const showHotspotsRef = useRef(showHotspots);
+  const showActiveRef   = useRef(showActive);
+  showHotspotsRef.current = showHotspots;
+  showActiveRef.current   = showActive;
 
+  // Rebuild markers when underlying data changes
   useEffect(() => {
     if (!containerRef.current) return;
-
     import('leaflet').then(mod => {
       const L = mod.default || mod;
-
       if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
 
       const map = L.map(containerRef.current, {
-        center: [-37.814, 144.963],
-        zoom: 11,
-        zoomControl: true,
-        attributionControl: false,
+        center: [-37.814, 144.963], zoom: 11,
+        zoomControl: true, attributionControl: false,
       });
-
-      const tilePane = map.getPanes().tilePane;
-      tilePane.style.filter = 'invert(100%) hue-rotate(180deg) brightness(90%) contrast(90%) saturate(60%)';
-
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        subdomains: 'abc',
-        maxZoom: 19,
-      }).addTo(map);
-
+      map.getPanes().tilePane.style.filter = 'invert(100%) hue-rotate(180deg) brightness(90%) contrast(90%) saturate(60%)';
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { subdomains: 'abc', maxZoom: 19 }).addTo(map);
       L.control.attribution({ prefix: false })
         .addAttribution('© <a href="https://openstreetmap.org" style="color:#666">OpenStreetMap</a>')
         .addTo(map);
 
+      const hotLayer    = L.layerGroup().addTo(map);
+      const activeLayer = L.layerGroup().addTo(map);
+
       points.forEach(([lat, lng]) => {
-        L.circleMarker([lat, lng], { radius: 28, fillColor: ORANGE, fillOpacity: 0.07, stroke: false }).addTo(map);
-        L.circleMarker([lat, lng], { radius: 10, fillColor: ORANGE, fillOpacity: 0.22, stroke: false }).addTo(map);
-        L.circleMarker([lat, lng], { radius: 4,  fillColor: '#ffcc66', fillOpacity: 0.6,  stroke: false }).addTo(map);
+        L.circleMarker([lat, lng], { radius: 28, fillColor: ORANGE, fillOpacity: 0.07, stroke: false }).addTo(hotLayer);
+        L.circleMarker([lat, lng], { radius: 10, fillColor: ORANGE, fillOpacity: 0.22, stroke: false }).addTo(hotLayer);
+        L.circleMarker([lat, lng], { radius: 4,  fillColor: '#ffcc66', fillOpacity: 0.6,  stroke: false }).addTo(hotLayer);
       });
 
-      if (points.length > 0) {
-        const lats = points.map(p => p[0]);
-        const lngs = points.map(p => p[1]);
+      activePoints.forEach(([lat, lng]) => {
+        L.circleMarker([lat, lng], { radius: 14, fillColor: GRN, fillOpacity: 0.15, stroke: false }).addTo(activeLayer);
+        L.circleMarker([lat, lng], { radius: 5,  fillColor: GRN, fillOpacity: 0.8, color: GRN, weight: 1 }).addTo(activeLayer);
+      });
+
+      hotLayerRef.current    = hotLayer;
+      activeLayerRef.current = activeLayer;
+      mapRef.current         = map;
+
+      // Apply current toggle state — avoids waiting for the second effect
+      if (!showHotspotsRef.current) map.removeLayer(hotLayer);
+      if (!showActiveRef.current)   map.removeLayer(activeLayer);
+
+      const allPts = [...points, ...activePoints];
+      if (allPts.length > 0) {
+        const lats = allPts.map(p => p[0]);
+        const lngs = allPts.map(p => p[1]);
         map.fitBounds([
           [Math.min(...lats) - 0.04, Math.min(...lngs) - 0.06],
           [Math.max(...lats) + 0.04, Math.max(...lngs) + 0.06],
         ], { maxZoom: 13 });
       }
-
-      mapRef.current = map;
     });
-
     return () => { if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; } };
-  }, [points]);
+  }, [points, activePoints]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return (
-    <div ref={containerRef} style={{ width: '100%', height: '100%', borderRadius: 2 }} />
-  );
+  // Toggle layer visibility without rebuilding the map
+  useEffect(() => {
+    const map = mapRef.current;
+    const hot = hotLayerRef.current;
+    const act = activeLayerRef.current;
+    if (!map || !hot || !act) return;
+    if (showHotspots) map.addLayer(hot); else map.removeLayer(hot);
+    if (showActive)   map.addLayer(act); else map.removeLayer(act);
+  }, [showHotspots, showActive]);
+
+  return <div ref={containerRef} style={{ width: '100%', height: '100%', borderRadius: 2 }} />;
 }
 
 // ── Main tab ──────────────────────────────────────────────────────────────────
 
 export default function TowAnalyticsTab({ allFeatures, liveIds, loading }) {
-  const [periodMs, setPeriodMs] = useState(Infinity);
+  const [periodMs,     setPeriodMs]     = useState(Infinity);
+  const [showHotspots, setShowHotspots] = useState(true);
+  const [showActive,   setShowActive]   = useState(true);
+  const winW     = useWindowWidth();
+  const isMobile = winW < 640;
 
   // ── Client-side period filter ────────────────────────────────────────────────
-  const since    = Date.now() - periodMs;
-  const features = allFeatures.filter(f => {
-    if (periodMs === Infinity) return true;
-    const t = new Date(f._logMeta?.firstSeen || f.properties?.lastUpdated || 0).getTime();
-    return t >= since;
-  });
+  const features = useMemo(() => {
+    const cutoff = Date.now() - periodMs;
+    return allFeatures.filter(f => {
+      if (periodMs === Infinity) return true;
+      const t = new Date(f._logMeta?.firstSeen || f.properties?.lastUpdated || 0).getTime();
+      return t >= cutoff;
+    });
+  }, [allFeatures, periodMs]);
 
   // ── Active / Cleared split ───────────────────────────────────────────────────
   const activeCount  = features.filter(f =>  liveIds.has(String(f.properties?.eventId))).length;
@@ -207,15 +242,33 @@ export default function TowAnalyticsTab({ allFeatures, liveIds, loading }) {
     ? (laneValues.reduce((a, b) => a + b, 0) / laneValues.length).toFixed(1)
     : '—';
 
-  // ── Summary ──────────────────────────────────────────────────────────────────
-  const days      = periodMs === Infinity ? 31 : Math.round(periodMs / 864e5);
-  const avgPerDay = features.length ? (features.length / days).toFixed(1) : '0';
-  const topSuburb = topSuburbs[0]?.[0] || '—';
-  const mapPoints = features
-    .filter(f => f.geometry?.coordinates)
-    .map(f => [f.geometry.coordinates[1], f.geometry.coordinates[0]]);
+  // ── Map point sets ───────────────────────────────────────────────────────────
+  const mapPoints = useMemo(() =>
+    features
+      .filter(f => f.geometry?.coordinates)
+      .map(f => [f.geometry.coordinates[1], f.geometry.coordinates[0]]),
+    [features]);
 
+  const activeMapPoints = useMemo(() =>
+    features
+      .filter(f => f.geometry?.coordinates && liveIds.has(String(f.properties?.eventId)))
+      .map(f => [f.geometry.coordinates[1], f.geometry.coordinates[0]]),
+    [features, liveIds]);
+
+  // ── Summary ──────────────────────────────────────────────────────────────────
+  const days        = periodMs === Infinity ? 31 : Math.round(periodMs / 864e5);
+  const avgPerDay   = features.length ? (features.length / days).toFixed(1) : '0';
+  const topSuburb   = topSuburbs[0]?.[0] || '—';
   const periodLabel = PERIODS.find(p => p.ms === periodMs)?.label || '31d';
+
+  const legendBtn = (active, color) => ({
+    fontSize: 8, fontWeight: 700, padding: '3px 8px', borderRadius: 2, cursor: 'pointer',
+    fontFamily: "'IBM Plex Mono',monospace", letterSpacing: '0.06em',
+    display: 'inline-flex', alignItems: 'center', gap: 4,
+    border: `1px solid ${active ? color + '88' : '#2a2a2a'}`,
+    color: active ? color : '#444',
+    background: active ? color + '11' : '#0d0d0d',
+  });
 
   return (
     <div style={{ padding: 16, flex: 1, overflowY: 'auto' }}>
@@ -253,19 +306,34 @@ export default function TowAnalyticsTab({ allFeatures, liveIds, loading }) {
       </div>
 
       {/* Map + side stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 12, marginBottom: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 320px', gap: 12, marginBottom: 14 }}>
 
-        {/* Heat map */}
+        {/* Map */}
         <div style={{ background: SURF, border: '1px solid ' + BRD, borderRadius: 2, overflow: 'hidden', minHeight: 340 }}>
-          <div style={{ padding: '8px 12px', borderBottom: '1px solid ' + BRD, fontSize: 8, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700 }}>
-            Incident Heat Map · {mapPoints.length} plotted
+          <div style={{ padding: '8px 12px', borderBottom: '1px solid ' + BRD, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+            <span style={{ fontSize: 8, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700 }}>
+              Incident Map · {mapPoints.length} plotted
+            </span>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button onClick={() => setShowHotspots(s => !s)} style={legendBtn(showHotspots, ORANGE)}>
+                <span style={{ fontSize: 10, lineHeight: 1 }}>●</span> Hotspots
+              </button>
+              <button onClick={() => setShowActive(s => !s)} style={legendBtn(showActive, GRN)}>
+                <span style={{ fontSize: 10, lineHeight: 1 }}>●</span> Active
+              </button>
+            </div>
           </div>
-          <div style={{ height: 300, position: 'relative' }}>
+          <div style={{ height: isMobile ? 260 : 300, position: 'relative' }}>
             {loading && allFeatures.length === 0
               ? <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', fontSize: 9, color: MUT }}>Loading…</div>
-              : mapPoints.length === 0
+              : mapPoints.length === 0 && activeMapPoints.length === 0
                 ? <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', fontSize: 9, color: MUT }}>No coordinate data yet</div>
-                : <HeatMap points={mapPoints} />
+                : <HeatMap
+                    points={mapPoints}
+                    activePoints={activeMapPoints}
+                    showHotspots={showHotspots}
+                    showActive={showActive}
+                  />
             }
           </div>
         </div>
@@ -284,7 +352,7 @@ export default function TowAnalyticsTab({ allFeatures, liveIds, loading }) {
       </div>
 
       {/* Peak hours + day of week */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12, marginBottom: 14 }}>
         <div style={{ background: SURF, border: '1px solid ' + BRD, borderRadius: 2, padding: '10px 12px' }}>
           <div style={{ fontSize: 8, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 10 }}>Jobs by Hour of Day</div>
           <HourChart counts={hourCounts} />
@@ -296,7 +364,7 @@ export default function TowAnalyticsTab({ allFeatures, liveIds, loading }) {
       </div>
 
       {/* Top suburbs + top roads */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
         <div style={{ background: SURF, border: '1px solid ' + BRD, borderRadius: 2, padding: '10px 12px' }}>
           <div style={{ fontSize: 8, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 10 }}>Hot Suburbs</div>
           <BarList data={topSuburbs} color={GRN} maxBars={10} labelWidth={110} />
