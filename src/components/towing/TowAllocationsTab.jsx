@@ -1,12 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { jsPDF } from 'jspdf';
 import { ACC, MUT, BRD, TXT, GRN, SURF } from '../../lib/styles';
-import { logAllocations, markAllocationsCleared, getRecentAllocations } from '../../lib/db/towing';
+import { getRecentAllocations } from '../../lib/db/towing';
 
-const API_URL = 'https://api.opendata.transport.vic.gov.au/api/opendata/roads/disruptions/unplanned/v3';
-const API_KEY = import.meta.env.VITE_VICROADS_KEY || 'bb7fc352-3ce6-44d2-9628-63fefb64278d';
-const POLL_MS = 60_000;
-const ORANGE  = '#e8870a';
+const ORANGE = '#e8870a';
 
 const suburb = f => f.properties?.reference?.startIntersectionLocality || '';
 
@@ -216,16 +213,9 @@ function AllocationCard({ feature, fromLog, userPos, nearbyKm }) {
   );
 }
 
-// ── Main tab ──────────────────────────────────────────────────────────────────────────────────────────
-export default function TowAllocationsTab() {
-  const [allFeatures,  setAllFeatures]  = useState([]);
-  const [liveIds,      setLiveIds]      = useState(new Set());
-  const [loading,      setLoading]      = useState(true);
-  const [err,          setErr]          = useState('');
-  const [lastFetch,    setLastFetch]    = useState(null);
-  const [countdown,    setCountdown]    = useState(POLL_MS / 1000);
+// ── Main tab ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+export default function TowAllocationsTab({ allFeatures, liveIds, loading, err, lastFetch, countdown, fetchAllocations }) {
   const [userPos,      setUserPos]      = useState(null);
-  const prevLiveIdsRef = useRef(new Set());
 
   useEffect(() => {
     if (!navigator.geolocation) return;
@@ -236,6 +226,7 @@ export default function TowAllocationsTab() {
     );
     return () => navigator.geolocation.clearWatch(id);
   }, []);
+
   const [nearbyKm,     setNearbyKm]     = useState(() => Number(localStorage.getItem('towbench_nearby_km') ?? 10));
   const [timeRange,    setTimeRange]    = useState('31d');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -259,60 +250,7 @@ export default function TowAllocationsTab() {
 
   const setRadius = (km) => { setNearbyKm(km); localStorage.setItem('towbench_nearby_km', km); };
 
-  const mergeFeatures = (live, logged) => {
-    const map = new Map();
-    logged.forEach(f => { if (f.properties?.eventId) map.set(String(f.properties.eventId), f); });
-    live.forEach(f => {
-      if (!f.properties?.eventId) return;
-      const id = String(f.properties.eventId);
-      const prev = map.get(id);
-      // Preserve _logMeta (firstSeen/lastSeen) from the DB-loaded version so time-in stays accurate
-      map.set(id, prev?._logMeta ? { ...f, _logMeta: prev._logMeta } : f);
-    });
-    return [...map.values()];
-  };
-
-  useEffect(() => {
-    getRecentAllocations(744)
-      .then(logged => {
-        setAllFeatures(prev => mergeFeatures([], [...prev, ...logged]));
-        setLoading(false);
-      })
-      .catch(e => { console.warn('getRecentAllocations:', e.message); setLoading(false); });
-  }, []);
-
-  const fetchAllocations = useCallback(async () => {
-    try {
-      const res  = await fetch(API_URL, { headers: { KeyID: API_KEY } });
-      if (!res.ok) throw new Error(`API returned ${res.status}`);
-      const data = await res.json();
-      const all  = data.data?.features || data.features || [];
-      const live = all.filter(f => f.properties?.source?.sourceName === 'TowAllocation');
-      const newLiveIds = new Set(live.map(f => String(f.properties?.eventId)));
-      const justCleared = [...prevLiveIdsRef.current].filter(id => !newLiveIds.has(id));
-      if (justCleared.length) markAllocationsCleared(justCleared).catch(e => console.warn('markAllocationsCleared:', e));
-      prevLiveIdsRef.current = newLiveIds;
-      setLiveIds(newLiveIds);
-      logAllocations(live).catch(e => console.warn('logAllocations:', e));
-      setAllFeatures(prev => mergeFeatures(live, prev));
-      setErr('');
-      setLastFetch(new Date());
-      setCountdown(POLL_MS / 1000);
-    } catch (e) { setErr(e.message); }
-  }, []);
-
-  useEffect(() => {
-    fetchAllocations();
-    const poll = setInterval(fetchAllocations, POLL_MS);
-    return () => clearInterval(poll);
-  }, [fetchAllocations]);
-
-  useEffect(() => {
-    const t = setInterval(() => setCountdown(c => (c > 0 ? c - 1 : POLL_MS / 1000)), 1000);
-    return () => clearInterval(t);
-  }, []);
-
-  // ── PDF Export ───────────────────────────────────────────────────────────────────────────────────────────────────────
+  // ── PDF Export ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   const handleExport = useCallback(async () => {
     setExporting(true);
     try {
