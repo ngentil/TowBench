@@ -14,16 +14,6 @@ function getGreeting(name) {
   return `${tod}, ${name}`;
 }
 
-function shouldShowGreeting() {
-  const h = new Date().getHours();
-  const period = h < 12 ? 'morning' : h < 18 ? 'afternoon' : 'evening';
-  const today  = new Date().toISOString().slice(0, 10);
-  const stored = JSON.parse(localStorage.getItem('towbench_greeting') || 'null');
-  if (stored?.date === today && stored?.period === period) return false;
-  localStorage.setItem('towbench_greeting', JSON.stringify({ date: today, period }));
-  return true;
-}
-
 function requestGPS() {
   if (!navigator.geolocation) return;
   const ask = () => navigator.geolocation.getCurrentPosition(() => {}, () => {});
@@ -66,10 +56,10 @@ export default function App() {
     const name = truckData?.driver_name || userRes.data?.user?.user_metadata?.driver_name || '';
     setTruck(truckData);
     setDriverDisplayName(name);
-    if (welcome && name && shouldShowGreeting()) {
+    if (welcome && name) {
       setGreeting(getGreeting(name));
       setShowGreeting(true);
-      setTimeout(() => setShowGreeting(false), 5500);
+      setTimeout(() => setShowGreeting(false), 3500);
     }
   };
 
@@ -116,13 +106,13 @@ export default function App() {
       if (!email.trim() || !/\S+@\S+\.\S+/.test(email)) { setLoginErr('Enter a valid email address.'); return; }
       if (!truckInfo.is_admin && !accessCode.trim())     { setLoginErr('Enter your access code.'); return; }
       if (!driverName.trim())                            { setLoginErr('Please enter your name.'); return; }
-      if (password.length < 8)                           { setLoginErr('Password must be at least 8 characters.'); return; }
+      if (password.length < 6)                           { setLoginErr('Password must be at least 6 characters.'); return; }
       if (password !== confirmPwd)                       { setLoginErr('Passwords do not match.'); return; }
     }
     setLoggingIn(true);
     if (truckInfo.registered) {
       const { error } = await supabase.auth.signInWithPassword({ email: truckInfo.email, password });
-      if (error) { setLoginErr(error.message); setLoggingIn(false); return; }
+      if (error) { setLoginErr('Incorrect password.'); setLoggingIn(false); return; }
     } else {
       if (!truckInfo.is_admin) {
         const { data: valid } = await supabase.rpc('validate_invite_code', { p_code: accessCode.trim() });
@@ -261,19 +251,19 @@ export default function App() {
                   <div>
                     <div style={labelStyle}>Password</div>
                     <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-                      placeholder="········" required minLength={8} style={inputStyle} />
+                      placeholder="••••••••" required minLength={6} style={inputStyle} />
                   </div>
                   <div>
                     <div style={labelStyle}>Confirm Password</div>
                     <input type="password" value={confirmPwd} onChange={e => setConfirmPwd(e.target.value)}
-                      placeholder="········" required minLength={8} style={inputStyle} />
+                      placeholder="••••••••" required minLength={6} style={inputStyle} />
                   </div>
                 </>
               ) : (
                 <div>
                   <div style={labelStyle}>Password</div>
                   <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-                    placeholder="········" required autoFocus minLength={8} style={inputStyle} />
+                    placeholder="••••••••" required autoFocus minLength={6} style={inputStyle} />
                 </div>
               )}
 
