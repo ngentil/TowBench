@@ -216,7 +216,7 @@ function AllocationCard({ feature, fromLog, userPos }) {
   );
 }
 
-// ── Main tab ────────────────────────────────────────────────────────────────────────────────────────
+// ── Main tab ──────────────────────────────────────────────────────────────────────────────────────────
 export default function TowAllocationsTab() {
   const [allFeatures,  setAllFeatures]  = useState([]);
   const [liveIds,      setLiveIds]      = useState(new Set());
@@ -256,7 +256,13 @@ export default function TowAllocationsTab() {
   const mergeFeatures = (live, logged) => {
     const map = new Map();
     logged.forEach(f => { if (f.properties?.eventId) map.set(String(f.properties.eventId), f); });
-    live.forEach(f   => { if (f.properties?.eventId) map.set(String(f.properties.eventId), f); });
+    live.forEach(f => {
+      if (!f.properties?.eventId) return;
+      const id = String(f.properties.eventId);
+      const prev = map.get(id);
+      // Preserve _logMeta (firstSeen/lastSeen) from the DB-loaded version so time-in stays accurate
+      map.set(id, prev?._logMeta ? { ...f, _logMeta: prev._logMeta } : f);
+    });
     return [...map.values()];
   };
 
