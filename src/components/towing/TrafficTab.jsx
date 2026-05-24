@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ACC, MUT, BRD, TXT, RED, SURF } from '../../lib/styles';
+import { timeAgo, fmtShort } from '../../lib/utils';
+import { VICROADS_URL, VICROADS_KEY } from '../../lib/constants';
 
-const VICROADS_URL   = 'https://api.opendata.transport.vic.gov.au/api/opendata/roads/disruptions/unplanned/v3';
-const VICROADS_KEY   = import.meta.env.VITE_VICROADS_KEY || 'bb7fc352-3ce6-44d2-9628-63fefb64278d';
 const EMERGENCY_URL  = '/.netlify/functions/vic-emergency';
 const REFRESH_MS     = 60_000;
 const WINDOW_MS      = 24 * 60 * 60 * 1000;
@@ -47,25 +47,6 @@ function incidentIcon(sub = '', emergency = false) {
     return '🚨';
   }
   return { accident: '💥', breakdown: '🚗', flood: '🌊', damage: '🛣' }[toFilter(sub)] || '⚠️';
-}
-
-function fmtDate(iso) {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return '—';
-  return d.toLocaleString('en-AU', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true });
-}
-
-function timeAgo(iso) {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return null;
-  const ms = Date.now() - d.getTime();
-  if (ms < 0) return null;
-  const m = Math.floor(ms / 60000);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  return `${h}h ${m % 60}m ago`;
 }
 
 function normaliseVicRoads(f) {
@@ -126,7 +107,7 @@ function IncidentCard({ inc }) {
       {open && (
         <div style={{ padding: '0 12px 12px', borderTop: '1px solid #1a1a1a' }}>
           <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-            {[['Type', inc.subType || '—'], ['Status', inc.status || '—'], ['Updated', fmtDate(inc.updated)], ...(inc.geometry?.coordinates ? [['Coordinates', `${inc.geometry.coordinates[1]?.toFixed(4)}, ${inc.geometry.coordinates[0]?.toFixed(4)}`]] : [])].map(([label, val]) => (
+            {[['Type', inc.subType || '—'], ['Status', inc.status || '—'], ['Updated', fmtShort(inc.updated)], ...(inc.geometry?.coordinates ? [['Coordinates', `${inc.geometry.coordinates[1]?.toFixed(4)}, ${inc.geometry.coordinates[0]?.toFixed(4)}`]] : [])].map(([label, val]) => (
               <div key={label} style={{ background: SURF, border: '1px solid ' + BRD, borderRadius: 2, padding: '5px 8px' }}>
                 <div style={{ fontSize: 7, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 1 }}>{label}</div>
                 <div style={{ fontSize: 10, color: TXT, fontFamily: "'IBM Plex Mono',monospace", wordBreak: 'break-word' }}>{val}</div>
