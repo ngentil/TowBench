@@ -76,6 +76,12 @@ function OpsMap({ allFeatures, liveIds, acceptedJobs, onMarkerClick, flyToRef })
       layerRef.current = layer;
       mapRef.current   = map;
       if (flyToRef) flyToRef.current = (lat, lng) => map.flyTo([lat, lng], 14, { duration: 0.5 });
+      if (!document.getElementById('ops-pulse-style')) {
+        const s = document.createElement('style');
+        s.id = 'ops-pulse-style';
+        s.textContent = '@keyframes ops-pulse{0%{transform:translate(-50%,-50%) scale(1);opacity:0.65}70%{transform:translate(-50%,-50%) scale(3.2);opacity:0}100%{transform:translate(-50%,-50%) scale(3.2);opacity:0}}';
+        document.head.appendChild(s);
+      }
     });
     return () => { if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; } };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -104,10 +110,18 @@ function OpsMap({ allFeatures, liveIds, acceptedJobs, onMarkerClick, flyToRef })
       }
 
       const dotColor = isOverdue ? '#cc2222' : accepted ? '#cc4422' : GRN;
-      const outerM = L.circleMarker([lat, lng], { radius: 14, fillColor: dotColor, fillOpacity: 0.15, stroke: false, bubblingMouseEvents: false });
-      const innerM = L.circleMarker([lat, lng], { radius: 5, fillColor: dotColor, fillOpacity: 0.9, color: dotColor, weight: 1, bubblingMouseEvents: false });
-      outerM.addTo(layer);
-      innerM.addTo(layer);
+      const sz = isOverdue ? 12 : 10;
+      const pulseHtml =
+        `<div style="position:relative;width:${sz}px;height:${sz}px">` +
+        `<div style="position:absolute;top:50%;left:50%;width:${sz}px;height:${sz}px;border-radius:50%;background:${dotColor};animation:ops-pulse 2s ease-out infinite"></div>` +
+        `<div style="position:absolute;top:50%;left:50%;width:${sz}px;height:${sz}px;border-radius:50%;background:${dotColor};transform:translate(-50%,-50%);opacity:0.95"></div>` +
+        `</div>`;
+      const activeM = L.marker([lat, lng], {
+        icon: L.divIcon({ className: '', html: pulseHtml, iconSize: [sz, sz], iconAnchor: [sz / 2, sz / 2] }),
+        bubblingMouseEvents: false,
+        zIndexOffset: 100,
+      });
+      activeM.addTo(layer);
 
       const road    = p.closedRoadName || '—';
       const sub     = p.reference?.startIntersectionLocality || '';
@@ -146,8 +160,7 @@ function OpsMap({ allFeatures, liveIds, acceptedJobs, onMarkerClick, flyToRef })
           .setLatLng([lat, lng]).setContent(popupHtml).openOn(map);
         onMarkerClick(eventId);
       };
-      innerM.on('click', handleClick);
-      outerM.on('click', handleClick);
+      activeM.on('click', handleClick);
     });
   }, [allFeatures, liveIds, acceptedJobs, onMarkerClick]); // eslint-disable-line react-hooks/exhaustive-deps
 
