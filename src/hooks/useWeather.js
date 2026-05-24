@@ -20,6 +20,7 @@ export default function useWeather() {
         const now   = new Date();
         const currentHour = now.getHours();
 
+        // Look 3 hours ahead (current + 2 more)
         let maxProb = 0;
         let hoursUntil = 0;
         for (let offset = 0; offset <= 2; offset++) {
