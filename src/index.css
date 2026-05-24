@@ -34,8 +34,6 @@ body { background: #0e0e0e; font-family: 'IBM Plex Mono', monospace; }
 
 /* ─── Night Shift Skin — Red phosphor CRT monochrome ─── */
 body[data-theme="night"] { background: #000 !important; }
-
-/* Kill all motion */
 body[data-theme="night"] *,
 body[data-theme="night"] *::before,
 body[data-theme="night"] *::after {
@@ -44,12 +42,8 @@ body[data-theme="night"] *::after {
   box-shadow: none !important;
   text-shadow: none !important;
 }
-
-/* Blanket: all text → red */
 body[data-theme="night"],
 body[data-theme="night"] * { color: #cc2222 !important; }
-
-/* Blanket: all surfaces → black, borders → dark red */
 body[data-theme="night"] div,
 body[data-theme="night"] span,
 body[data-theme="night"] section,
@@ -61,8 +55,6 @@ body[data-theme="night"] li {
   background-color: #000 !important;
   border-color: #1a0303 !important;
 }
-
-/* Inputs + textareas: slightly tinted so they read as "fields" */
 body[data-theme="night"] input,
 body[data-theme="night"] textarea,
 body[data-theme="night"] select {
@@ -74,43 +66,147 @@ body[data-theme="night"] select {
   caret-color: #ff2222;
 }
 body[data-theme="night"] ::placeholder { color: #3a0808 !important; }
-
-/* Buttons */
 body[data-theme="night"] button {
   background-color: #060000 !important;
   color: #cc2222 !important;
   border-color: #2e0606 !important;
   min-height: 36px;
 }
-
-/* Structural accent borders (2 px, 3 px) → brighter red so they read as dividers */
 body[data-theme="night"] [style*="border-bottom: 2px"],
 body[data-theme="night"] [style*="border-top: 2px"] {
   border-top-color:    #cc1111 !important;
   border-bottom-color: #cc1111 !important;
 }
 body[data-theme="night"] [style*="border-left: 3px"],
-body[data-theme="night"] [style*="border-left: 2px"] {
-  border-left-color: #cc1111 !important;
-}
-/* Active allocation cards: faint orange stripe, distinct from cleared (red) */
-body[data-theme="night"] [style*="border-left: 3px solid #3d9e50"] {
-  border-left-color: #8a3d00 !important;
-}
-
-/* Links */
+body[data-theme="night"] [style*="border-left: 2px"] { border-left-color: #cc1111 !important; }
+body[data-theme="night"] [style*="border-left: 3px solid #3d9e50"] { border-left-color: #8a3d00 !important; }
 body[data-theme="night"] a { color: #ee2222 !important; }
-
-/* Leaflet map container — red phosphor tint via CSS filter */
 body[data-theme="night"] .leaflet-container {
   background: #000 !important;
   filter: grayscale(1) sepia(1) hue-rotate(310deg) saturate(6) brightness(0.4) !important;
 }
-/* Leaflet popup in night mode */
 body[data-theme="night"] .towbench-popup .leaflet-popup-content-wrapper {
   background: #060000 !important;
   border-color: #2e0606 !important;
   border-top-color: #cc1111 !important;
+}
+
+/* ─── Amber Phosphor CRT ─── */
+body[data-theme="amber"] { background: #000 !important; }
+body[data-theme="amber"] *,
+body[data-theme="amber"] *::before,
+body[data-theme="amber"] *::after {
+  animation: none !important;
+  transition: none !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+body[data-theme="amber"],
+body[data-theme="amber"] * { color: #cc8000 !important; }
+body[data-theme="amber"] div,
+body[data-theme="amber"] span,
+body[data-theme="amber"] section,
+body[data-theme="amber"] header,
+body[data-theme="amber"] main,
+body[data-theme="amber"] nav,
+body[data-theme="amber"] ul,
+body[data-theme="amber"] li {
+  background-color: #000 !important;
+  border-color: #1a0900 !important;
+}
+body[data-theme="amber"] input,
+body[data-theme="amber"] textarea,
+body[data-theme="amber"] select {
+  background-color: #060200 !important;
+  color: #cc8000 !important;
+  border-color: #2e1400 !important;
+  min-height: 36px;
+  font-size: 13px !important;
+  caret-color: #ffaa00;
+}
+body[data-theme="amber"] ::placeholder { color: #3a1a00 !important; }
+body[data-theme="amber"] button {
+  background-color: #060200 !important;
+  color: #cc8000 !important;
+  border-color: #2e1400 !important;
+  min-height: 36px;
+}
+body[data-theme="amber"] [style*="border-bottom: 2px"],
+body[data-theme="amber"] [style*="border-top: 2px"] {
+  border-top-color:    #bb6600 !important;
+  border-bottom-color: #bb6600 !important;
+}
+body[data-theme="amber"] [style*="border-left: 3px"],
+body[data-theme="amber"] [style*="border-left: 2px"] { border-left-color: #bb6600 !important; }
+body[data-theme="amber"] [style*="border-left: 3px solid #3d9e50"] { border-left-color: #6b3800 !important; }
+body[data-theme="amber"] a { color: #ee9900 !important; }
+body[data-theme="amber"] .leaflet-container {
+  background: #000 !important;
+  filter: grayscale(1) sepia(1) brightness(0.55) !important;
+}
+body[data-theme="amber"] .towbench-popup .leaflet-popup-content-wrapper {
+  background: #060200 !important;
+  border-color: #2e1400 !important;
+  border-top-color: #bb6600 !important;
+}
+
+/* ─── Terminal Green CRT ─── */
+body[data-theme="green"] { background: #000 !important; }
+body[data-theme="green"] *,
+body[data-theme="green"] *::before,
+body[data-theme="green"] *::after {
+  animation: none !important;
+  transition: none !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+body[data-theme="green"],
+body[data-theme="green"] * { color: #00bb44 !important; }
+body[data-theme="green"] div,
+body[data-theme="green"] span,
+body[data-theme="green"] section,
+body[data-theme="green"] header,
+body[data-theme="green"] main,
+body[data-theme="green"] nav,
+body[data-theme="green"] ul,
+body[data-theme="green"] li {
+  background-color: #000 !important;
+  border-color: #001508 !important;
+}
+body[data-theme="green"] input,
+body[data-theme="green"] textarea,
+body[data-theme="green"] select {
+  background-color: #000600 !important;
+  color: #00bb44 !important;
+  border-color: #002e10 !important;
+  min-height: 36px;
+  font-size: 13px !important;
+  caret-color: #00ff55;
+}
+body[data-theme="green"] ::placeholder { color: #003a14 !important; }
+body[data-theme="green"] button {
+  background-color: #000600 !important;
+  color: #00bb44 !important;
+  border-color: #002e10 !important;
+  min-height: 36px;
+}
+body[data-theme="green"] [style*="border-bottom: 2px"],
+body[data-theme="green"] [style*="border-top: 2px"] {
+  border-top-color:    #009933 !important;
+  border-bottom-color: #009933 !important;
+}
+body[data-theme="green"] [style*="border-left: 3px"],
+body[data-theme="green"] [style*="border-left: 2px"] { border-left-color: #009933 !important; }
+body[data-theme="green"] [style*="border-left: 3px solid #3d9e50"] { border-left-color: #006622 !important; }
+body[data-theme="green"] a { color: #00ee55 !important; }
+body[data-theme="green"] .leaflet-container {
+  background: #000 !important;
+  filter: grayscale(1) hue-rotate(80deg) saturate(6) brightness(0.45) !important;
+}
+body[data-theme="green"] .towbench-popup .leaflet-popup-content-wrapper {
+  background: #000600 !important;
+  border-color: #002e10 !important;
+  border-top-color: #009933 !important;
 }
 
 /* Leaflet popup dark theme */
