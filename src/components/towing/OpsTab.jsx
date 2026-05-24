@@ -426,31 +426,37 @@ export default function OpsTab({ allFeatures, liveIds, lastFetch, countdown, isS
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
-      {/* Stats bar */}
-      <div style={{ background: SURF, borderBottom: '1px solid ' + BRD, padding: '7px 14px', display: 'flex', alignItems: 'center', gap: 18, flexShrink: 0, flexWrap: 'wrap' }}>
+      {/* Row 1 — stats */}
+      <div style={{ background: SURF, borderBottom: '1px solid #1a1a1a', padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0, flexWrap: 'wrap' }}>
         <Stat label="Active"        value={liveIds.size}        color={liveIds.size > 0      ? ACC : MUT} />
         <Stat label="Accepted"      value={acceptedJobs.size}   color={acceptedJobs.size > 0 ? ACC : MUT} />
         <Stat label="Cleared Today" value={clearedToday.length} color={MUT} />
         <Stat label="Trucks Live"   value={activeTrucks}        color={activeTrucks > 0 ? GRN : MUT} />
-        {rainSoon && <span style={{ fontSize: 8, color: '#7ab0d0', paddingLeft: 4, borderLeft: '2px solid #1e3a5a' }}>🌧 Rain {hoursUntil === 0 ? 'now' : `~${hoursUntil}h`} ({maxProb}%)</span>}
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 7, color: GRN, fontFamily: "'IBM Plex Mono',monospace", letterSpacing: '0.06em', opacity: 0.6 }} title="Location sharing active">📍</span>
+          <span style={{ fontSize: 7, color: GRN, fontFamily: "'IBM Plex Mono',monospace", opacity: 0.6 }} title="Location sharing active">📍</span>
           {lastFetch && <span style={{ fontSize: 7, color: MUT, fontFamily: "'IBM Plex Mono',monospace" }}>{countdown}s</span>}
           <span style={{ width: 7, height: 7, borderRadius: '50%', background: healthColor, display: 'inline-block', flexShrink: 0 }} title={isStale ? 'Feed stale' : 'Feed live'} />
-          {/* View selector */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 2, borderLeft: '1px solid #252525', paddingLeft: 8 }}>
-            {VIEW_ORDER.map(v => (
-              <button key={v} onClick={() => setView(v)}
-                style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 2, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", background: view === v ? ACC + '22' : 'none', border: `1px solid ${view === v ? ACC + '66' : '#2a2a2a'}`, color: view === v ? ACC : MUT, letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>
-                {VIEW_LABELS[v]}
-              </button>
-            ))}
-            <button onClick={cycleView}
-              style={{ fontSize: 9, color: MUT, border: '1px solid #2a2a2a', borderRadius: 2, padding: '2px 6px', cursor: 'pointer', background: 'none', fontFamily: "'IBM Plex Mono',monospace' " }}>
-              ⟳
-            </button>
-          </div>
         </div>
+      </div>
+
+      {/* Row 2 — view selector + weather */}
+      <div style={{ background: '#0a0a0a', borderBottom: '1px solid ' + BRD, padding: '5px 14px', display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, flexWrap: 'wrap' }}>
+        {VIEW_ORDER.map(v => (
+          <button key={v} onClick={() => setView(v)}
+            style={{ fontSize: 9, fontWeight: 700, padding: '3px 10px', borderRadius: 2, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", background: view === v ? ACC + '22' : 'none', border: `1px solid ${view === v ? ACC + '66' : '#2a2a2a'}`, color: view === v ? ACC : MUT, letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
+            {VIEW_LABELS[v]}
+          </button>
+        ))}
+        <button onClick={cycleView}
+          style={{ fontSize: 10, color: MUT, border: '1px solid #2a2a2a', borderRadius: 2, padding: '3px 8px', cursor: 'pointer', background: 'none', fontFamily: "'IBM Plex Mono',monospace" }}
+          title="Cycle views">
+          ⟳
+        </button>
+        {rainSoon && (
+          <span style={{ marginLeft: 'auto', fontSize: 8, color: '#7ab0d0', padding: '2px 8px', background: '#0a1520', border: '1px solid #1e3a5a', borderRadius: 2 }}>
+            🌧 Rain {hoursUntil === 0 ? 'now' : `~${hoursUntil}h`} ({maxProb}%)
+          </span>
+        )}
       </div>
 
       {/* Analytics view — unmount map, render TowAnalyticsTab full-height */}
