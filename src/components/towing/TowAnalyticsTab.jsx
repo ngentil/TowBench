@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import 'leaflet/dist/leaflet.css';
 import { ACC, MUT, BRD, TXT, GRN, SURF } from '../../lib/styles';
 import { supabase } from '../../lib/supabase';
+import { timeIn, fmtShort, haversineKm } from '../../lib/utils';
 
 const ORANGE = '#e8870a';
 const PERIODS = [
@@ -21,15 +22,6 @@ function useWindowWidth() {
   return w;
 }
 
-function haversineKm(lat1, lon1, lat2, lon2) {
-  const R = 6371;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = Math.sin(dLat / 2) ** 2
-    + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
 function tally(arr, keyFn) {
   const map = {};
   arr.forEach(item => { const k = keyFn(item) || 'Unknown'; map[k] = (map[k] || 0) + 1; });
@@ -41,23 +33,6 @@ function fmtDuration(mins) {
   if (mins < 60) return `${Math.round(mins)}m`;
   const h = Math.floor(mins / 60); const m = Math.round(mins % 60);
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
-}
-
-function fmtElapsed(iso) {
-  if (!iso) return null;
-  const diff = Date.now() - new Date(iso).getTime();
-  if (diff < 0) return null;
-  const m = Math.floor(diff / 60000);
-  if (m < 60) return `${m}m`;
-  const h = Math.floor(m / 60); const rm = m % 60;
-  if (h < 24) return rm > 0 ? `${h}h ${rm}m` : `${h}h`;
-  const d = Math.floor(h / 24); const rh = h % 24;
-  return rh > 0 ? `${d}d ${rh}h` : `${d}d`;
-}
-
-function fmtShort(iso) {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleString('en-AU', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true });
 }
 
 function KpiCard({ label, value, sub, color = TXT }) {
@@ -201,7 +176,7 @@ function HeatMap({ points, activeFeatures, showHotspots, showActive, traceMode, 
         outerM.addTo(activeLayer); innerM.addTo(activeLayer);
         const road=p.closedRoadName||'—', sub=p.reference?.startIntersectionLocality||'', cross=p.reference?.startIntersectionRoadName||'';
         const eventId=p.eventId||'—', desc=p.description||'', lanes=p.numberLanesImpacted, subType=p.eventSubType||'', impact=p.impact?.impactType||'', melway=p.melway||'';
-        const elapsed=fmtElapsed(logMeta?.firstSeen||p.lastUpdated), firstSeen=logMeta?.firstSeen?fmtShort(logMeta.firstSeen):null;
+        const elapsed=timeIn(logMeta?.firstSeen||p.lastUpdated), firstSeen=logMeta?.firstSeen?fmtShort(logMeta.firstSeen):null;
         const mapsUrl=`https://www.google.com/maps?q=${lat},${lng}`;
         const infoRows=[
           ['Event ID','#'+eventId],
