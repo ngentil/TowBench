@@ -96,16 +96,84 @@ function OpsCard({ feature, acceptedJob, selected, onCardClick, cardRef }) {
   );
 }
 
+// Copied from TowAnalyticsTab HeatMap — self-contained component, reinits on data change
+// so the Leaflet container always has real pixel dimensions when L.map() is called
+function OpsMap({ allFeatures, liveIds, acceptedJobs, onMarkerClick, flyToRef }) {
+  const containerRef = useRef(null);
+  const mapRef       = useRef(null);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    import('leaflet').then(mod => {
+      const L = mod.default || mod;
+      if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
+
+      const map = L.map(containerRef.current, {
+        center: [-37.814, 144.963], zoom: 11,
+        zoomControl: true, attributionControl: false,
+      });
+      map.getPanes().tilePane.style.filter = 'invert(100%) hue-rotate(180deg) brightness(90%) contrast(90%) saturate(60%)';
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { subdomains: 'abc', maxZoom: 19 }).addTo(map);
+      L.control.attribution({ prefix: false })
+        .addAttribution('© <a href="https://openstreetmap.org" style="color:#666">OpenStreetMap</a>')
+        .addTo(map);
+
+      allFeatures.forEach(feature => {
+        const coords = feature.geometry?.coordinates;
+        if (!coords) return;
+        const lat     = coords[1], lng = coords[0];
+        const eventId = String(feature.properties?.eventId || '');
+        const isLive  = liveIds.has(eventId);
+        const accepted = acceptedJobs.get(eventId);
+        const isOverdue = accepted && (Date.now() - new Date(accepted.accepted_at).getTime()) >= 60 * 60 * 1000;
+
+        if (!isLive) {
+          L.circleMarker([lat, lng], { radius: 5, fillColor: '#555', fillOpacity: 0.5, color: '#555', weight: 0.5 }).addTo(map);
+          return;
+        }
+
+        const dotColor = isOverdue ? '#cc2222' : accepted ? '#cc4422' : GRN;
+
+        const outerM = L.circleMarker([lat, lng], {
+          radius: 14, fillColor: dotColor, fillOpacity: 0.15, stroke: false, bubblingMouseEvents: false,
+        });
+        const innerM = L.circleMarker([lat, lng], {
+          radius: 5, fillColor: dotColor, fillOpacity: 0.9, color: dotColor, weight: 1, bubblingMouseEvents: false,
+        });
+        outerM.addTo(map);
+        innerM.addTo(map);
+
+        const handleClick = () => onMarkerClick(eventId);
+        innerM.on('click', handleClick);
+        outerM.on('click', handleClick);
+      });
+
+      mapRef.current = map;
+      if (flyToRef) flyToRef.current = (lat, lng) => map.flyTo([lat, lng], 14, { duration: 0.5 });
+    });
+
+    return () => {
+      if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
+      if (flyToRef) flyToRef.current = null;
+    };
+  }, [allFeatures, liveIds, acceptedJobs]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return <div ref={containerRef} style={{ width: '100%', height: '100%' }} />;
+}
+
 export default function OpsTab({ allFeatures, liveIds, lastFetch, countdown, isStale, acceptedJobs, userEmail }) {
   const { rainSoon, maxProb, hoursUntil } = useWeather();
-  const [selectedId, setSelectedId] = useState(null);
+  const [selectedId,  setSelectedId]  = useState(null);
+  const [splitHeight, setSplitHeight] = useState(window.innerHeight - 120);
+  const flyToRef    = useRef(null);
+  const cardRefsRef = useRef(new Map());
 
-  const containerRef  = useRef(null);
-  const mapRef        = useRef(null);
-  const layerRef      = useRef(null);
-  const leafletRef    = useRef(null);
-  const flyToRef      = useRef(null);
-  const cardRefsRef   = useRef(new Map());
+  useEffect(() => {
+    const h = () => setSplitHeight(window.innerHeight - 120);
+    window.addEventListener('resize', h);
+    return () => window.removeEventListener('resize', h);
+  }, []);
 
   const { activeFeatures, clearedToday } = useMemo(() => {
     const active = [], cleared = [];
@@ -127,67 +195,11 @@ export default function OpsTab({ allFeatures, liveIds, lastFetch, countdown, isS
       ? '#cc8800'
       : '#3d9e50';
 
-  // Map init — runs once on mount
-  useEffect(() => {
-    if (!containerRef.current) return;
-    import('leaflet').then(mod => {
-      const L = mod.default || mod;
-      leafletRef.current = L;
-      if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
-
-      const map = L.map(containerRef.current, {
-        center: [-37.814, 144.963], zoom: 11,
-        zoomControl: true, attributionControl: false,
-      });
-      map.getPanes().tilePane.style.filter = 'invert(100%) hue-rotate(180deg) brightness(90%) contrast(90%) saturate(60%)';
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { subdomains: 'abc', maxZoom: 19 }).addTo(map);
-      L.control.attribution({ prefix: false })
-        .addAttribution('© <a href="https://openstreetmap.org" style="color:#666">OpenStreetMap</a>')
-        .addTo(map);
-
-      const layer = L.layerGroup().addTo(map);
-      layerRef.current = layer;
-      mapRef.current   = map;
-      flyToRef.current = (lat, lng) => map.flyTo([lat, lng], 14, { duration: 0.5 });
-      setTimeout(() => map.invalidateSize(), 150);
-    });
-    return () => { if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; } };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Rebuild markers when data changes
-  useEffect(() => {
-    const L     = leafletRef.current;
-    const layer = layerRef.current;
-    if (!L || !layer) return;
-    layer.clearLayers();
-
-    allFeatures.forEach(feature => {
-      const coords = feature.geometry?.coordinates;
-      if (!coords) return;
-      const lat      = coords[1], lng = coords[0];
-      const eventId  = String(feature.properties?.eventId || '');
-      const isLive   = liveIds.has(eventId);
-      const accepted = acceptedJobs.get(eventId);
-      const isOverdue = accepted && (Date.now() - new Date(accepted.accepted_at).getTime()) >= 60 * 60 * 1000;
-
-      let color, radius, opacity;
-      if (!isLive)        { color = '#555';    radius = 5; opacity = 0.5; }
-      else if (isOverdue) { color = '#cc2222'; radius = 9; opacity = 0.95; }
-      else if (accepted)  { color = '#cc4422'; radius = 8; opacity = 0.9; }
-      else                { color = ORANGE;    radius = 7; opacity = 0.9; }
-
-      const marker = L.circleMarker([lat, lng], {
-        radius, fillColor: color, fillOpacity: opacity,
-        color: color, weight: isLive ? 1.5 : 0.5,
-      });
-      marker.on('click', () => {
-        setSelectedId(eventId);
-        const el = cardRefsRef.current.get(eventId);
-        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      });
-      marker.addTo(layer);
-    });
-  }, [allFeatures, liveIds, acceptedJobs]);
+  const handleMarkerClick = (eventId) => {
+    setSelectedId(eventId);
+    const el = cardRefsRef.current.get(eventId);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  };
 
   const handleCardClick = (feature) => {
     const coords  = feature.geometry?.coordinates;
@@ -205,8 +217,8 @@ export default function OpsTab({ allFeatures, liveIds, lastFetch, countdown, isS
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
       {/* Stats bar */}
       <div style={{ background: SURF, borderBottom: '1px solid ' + BRD, padding: '7px 14px', display: 'flex', alignItems: 'center', gap: 18, flexShrink: 0, flexWrap: 'wrap' }}>
-        <Stat label="Active" value={liveIds.size} color={liveIds.size > 0 ? ACC : MUT} />
-        <Stat label="Accepted" value={acceptedJobs.size} color={acceptedJobs.size > 0 ? ACC : MUT} />
+        <Stat label="Active"        value={liveIds.size}      color={liveIds.size > 0      ? ACC : MUT} />
+        <Stat label="Accepted"      value={acceptedJobs.size} color={acceptedJobs.size > 0 ? ACC : MUT} />
         <Stat label="Cleared Today" value={clearedToday.length} color={MUT} />
         {rainSoon && (
           <span style={{ fontSize: 8, color: '#7ab0d0', paddingLeft: 4, borderLeft: '2px solid #1e3a5a' }}>
@@ -215,9 +227,7 @@ export default function OpsTab({ allFeatures, liveIds, lastFetch, countdown, isS
         )}
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
           {lastFetch && (
-            <span style={{ fontSize: 7, color: MUT, fontFamily: "'IBM Plex Mono',monospace" }}>
-              {countdown}s
-            </span>
+            <span style={{ fontSize: 7, color: MUT, fontFamily: "'IBM Plex Mono',monospace" }}>{countdown}s</span>
           )}
           <span
             style={{ width: 7, height: 7, borderRadius: '50%', background: healthColor, display: 'inline-block', flexShrink: 0 }}
@@ -226,10 +236,18 @@ export default function OpsTab({ allFeatures, liveIds, lastFetch, countdown, isS
         </div>
       </div>
 
-      {/* Split view */}
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
+      {/* Split view — explicit pixel height so Leaflet always gets real dimensions */}
+      <div style={{ display: 'flex', height: splitHeight, overflow: 'hidden' }}>
         {/* Map — 60% */}
-        <div ref={containerRef} style={{ flex: '0 0 60%', minHeight: 0, position: 'relative' }} />
+        <div style={{ flex: '0 0 60%', position: 'relative' }}>
+          <OpsMap
+            allFeatures={allFeatures}
+            liveIds={liveIds}
+            acceptedJobs={acceptedJobs}
+            onMarkerClick={handleMarkerClick}
+            flyToRef={flyToRef}
+          />
+        </div>
 
         {/* Card list — 40% */}
         <div style={{ flex: '0 0 40%', overflowY: 'auto', borderLeft: '1px solid ' + BRD, display: 'flex', flexDirection: 'column' }}>
