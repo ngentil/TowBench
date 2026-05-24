@@ -2,23 +2,10 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import 'leaflet/dist/leaflet.css';
 import { ACC, MUT, BRD, TXT, GRN, SURF } from '../../lib/styles';
 import useWeather from '../../hooks/useWeather';
+import { timeIn } from '../../lib/utils';
 
 const ORANGE = '#e8670a';
 const POLL_MS = 60_000;
-
-function timeIn(iso) {
-  if (!iso) return null;
-  const diff = Date.now() - new Date(iso).getTime();
-  if (diff < 0) return null;
-  const m = Math.floor(diff / 60000);
-  if (m < 60) return `${m}m`;
-  const h = Math.floor(m / 60);
-  const rm = m % 60;
-  if (h < 24) return rm > 0 ? `${h}h ${rm}m` : `${h}h`;
-  const d = Math.floor(h / 24);
-  const rh = h % 24;
-  return rh > 0 ? `${d}d ${rh}h` : `${d}d`;
-}
 
 function isToday(iso) {
   if (!iso) return false;

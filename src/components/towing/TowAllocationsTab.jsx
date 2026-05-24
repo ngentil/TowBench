@@ -4,6 +4,7 @@ import { ACC, MUT, BRD, TXT, GRN, SURF } from '../../lib/styles';
 import { getRecentAllocations } from '../../lib/db/towing';
 import useWeather from '../../hooks/useWeather';
 import { supabase } from '../../lib/supabase';
+import { timeIn, fmtShort, haversineKm } from '../../lib/utils';
 
 const ORANGE = '#e8870a';
 
@@ -33,44 +34,7 @@ const EXPORT_PERIODS = [
   { label: 'Last 31 days', hours: 744  },
 ];
 
-function fmt(iso) {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleString('en-AU', {
-    day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true,
-  });
-}
-
-function fmtShort(iso) {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleString('en-AU', {
-    day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true,
-  });
-}
-
-function timeIn(iso) {
-  if (!iso) return null;
-  const diff = Date.now() - new Date(iso).getTime();
-  if (diff < 0) return null;
-  const m = Math.floor(diff / 60000);
-  if (m < 60)  return `${m}m`;
-  const h = Math.floor(m / 60);
-  const rm = m % 60;
-  if (h < 24)  return rm > 0 ? `${h}h ${rm}m` : `${h}h`;
-  const d = Math.floor(h / 24);
-  const rh = h % 24;
-  return rh > 0 ? `${d}d ${rh}h` : `${d}d`;
-}
-
 const NEARBY_OPTS = [0, 5, 10, 15, 20, 30];
-
-function haversineKm(lat1, lon1, lat2, lon2) {
-  const R = 6371;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = Math.sin(dLat / 2) ** 2
-    + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
 
 function StatusBadge({ live }) {
   const color = live ? GRN : '#555';
@@ -212,11 +176,11 @@ function AllocationCard({ feature, fromLog, userPos, nearbyKm, acceptedJob, user
               ['Cross Street',   crossSt   || '—'],
               ['Melway',         melway    || '—'],
               ['Time In',        elapsed   || '—'],
-              ['Last Updated',   fmt(created)],
+              ['Last Updated',   fmtShort(created)],
               ...(logMeta ? [
-                ['First Seen', fmt(logMeta.firstSeen)],
-                ['Last Seen',  fmt(logMeta.lastSeen)],
-                ...(logMeta.clearedAt ? [['Cleared', fmt(logMeta.clearedAt)]] : []),
+                ['First Seen', fmtShort(logMeta.firstSeen)],
+                ['Last Seen',  fmtShort(logMeta.lastSeen)],
+                ...(logMeta.clearedAt ? [['Cleared', fmtShort(logMeta.clearedAt)]] : []),
               ] : []),
               ...(coords ? [['Coordinates', `${coords[1].toFixed(5)}, ${coords[0].toFixed(5)}`]] : []),
             ].map(([label, val]) => (

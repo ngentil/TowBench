@@ -7,9 +7,8 @@ import { logAllocations, markAllocationsCleared, getRecentAllocations } from '..
 import { supabase } from '../../lib/supabase';
 import AdminSettings from '../admin/AdminSettings';
 import OpsTab from './OpsTab';
+import { VICROADS_URL, VICROADS_KEY } from '../../lib/constants';
 
-const API_URL = 'https://api.opendata.transport.vic.gov.au/api/opendata/roads/disruptions/unplanned/v3';
-const API_KEY = import.meta.env.VITE_VICROADS_KEY || 'bb7fc352-3ce6-44d2-9628-63fefb64278d';
 const POLL_MS = 60_000;
 
 const BASE_TABS = [
@@ -82,7 +81,7 @@ export default function TowingSection({ isAdmin, userEmail, companyConfig, setCo
 
   const fetchAllocations = useCallback(async () => {
     try {
-      const res  = await fetch(API_URL, { headers: { KeyID: API_KEY } });
+      const res  = await fetch(VICROADS_URL, { headers: { KeyID: VICROADS_KEY } });
       if (!res.ok) throw new Error(`API returned ${res.status}`);
       const data = await res.json();
       const all  = data.data?.features || data.features || [];

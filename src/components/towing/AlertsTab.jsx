@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ACC, MUT, TXT, RED, SURF, BRD } from '../../lib/styles';
+import { timeAgo } from '../../lib/utils';
 
 const WAZE_URL   = '/.netlify/functions/waze-alerts';
 const REFRESH_MS = 60_000;
@@ -19,16 +20,6 @@ const FILTERS = [
   { id: 'JAM',         label: '🚗 Jam' },
   { id: 'ROAD_CLOSED', label: '🚧 Road Closed' },
 ];
-
-function timeAgo(ms) {
-  if (!ms) return null;
-  const diff = Date.now() - ms;
-  if (diff < 0) return null;
-  const m = Math.floor(diff / 60000);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  return `${h}h ${m % 60}m ago`;
-}
 
 function wazeTitle(alert) {
   return (alert.subtype || alert.type || 'HAZARD')
