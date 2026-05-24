@@ -50,10 +50,10 @@ function OpsCard({ feature, acceptedJob, selected, nearestDriver, onCardClick, c
     <div ref={cardRef} onClick={onCardClick} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', cursor: 'pointer', borderLeft: `3px solid ${stripeColor}`, borderBottom: '1px solid #1a1a1a', borderRight: selected ? `2px solid ${ORANGE}` : '2px solid transparent', background: selected ? '#0d0a04' : 'transparent', flexShrink: 0 }}>
       <div style={{ flex: 1, minWidth: 0 }}>
         <span style={{ fontSize: 10, fontWeight: 700, color: TXT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>{road}</span>
-        <div style={{ display: 'flex', gap: 5, alignItems: 'center', marginTop: 1 }}>
-          <span style={{ fontSize: 7, color: MUT, fontFamily: "'IBM Plex Mono',monospace" }}>#{eventId}</span>
+        <div style={{ marginTop: 2 }}>
+          <span style={{ fontSize: 7, color: MUT, fontFamily: "'IBM Plex Mono',monospace", display: 'block' }}>#{eventId}</span>
           {isLive && nearestDriver && (
-            <span style={{ fontSize: 7, color: '#5a7a9a', fontFamily: "'IBM Plex Mono',monospace" }}>
+            <span style={{ fontSize: 7, color: '#5a7a9a', fontFamily: "'IBM Plex Mono',monospace", display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               🚛 {nearestDriver.label} {nearestDriver.dist.toFixed(1)}km
             </span>
           )}
@@ -262,14 +262,17 @@ function OpsMap({ allFeatures, liveIds, acceptedJobs, driverLocations, onMarkerC
   return <div ref={containerRef} style={{ width: '100%', height: '100%' }} />;
 }
 
-const VIEW_ORDER = ['ops', 'analytics', 'map', 'board'];
-const VIEW_LABELS = { ops: '🖥 Ops', analytics: '📊', map: '🗺', board: '📋' };
+const VIEW_ORDER    = ['ops', 'analytics', 'map', 'board'];
+const VIEW_LABELS   = { ops: '🖥 Ops', analytics: '📊', map: '🗺', board: '📋' };
+const MAP_POS_ORDER = ['left', 'right', 'top', 'bottom'];
+const MAP_POS_ICONS = { left: '◧', right: '◨', top: '⯒', bottom: '⯓' };
 
 export default function OpsTab({ allFeatures, liveIds, lastFetch, countdown, isStale, loading, acceptedJobs, userEmail, onAcceptJob, onReleaseJob }) {
   const { rainSoon, maxProb, hoursUntil } = useWeather();
   const [selectedId,      setSelectedId]      = useState(null);
   const [driverLocations, setDriverLocations] = useState([]);
   const [view,            setView]            = useState(() => localStorage.getItem('ops-view') || 'ops');
+  const [mapPos,          setMapPos]          = useState(() => localStorage.getItem('ops-map-pos') || 'left');
   const [boardSearch,     setBoardSearch]     = useState('');
   const flyToRef    = useRef(null);
   const cardRefsRef = useRef(new Map());
@@ -277,6 +280,7 @@ export default function OpsTab({ allFeatures, liveIds, lastFetch, countdown, isS
   useDriverLocation(userEmail);
 
   useEffect(() => { localStorage.setItem('ops-view', view); }, [view]);
+  useEffect(() => { localStorage.setItem('ops-map-pos', mapPos); }, [mapPos]);
 
   const cycleView = () => setView(v => VIEW_ORDER[(VIEW_ORDER.indexOf(v) + 1) % VIEW_ORDER.length]);
 
@@ -439,7 +443,7 @@ export default function OpsTab({ allFeatures, liveIds, lastFetch, countdown, isS
         </div>
       </div>
 
-      {/* Row 2 — view selector + weather */}
+      {/* Row 2 — view selector + map position + weather */}
       <div style={{ background: '#0a0a0a', borderBottom: '1px solid ' + BRD, padding: '5px 14px', display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, flexWrap: 'wrap' }}>
         {VIEW_ORDER.map(v => (
           <button key={v} onClick={() => setView(v)}
@@ -452,6 +456,17 @@ export default function OpsTab({ allFeatures, liveIds, lastFetch, countdown, isS
           title="Cycle views">
           ⟳
         </button>
+        {view === 'ops' && (
+          <>
+            <div style={{ width: 1, height: 14, background: '#2a2a2a', margin: '0 4px', flexShrink: 0 }} />
+            {MAP_POS_ORDER.map(pos => (
+              <button key={pos} onClick={() => setMapPos(pos)} title={`Map ${pos}`}
+                style={{ fontSize: 11, padding: '2px 7px', borderRadius: 2, cursor: 'pointer', background: mapPos === pos ? ACC + '22' : 'none', border: `1px solid ${mapPos === pos ? ACC + '66' : '#2a2a2a'}`, color: mapPos === pos ? ACC : MUT }}>
+                {MAP_POS_ICONS[pos]}
+              </button>
+            ))}
+          </>
+        )}
         {rainSoon && (
           <span style={{ marginLeft: 'auto', fontSize: 8, color: '#7ab0d0', padding: '2px 8px', background: '#0a1520', border: '1px solid #1e3a5a', borderRadius: 2 }}>
             🌧 Rain {hoursUntil === 0 ? 'now' : `~${hoursUntil}h`} ({maxProb}%)
@@ -467,24 +482,35 @@ export default function OpsTab({ allFeatures, liveIds, lastFetch, countdown, isS
       )}
 
       {/* Ops / Map / Board views */}
-      {view !== 'analytics' && (
-        <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
-          {view !== 'board' && (
-            <div style={{ flex: view === 'map' ? '1 1 100%' : '0 0 60%', position: 'relative' }}>
-              <OpsMap
-                allFeatures={allFeatures} liveIds={liveIds} acceptedJobs={acceptedJobs}
-                driverLocations={driverLocations}
-                onMarkerClick={handleMarkerClick} flyToRef={flyToRef}
-              />
-            </div>
-          )}
-          {view !== 'map' && (
-            <div style={{ flex: view === 'board' ? '1 1 100%' : '0 0 40%', display: 'flex', flexDirection: 'column', borderLeft: view === 'board' ? 'none' : '1px solid ' + BRD, minHeight: 0, overflow: 'hidden' }}>
-              {renderCardList(view === 'board')}
-            </div>
-          )}
-        </div>
-      )}
+      {view !== 'analytics' && (() => {
+        const isRow      = view !== 'ops' || mapPos === 'left' || mapPos === 'right';
+        const reversed   = view === 'ops' && (mapPos === 'right' || mapPos === 'bottom');
+        const flexDir    = isRow ? (reversed ? 'row-reverse' : 'row') : (reversed ? 'column-reverse' : 'column');
+        const mapFlex    = view === 'map'   ? '1 1 100%' : isRow ? '0 0 60%' : '0 0 50%';
+        const cardFlex   = view === 'board' ? '1 1 100%' : isRow ? '0 0 40%' : '0 0 50%';
+        const cardBorder = view === 'board' ? {} : isRow
+          ? (reversed ? { borderRight: '1px solid ' + BRD } : { borderLeft: '1px solid ' + BRD })
+          : (reversed ? { borderBottom: '1px solid ' + BRD } : { borderTop: '1px solid ' + BRD });
+
+        return (
+          <div style={{ display: 'flex', flexDirection: flexDir, flex: 1, minHeight: 0, overflow: 'hidden' }}>
+            {view !== 'board' && (
+              <div style={{ flex: mapFlex, position: 'relative', minHeight: 0, minWidth: 0 }}>
+                <OpsMap
+                  allFeatures={allFeatures} liveIds={liveIds} acceptedJobs={acceptedJobs}
+                  driverLocations={driverLocations}
+                  onMarkerClick={handleMarkerClick} flyToRef={flyToRef}
+                />
+              </div>
+            )}
+            {view !== 'map' && (
+              <div style={{ flex: cardFlex, display: 'flex', flexDirection: 'column', ...cardBorder, minHeight: 0, overflow: 'hidden' }}>
+                {renderCardList(view === 'board')}
+              </div>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }
