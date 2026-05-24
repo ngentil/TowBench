@@ -4,7 +4,7 @@ import { ACC, MUT, BRD, TXT, GRN, SURF } from '../../lib/styles';
 import { getRecentAllocations } from '../../lib/db/towing';
 import useWeather from '../../hooks/useWeather';
 import { supabase } from '../../lib/supabase';
-import { timeIn, fmtShort, haversineKm } from '../../lib/utils';
+import { timeIn, fmtTimer, fmtShort, haversineKm } from '../../lib/utils';
 
 const ORANGE = '#e8870a';
 
@@ -77,7 +77,7 @@ function AllocationCard({ feature, fromLog, userPos, nearbyKm, acceptedJob, user
 
   const isAcceptedByMe    = isLive && acceptedJob && acceptedJob.accepted_by === userEmail;
   const isAcceptedByOther = isLive && acceptedJob && acceptedJob.accepted_by !== userEmail;
-  const acceptedElapsed   = acceptedJob ? timeIn(acceptedJob.accepted_at) : null;
+  const acceptedElapsed   = acceptedJob ? fmtTimer(acceptedJob.accepted_at) : null;
   const isOverdue         = isAcceptedByMe && (Date.now() - new Date(acceptedJob.accepted_at).getTime()) >= 60 * 60 * 1000;
 
   const borderLeft = isNearby || isOverdue ? '3px solid #cc2222' : `3px solid ${isLive ? GRN : '#333'}`;

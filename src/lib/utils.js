@@ -36,6 +36,19 @@ export function fmtShort(iso) {
   });
 }
 
+// Formats acceptance elapsed time as a live stopwatch: "0:42", "5:23", "1:05:12"
+export function fmtTimer(iso) {
+  if (!iso) return null;
+  const totalSec = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (totalSec < 0) return null;
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  return h > 0
+    ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+    : `${m}:${String(s).padStart(2, '0')}`;
+}
+
 // Haversine great-circle distance in kilometres
 export function haversineKm(lat1, lon1, lat2, lon2) {
   const R = 6371;

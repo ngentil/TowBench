@@ -3,12 +3,13 @@ import 'leaflet/dist/leaflet.css';
 import { ACC, MUT, BRD, TXT, GRN, SURF } from '../../lib/styles';
 import useWeather from '../../hooks/useWeather';
 import useDriverLocation from '../../hooks/useDriverLocation';
-import { timeIn, haversineKm } from '../../lib/utils';
+import { timeIn, fmtTimer, haversineKm } from '../../lib/utils';
 import { supabase } from '../../lib/supabase';
+import TowAnalyticsTab from './TowAnalyticsTab';
 
 const ORANGE   = '#e8670a';
 const POLL_MS  = 60_000;
-const STALE_MS = 10 * 60 * 1000; // hide truck if >10 min since last ping
+const STALE_MS = 10 * 60 * 1000;
 
 function isToday(iso) {
   if (!iso) return false;
@@ -26,15 +27,18 @@ function Stat({ label, value, color }) {
   );
 }
 
-function OpsCard({ feature, acceptedJob, selected, nearestDriver, onCardClick, cardRef }) {
+function OpsCard({ feature, acceptedJob, selected, nearestDriver, onCardClick, cardRef, userEmail, onAcceptJob, onReleaseJob }) {
   const p       = feature.properties || {};
   const road    = p.closedRoadName || '—';
   const eventId = String(p.eventId || '');
   const logMeta = feature._logMeta;
   const isLive  = feature._isLive;
   const elapsed = timeIn(logMeta?.firstSeen || p.lastUpdated);
-  const isOverdue      = isLive && acceptedJob && (Date.now() - new Date(acceptedJob.accepted_at).getTime()) >= 60 * 60 * 1000;
-  const acceptedElapsed = acceptedJob ? timeIn(acceptedJob.accepted_at) : null;
+
+  const isOverdue       = isLive && acceptedJob && (Date.now() - new Date(acceptedJob.accepted_at).getTime()) >= 60 * 60 * 1000;
+  const acceptedElapsed = acceptedJob ? fmtTimer(acceptedJob.accepted_at) : null;
+  const isAcceptedByMe    = isLive && acceptedJob && acceptedJob.accepted_by === userEmail;
+  const isAcceptedByOther = isLive && acceptedJob && acceptedJob.accepted_by !== userEmail;
 
   let stripeColor;
   if (!isLive)          stripeColor = '#333';
@@ -55,10 +59,35 @@ function OpsCard({ feature, acceptedJob, selected, nearestDriver, onCardClick, c
           )}
         </div>
       </div>
-      <div style={{ flexShrink: 0, display: 'flex', gap: 4, alignItems: 'center' }}>
-        {isLive && !acceptedJob && elapsed && <span style={{ fontSize: 7, color: ORANGE, border: `1px solid ${ORANGE}44`, borderRadius: 2, padding: '1px 4px' }}>{elapsed}</span>}
-        {isLive && isOverdue && <span style={{ fontSize: 7, color: '#cc2222', border: '1px solid #cc222255', borderRadius: 2, padding: '1px 4px', fontWeight: 700 }}>⚠ {acceptedElapsed}</span>}
-        {isLive && acceptedJob && !isOverdue && <span style={{ fontSize: 7, color: ORANGE, border: `1px solid ${ORANGE}44`, borderRadius: 2, padding: '1px 4px' }}>✓ {acceptedElapsed}</span>}
+      <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-end' }}>
+        {isLive && !acceptedJob && onAcceptJob && (
+          <button onClick={e => { e.stopPropagation(); onAcceptJob(eventId); }}
+            style={{ background: GRN + '11', border: `1px solid ${GRN}55`, borderRadius: 2, color: GRN, fontSize: 8, padding: '3px 7px', cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>
+            ✓ Accept
+          </button>
+        )}
+        {isLive && !acceptedJob && !onAcceptJob && elapsed && (
+          <span style={{ fontSize: 7, color: ORANGE, border: `1px solid ${ORANGE}44`, borderRadius: 2, padding: '1px 4px' }}>{elapsed}</span>
+        )}
+        {isAcceptedByMe && (
+          <>
+            <span style={{ fontSize: 8, color: isOverdue ? '#cc4444' : ACC, fontFamily: "'IBM Plex Mono',monospace", whiteSpace: 'nowrap', fontWeight: 700 }}>
+              {isOverdue ? `⚠ ${acceptedElapsed}` : `✓ ${acceptedElapsed}`}
+            </span>
+            {onReleaseJob && (
+              <button onClick={e => { e.stopPropagation(); onReleaseJob(acceptedJob.id); }}
+                style={{ background: '#1a0000', border: '1px solid #cc222255', borderRadius: 2, color: '#cc6666', fontSize: 8, padding: '3px 7px', cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>
+                ✕ Release
+              </button>
+            )}
+          </>
+        )}
+        {isAcceptedByOther && (
+          <span style={{ fontSize: 7, color: MUT, border: '1px solid #2a2a2a', borderRadius: 2, padding: '2px 5px', whiteSpace: 'nowrap', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', display: 'block' }}
+            title={`Accepted by ${acceptedJob.accepted_by}`}>
+            🔒 {acceptedJob.accepted_by.split('@')[0]}
+          </span>
+        )}
         {!isLive && <span style={{ fontSize: 7, color: '#444', border: '1px solid #2a2a2a', borderRadius: 2, padding: '1px 4px' }}>✓</span>}
       </div>
     </div>
@@ -176,7 +205,7 @@ function OpsMap({ allFeatures, liveIds, acceptedJobs, driverLocations, onMarkerC
     });
   }, [allFeatures, liveIds, acceptedJobs, onMarkerClick]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Truck markers — rebuild independently when driver locations change
+  // Truck markers
   useEffect(() => {
     const L     = leafletRef.current;
     const layer = truckLayerRef.current;
@@ -233,17 +262,25 @@ function OpsMap({ allFeatures, liveIds, acceptedJobs, driverLocations, onMarkerC
   return <div ref={containerRef} style={{ width: '100%', height: '100%' }} />;
 }
 
-export default function OpsTab({ allFeatures, liveIds, lastFetch, countdown, isStale, acceptedJobs, userEmail }) {
+const VIEW_ORDER = ['ops', 'analytics', 'map', 'board'];
+const VIEW_LABELS = { ops: '🖥 Ops', analytics: '📊', map: '🗺', board: '📋' };
+
+export default function OpsTab({ allFeatures, liveIds, lastFetch, countdown, isStale, loading, acceptedJobs, userEmail, onAcceptJob, onReleaseJob }) {
   const { rainSoon, maxProb, hoursUntil } = useWeather();
   const [selectedId,      setSelectedId]      = useState(null);
-  const [splitHeight,     setSplitHeight]     = useState(window.innerHeight - 120);
   const [driverLocations, setDriverLocations] = useState([]);
+  const [view,            setView]            = useState(() => localStorage.getItem('ops-view') || 'ops');
+  const [boardSearch,     setBoardSearch]     = useState('');
   const flyToRef    = useRef(null);
   const cardRefsRef = useRef(new Map());
 
   useDriverLocation(userEmail);
 
-  // Fetch driver locations + subscribe to realtime
+  useEffect(() => { localStorage.setItem('ops-view', view); }, [view]);
+
+  const cycleView = () => setView(v => VIEW_ORDER[(VIEW_ORDER.indexOf(v) + 1) % VIEW_ORDER.length]);
+
+  // Driver location realtime
   useEffect(() => {
     supabase.from('driver_locations').select('*')
       .then(({ data }) => { if (data) setDriverLocations(data); })
@@ -264,12 +301,6 @@ export default function OpsTab({ allFeatures, liveIds, lastFetch, countdown, isS
     return () => supabase.removeChannel(ch);
   }, []);
 
-  useEffect(() => {
-    const h = () => setSplitHeight(window.innerHeight - 120);
-    window.addEventListener('resize', h);
-    return () => window.removeEventListener('resize', h);
-  }, []);
-
   const { activeFeatures, clearedToday } = useMemo(() => {
     const active = [], cleared = [];
     allFeatures.forEach(f => {
@@ -284,7 +315,6 @@ export default function OpsTab({ allFeatures, liveIds, lastFetch, countdown, isS
     return { activeFeatures: active, clearedToday: cleared };
   }, [allFeatures, liveIds]);
 
-  // Nearest active driver to each allocation
   const nearestDrivers = useMemo(() => {
     const now = Date.now();
     const activeDrvs = driverLocations.filter(d => now - new Date(d.updated_at).getTime() < STALE_MS);
@@ -304,6 +334,17 @@ export default function OpsTab({ allFeatures, liveIds, lastFetch, countdown, isS
     });
     return map;
   }, [activeFeatures, driverLocations]);
+
+  const filterCards = (arr) => {
+    if (!boardSearch.trim()) return arr;
+    const q = boardSearch.toLowerCase();
+    return arr.filter(f => {
+      const p = f.properties || {};
+      return [p.closedRoadName, p.reference?.startIntersectionLocality, p.eventId].join(' ').toLowerCase().includes(q);
+    });
+  };
+  const filteredActive  = filterCards(activeFeatures);
+  const filteredCleared = filterCards(clearedToday);
 
   const activeTrucks = driverLocations.filter(d => Date.now() - new Date(d.updated_at).getTime() < STALE_MS).length;
   const healthColor  = isStale ? '#cc2222' : lastFetch && (Date.now() - lastFetch.getTime()) > POLL_MS * 1.5 ? '#cc8800' : '#3d9e50';
@@ -326,8 +367,66 @@ export default function OpsTab({ allFeatures, liveIds, lastFetch, countdown, isS
     else    cardRefsRef.current.delete(eventId);
   };
 
+  const renderCardList = (showSearch) => (
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+      {showSearch && (
+        <div style={{ padding: '6px 10px', borderBottom: '1px solid ' + BRD, flexShrink: 0 }}>
+          <input
+            type="text" value={boardSearch} onChange={e => setBoardSearch(e.target.value)}
+            placeholder="Filter road, suburb, event ID…"
+            style={{ width: '100%', background: '#0a0a0a', border: '1px solid #252525', color: TXT, fontFamily: "'IBM Plex Mono',monospace", fontSize: 10, padding: '5px 8px', borderRadius: 2, outline: 'none', boxSizing: 'border-box' }}
+          />
+        </div>
+      )}
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        {filteredActive.length === 0 && filteredCleared.length === 0 && (
+          <div style={{ padding: 24, color: MUT, fontSize: 9, textAlign: 'center', letterSpacing: '0.1em' }}>No allocations</div>
+        )}
+        {filteredActive.map(f => {
+          const eventId = String(f.properties?.eventId || '');
+          return (
+            <OpsCard
+              key={eventId} feature={f}
+              acceptedJob={acceptedJobs.get(eventId) || null}
+              nearestDriver={nearestDrivers.get(eventId) || null}
+              selected={selectedId === eventId}
+              onCardClick={() => handleCardClick(f)}
+              cardRef={setCardRef(eventId)}
+              userEmail={userEmail}
+              onAcceptJob={onAcceptJob}
+              onReleaseJob={onReleaseJob}
+            />
+          );
+        })}
+        {filteredCleared.length > 0 && (
+          <>
+            <div style={{ padding: '5px 10px', fontSize: 7, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', borderBottom: '1px solid #1a1a1a', borderTop: filteredActive.length > 0 ? '1px solid #252525' : 'none', background: '#0a0a0a', flexShrink: 0 }}>
+              Cleared Today — {filteredCleared.length}
+            </div>
+            {filteredCleared.map(f => {
+              const eventId = String(f.properties?.eventId || '');
+              return (
+                <OpsCard
+                  key={eventId} feature={f}
+                  acceptedJob={null} nearestDriver={null}
+                  selected={selectedId === eventId}
+                  onCardClick={() => handleCardClick(f)}
+                  cardRef={setCardRef(eventId)}
+                  userEmail={userEmail}
+                  onAcceptJob={null}
+                  onReleaseJob={null}
+                />
+              );
+            })}
+          </>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+      {/* Stats bar */}
       <div style={{ background: SURF, borderBottom: '1px solid ' + BRD, padding: '7px 14px', display: 'flex', alignItems: 'center', gap: 18, flexShrink: 0, flexWrap: 'wrap' }}>
         <Stat label="Active"        value={liveIds.size}        color={liveIds.size > 0      ? ACC : MUT} />
         <Stat label="Accepted"      value={acceptedJobs.size}   color={acceptedJobs.size > 0 ? ACC : MUT} />
@@ -338,55 +437,48 @@ export default function OpsTab({ allFeatures, liveIds, lastFetch, countdown, isS
           <span style={{ fontSize: 7, color: GRN, fontFamily: "'IBM Plex Mono',monospace", letterSpacing: '0.06em', opacity: 0.6 }} title="Location sharing active">📍</span>
           {lastFetch && <span style={{ fontSize: 7, color: MUT, fontFamily: "'IBM Plex Mono',monospace" }}>{countdown}s</span>}
           <span style={{ width: 7, height: 7, borderRadius: '50%', background: healthColor, display: 'inline-block', flexShrink: 0 }} title={isStale ? 'Feed stale' : 'Feed live'} />
+          {/* View selector */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 2, borderLeft: '1px solid #252525', paddingLeft: 8 }}>
+            {VIEW_ORDER.map(v => (
+              <button key={v} onClick={() => setView(v)}
+                style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 2, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", background: view === v ? ACC + '22' : 'none', border: `1px solid ${view === v ? ACC + '66' : '#2a2a2a'}`, color: view === v ? ACC : MUT, letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>
+                {VIEW_LABELS[v]}
+              </button>
+            ))}
+            <button onClick={cycleView}
+              style={{ fontSize: 9, color: MUT, border: '1px solid #2a2a2a', borderRadius: 2, padding: '2px 6px', cursor: 'pointer', background: 'none', fontFamily: "'IBM Plex Mono',monospace' " }}>
+              ⟳
+            </button>
+          </div>
         </div>
       </div>
 
-      <div style={{ display: 'flex', height: splitHeight, overflow: 'hidden' }}>
-        <div style={{ flex: '0 0 60%', position: 'relative' }}>
-          <OpsMap
-            allFeatures={allFeatures} liveIds={liveIds} acceptedJobs={acceptedJobs}
-            driverLocations={driverLocations}
-            onMarkerClick={handleMarkerClick} flyToRef={flyToRef}
-          />
+      {/* Analytics view — unmount map, render TowAnalyticsTab full-height */}
+      {view === 'analytics' && (
+        <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <TowAnalyticsTab allFeatures={allFeatures} liveIds={liveIds} loading={loading} userEmail={userEmail} />
         </div>
-        <div style={{ flex: '0 0 40%', overflowY: 'auto', borderLeft: '1px solid ' + BRD, display: 'flex', flexDirection: 'column' }}>
-          {activeFeatures.length === 0 && clearedToday.length === 0 && (
-            <div style={{ padding: 24, color: MUT, fontSize: 9, textAlign: 'center', letterSpacing: '0.1em' }}>No allocations</div>
-          )}
-          {activeFeatures.map(f => {
-            const eventId = String(f.properties?.eventId || '');
-            return (
-              <OpsCard
-                key={eventId} feature={f}
-                acceptedJob={acceptedJobs.get(eventId) || null}
-                nearestDriver={nearestDrivers.get(eventId) || null}
-                selected={selectedId === eventId}
-                onCardClick={() => handleCardClick(f)}
-                cardRef={setCardRef(eventId)}
+      )}
+
+      {/* Ops / Map / Board views */}
+      {view !== 'analytics' && (
+        <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+          {view !== 'board' && (
+            <div style={{ flex: view === 'map' ? '1 1 100%' : '0 0 60%', position: 'relative' }}>
+              <OpsMap
+                allFeatures={allFeatures} liveIds={liveIds} acceptedJobs={acceptedJobs}
+                driverLocations={driverLocations}
+                onMarkerClick={handleMarkerClick} flyToRef={flyToRef}
               />
-            );
-          })}
-          {clearedToday.length > 0 && (
-            <>
-              <div style={{ padding: '5px 10px', fontSize: 7, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', borderBottom: '1px solid #1a1a1a', borderTop: activeFeatures.length > 0 ? '1px solid #252525' : 'none', background: '#0a0a0a', flexShrink: 0 }}>
-                Cleared Today — {clearedToday.length}
-              </div>
-              {clearedToday.map(f => {
-                const eventId = String(f.properties?.eventId || '');
-                return (
-                  <OpsCard
-                    key={eventId} feature={f}
-                    acceptedJob={null} nearestDriver={null}
-                    selected={selectedId === eventId}
-                    onCardClick={() => handleCardClick(f)}
-                    cardRef={setCardRef(eventId)}
-                  />
-                );
-              })}
-            </>
+            </div>
+          )}
+          {view !== 'map' && (
+            <div style={{ flex: view === 'board' ? '1 1 100%' : '0 0 40%', display: 'flex', flexDirection: 'column', borderLeft: view === 'board' ? 'none' : '1px solid ' + BRD, minHeight: 0, overflow: 'hidden' }}>
+              {renderCardList(view === 'board')}
+            </div>
           )}
         </div>
-      </div>
+      )}
     </div>
   );
 }
