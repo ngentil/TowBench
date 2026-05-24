@@ -6,6 +6,7 @@ import FleetTab from './FleetTab';
 import { logAllocations, markAllocationsCleared, getRecentAllocations } from '../../lib/db/towing';
 import { supabase } from '../../lib/supabase';
 import AdminSettings from '../admin/AdminSettings';
+import OpsTab from './OpsTab';
 
 const API_URL = 'https://api.opendata.transport.vic.gov.au/api/opendata/roads/disruptions/unplanned/v3';
 const API_KEY = import.meta.env.VITE_VICROADS_KEY || 'bb7fc352-3ce6-44d2-9628-63fefb64278d';
@@ -14,6 +15,7 @@ const POLL_MS = 60_000;
 const BASE_TABS = [
   { id: 'allocations', label: '🚦 Tow Allocations' },
   { id: 'analytics',   label: '📊 Analytics' },
+  { id: 'ops',         label: '🖥 Ops' },
   { id: 'fleet',       label: '🚛 Fleet' },
 ];
 
@@ -21,6 +23,7 @@ export default function TowingSection({ isAdmin, userEmail, companyConfig, setCo
   const TABS = isAdmin ? [...BASE_TABS, { id: 'settings', label: '⚙ Settings' }] : BASE_TABS;
   const [tab, setTab] = useState('allocations');
 
+  // ── Shared allocation state ──────────────────────────────────────────────────────────────
   const [allFeatures,  setAllFeatures]  = useState([]);
   const [liveIds,      setLiveIds]      = useState(new Set());
   const [loading,      setLoading]      = useState(true);
@@ -139,6 +142,14 @@ export default function TowingSection({ isAdmin, userEmail, companyConfig, setCo
         )}
         {tab === 'analytics' && (
           <TowAnalyticsTab allFeatures={allFeatures} liveIds={liveIds} loading={loading} userEmail={userEmail} />
+        )}
+        {tab === 'ops' && (
+          <OpsTab
+            allFeatures={allFeatures} liveIds={liveIds}
+            lastFetch={lastFetch} countdown={countdown}
+            isStale={lastFetch ? (Date.now() - lastFetch.getTime()) > 3 * POLL_MS : false}
+            acceptedJobs={acceptedJobs} userEmail={userEmail}
+          />
         )}
         {tab === 'fleet' && <FleetTab isAdmin={isAdmin} />}
         {tab === 'settings' && isAdmin && <AdminSettings companyConfig={companyConfig} setCompanyConfig={setCompanyConfig} />}
