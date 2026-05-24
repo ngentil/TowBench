@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ACC, MUT, BRD, TXT, RED, SURF } from '../../lib/styles';
 import { supabase } from '../../lib/supabase';
+import { timeAgo } from '../../lib/utils';
 
 const REFRESH_MS     = 60_000;
 const WINDOW_MS      = 2 * 60 * 60 * 1000;
@@ -14,18 +15,6 @@ const AGENCY_COLOR = {
   MEDSTAR: '#2a8faf',
   VIC:     '#5a7aaf',
 };
-
-function timeAgo(iso) {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return null;
-  const ms = Date.now() - d.getTime();
-  if (ms < 0) return null;
-  const m = Math.floor(ms / 60000);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  return `${h}h ${m % 60}m ago`;
-}
 
 function incidentIcon(sub = '') {
   const s = sub.toLowerCase();
