@@ -2,10 +2,13 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import 'leaflet/dist/leaflet.css';
 import { ACC, MUT, BRD, TXT, GRN, SURF } from '../../lib/styles';
 import useWeather from '../../hooks/useWeather';
-import { timeIn } from '../../lib/utils';
+import useDriverLocation from '../../hooks/useDriverLocation';
+import { timeIn, haversineKm } from '../../lib/utils';
+import { supabase } from '../../lib/supabase';
 
-const ORANGE = '#e8670a';
-const POLL_MS = 60_000;
+const ORANGE   = '#e8670a';
+const POLL_MS  = 60_000;
+const STALE_MS = 10 * 60 * 1000; // hide truck if >10 min since last ping
 
 function isToday(iso) {
   if (!iso) return false;
@@ -23,14 +26,14 @@ function Stat({ label, value, color }) {
   );
 }
 
-function OpsCard({ feature, acceptedJob, selected, onCardClick, cardRef }) {
+function OpsCard({ feature, acceptedJob, selected, nearestDriver, onCardClick, cardRef }) {
   const p       = feature.properties || {};
   const road    = p.closedRoadName || '—';
   const eventId = String(p.eventId || '');
   const logMeta = feature._logMeta;
   const isLive  = feature._isLive;
   const elapsed = timeIn(logMeta?.firstSeen || p.lastUpdated);
-  const isOverdue = isLive && acceptedJob && (Date.now() - new Date(acceptedJob.accepted_at).getTime()) >= 60 * 60 * 1000;
+  const isOverdue      = isLive && acceptedJob && (Date.now() - new Date(acceptedJob.accepted_at).getTime()) >= 60 * 60 * 1000;
   const acceptedElapsed = acceptedJob ? timeIn(acceptedJob.accepted_at) : null;
 
   let stripeColor;
@@ -43,7 +46,14 @@ function OpsCard({ feature, acceptedJob, selected, onCardClick, cardRef }) {
     <div ref={cardRef} onClick={onCardClick} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', cursor: 'pointer', borderLeft: `3px solid ${stripeColor}`, borderBottom: '1px solid #1a1a1a', borderRight: selected ? `2px solid ${ORANGE}` : '2px solid transparent', background: selected ? '#0d0a04' : 'transparent', flexShrink: 0 }}>
       <div style={{ flex: 1, minWidth: 0 }}>
         <span style={{ fontSize: 10, fontWeight: 700, color: TXT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>{road}</span>
-        <span style={{ fontSize: 7, color: MUT, fontFamily: "'IBM Plex Mono',monospace" }}>#{eventId}</span>
+        <div style={{ display: 'flex', gap: 5, alignItems: 'center', marginTop: 1 }}>
+          <span style={{ fontSize: 7, color: MUT, fontFamily: "'IBM Plex Mono',monospace" }}>#{eventId}</span>
+          {isLive && nearestDriver && (
+            <span style={{ fontSize: 7, color: '#5a7a9a', fontFamily: "'IBM Plex Mono',monospace" }}>
+              🚛 {nearestDriver.name} {nearestDriver.dist.toFixed(1)}km
+            </span>
+          )}
+        </div>
       </div>
       <div style={{ flexShrink: 0, display: 'flex', gap: 4, alignItems: 'center' }}>
         {isLive && !acceptedJob && elapsed && <span style={{ fontSize: 7, color: ORANGE, border: `1px solid ${ORANGE}44`, borderRadius: 2, padding: '1px 4px' }}>{elapsed}</span>}
@@ -55,13 +65,13 @@ function OpsCard({ feature, acceptedJob, selected, onCardClick, cardRef }) {
   );
 }
 
-function OpsMap({ allFeatures, liveIds, acceptedJobs, onMarkerClick, flyToRef }) {
-  const containerRef = useRef(null);
-  const mapRef       = useRef(null);
-  const layerRef     = useRef(null);
-  const leafletRef   = useRef(null);
+function OpsMap({ allFeatures, liveIds, acceptedJobs, driverLocations, onMarkerClick, flyToRef }) {
+  const containerRef  = useRef(null);
+  const mapRef        = useRef(null);
+  const layerRef      = useRef(null);
+  const truckLayerRef = useRef(null);
+  const leafletRef    = useRef(null);
 
-  // Init once — parent has explicit pixel height so container has real dimensions immediately
   useEffect(() => {
     if (!containerRef.current) return;
     import('leaflet').then(mod => {
@@ -72,9 +82,11 @@ function OpsMap({ allFeatures, liveIds, acceptedJobs, onMarkerClick, flyToRef })
       map.getPanes().tilePane.style.filter = 'invert(100%) hue-rotate(180deg) brightness(90%) contrast(90%) saturate(60%)';
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { subdomains: 'abc', maxZoom: 19 }).addTo(map);
       L.control.attribution({ prefix: false }).addAttribution('© <a href="https://openstreetmap.org" style="color:#666">OpenStreetMap</a>').addTo(map);
-      const layer = L.layerGroup().addTo(map);
-      layerRef.current = layer;
-      mapRef.current   = map;
+      const layer      = L.layerGroup().addTo(map);
+      const truckLayer = L.layerGroup().addTo(map);
+      layerRef.current      = layer;
+      truckLayerRef.current = truckLayer;
+      mapRef.current        = map;
       if (flyToRef) flyToRef.current = (lat, lng) => map.flyTo([lat, lng], 14, { duration: 0.5 });
       if (!document.getElementById('ops-pulse-style')) {
         const s = document.createElement('style');
@@ -86,7 +98,7 @@ function OpsMap({ allFeatures, liveIds, acceptedJobs, onMarkerClick, flyToRef })
     return () => { if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; } };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Rebuild markers only — no map reinit, zoom/pan preserved
+  // Allocation markers
   useEffect(() => {
     const L     = leafletRef.current;
     const layer = layerRef.current;
@@ -100,7 +112,7 @@ function OpsMap({ allFeatures, liveIds, acceptedJobs, onMarkerClick, flyToRef })
       const lat     = coords[1], lng = coords[0];
       const eventId = String(feature.properties?.eventId || '');
       const isLive  = liveIds.has(eventId);
-      const accepted = acceptedJobs.get(eventId);
+      const accepted  = acceptedJobs.get(eventId);
       const isOverdue = accepted && (Date.now() - new Date(accepted.accepted_at).getTime()) >= 60 * 60 * 1000;
       const p = feature.properties || {};
 
@@ -164,15 +176,77 @@ function OpsMap({ allFeatures, liveIds, acceptedJobs, onMarkerClick, flyToRef })
     });
   }, [allFeatures, liveIds, acceptedJobs, onMarkerClick]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Truck markers — rebuild independently when driver locations change
+  useEffect(() => {
+    const L     = leafletRef.current;
+    const layer = truckLayerRef.current;
+    if (!L || !layer) return;
+    layer.clearLayers();
+    const now = Date.now();
+    (driverLocations || []).forEach(d => {
+      const staleMs = now - new Date(d.updated_at).getTime();
+      if (staleMs > STALE_MS) return;
+      const fresh   = staleMs < 2 * 60 * 1000;
+      const color   = fresh ? '#3d9e50' : '#cc8800';
+      const name    = d.driver_email.split('@')[0];
+      const rotate  = d.heading != null ? `transform:rotate(${d.heading}deg);` : '';
+      const ago     = Math.floor(staleMs / 60000);
+      const agoStr  = ago === 0 ? 'just now' : `${ago}m ago`;
+      const html =
+        `<div style="display:flex;flex-direction:column;align-items:center;gap:2px;pointer-events:none">` +
+        `<div style="font-size:20px;line-height:1;${rotate}filter:drop-shadow(0 2px 6px rgba(0,0,0,0.9))">🚛</div>` +
+        `<div style="background:${color};color:#000;font-family:'IBM Plex Mono',monospace;font-size:6px;font-weight:700;padding:1px 5px;border-radius:2px;white-space:nowrap;letter-spacing:0.06em;box-shadow:0 1px 4px rgba(0,0,0,0.7)">${name}</div>` +
+        `</div>`;
+      const marker = L.marker([d.lat, d.lng], {
+        icon: L.divIcon({ className: '', html, iconSize: [40, 36], iconAnchor: [20, 36] }),
+        zIndexOffset: 500,
+      });
+      marker.bindPopup(
+        `<div style="font-family:'IBM Plex Mono',monospace;padding:8px 10px;color:#d8d8d8;min-width:130px">` +
+        `<div style="font-size:10px;font-weight:700;color:#e8e8e8;margin-bottom:5px">${name}</div>` +
+        `<div style="font-size:8px;color:#5a5a5a">${agoStr}</div>` +
+        `${d.accuracy ? `<div style="font-size:7px;color:#3a3a3a;margin-top:3px">±${Math.round(d.accuracy)}m</div>` : ''}` +
+        `</div>`,
+        { className: 'towbench-popup', closeButton: false }
+      );
+      marker.addTo(layer);
+    });
+  }, [driverLocations]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return <div ref={containerRef} style={{ width: '100%', height: '100%' }} />;
 }
 
 export default function OpsTab({ allFeatures, liveIds, lastFetch, countdown, isStale, acceptedJobs, userEmail }) {
   const { rainSoon, maxProb, hoursUntil } = useWeather();
-  const [selectedId,  setSelectedId]  = useState(null);
-  const [splitHeight, setSplitHeight] = useState(window.innerHeight - 120);
+  const [selectedId,      setSelectedId]      = useState(null);
+  const [splitHeight,     setSplitHeight]     = useState(window.innerHeight - 120);
+  const [sharing,         setSharing]         = useState(() => localStorage.getItem('towbench_share_loc') === 'true');
+  const [driverLocations, setDriverLocations] = useState([]);
   const flyToRef    = useRef(null);
   const cardRefsRef = useRef(new Map());
+
+  useDriverLocation(userEmail, sharing);
+
+  // Fetch driver locations + subscribe to realtime
+  useEffect(() => {
+    supabase.from('driver_locations').select('*')
+      .then(({ data }) => { if (data) setDriverLocations(data); })
+      .catch(() => {});
+
+    const ch = supabase
+      .channel('driver-locs')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'driver_locations' }, payload => {
+        const key = payload.new?.driver_email || payload.old?.driver_email;
+        setDriverLocations(prev => {
+          const without = prev.filter(d => d.driver_email !== key);
+          if (payload.eventType !== 'DELETE' && payload.new) return [...without, payload.new];
+          return without;
+        });
+      })
+      .subscribe();
+
+    return () => supabase.removeChannel(ch);
+  }, []);
 
   useEffect(() => {
     const h = () => setSplitHeight(window.innerHeight - 120);
@@ -183,8 +257,8 @@ export default function OpsTab({ allFeatures, liveIds, lastFetch, countdown, isS
   const { activeFeatures, clearedToday } = useMemo(() => {
     const active = [], cleared = [];
     allFeatures.forEach(f => {
-      const id   = String(f.properties?.eventId || '');
-      const live = liveIds.has(id);
+      const id      = String(f.properties?.eventId || '');
+      const live    = liveIds.has(id);
       const enriched = { ...f, _isLive: live };
       if (live) active.push(enriched);
       else if (isToday(f._logMeta?.firstSeen || f.properties?.lastUpdated)) cleared.push(enriched);
@@ -194,7 +268,36 @@ export default function OpsTab({ allFeatures, liveIds, lastFetch, countdown, isS
     return { activeFeatures: active, clearedToday: cleared };
   }, [allFeatures, liveIds]);
 
-  const healthColor = isStale ? '#cc2222' : lastFetch && (Date.now() - lastFetch.getTime()) > POLL_MS * 1.5 ? '#cc8800' : '#3d9e50';
+  // Nearest active driver to each allocation
+  const nearestDrivers = useMemo(() => {
+    const now = Date.now();
+    const activeDrvs = driverLocations.filter(d => now - new Date(d.updated_at).getTime() < STALE_MS);
+    if (!activeDrvs.length) return new Map();
+    const map = new Map();
+    activeFeatures.forEach(f => {
+      const coords = f.geometry?.coordinates;
+      if (!coords) return;
+      const [lng, lat] = coords;
+      let best = null;
+      activeDrvs.forEach(d => {
+        const dist = haversineKm(lat, lng, d.lat, d.lng);
+        if (!best || dist < best.dist) best = { name: d.driver_email.split('@')[0], dist };
+      });
+      if (best) map.set(String(f.properties?.eventId), best);
+    });
+    return map;
+  }, [activeFeatures, driverLocations]);
+
+  const activeTrucks = driverLocations.filter(d => Date.now() - new Date(d.updated_at).getTime() < STALE_MS).length;
+  const healthColor  = isStale ? '#cc2222' : lastFetch && (Date.now() - lastFetch.getTime()) > POLL_MS * 1.5 ? '#cc8800' : '#3d9e50';
+
+  const toggleSharing = () => {
+    setSharing(s => {
+      const next = !s;
+      localStorage.setItem('towbench_share_loc', String(next));
+      return next;
+    });
+  };
 
   const handleMarkerClick = (eventId) => {
     setSelectedId(eventId);
@@ -220,8 +323,12 @@ export default function OpsTab({ allFeatures, liveIds, lastFetch, countdown, isS
         <Stat label="Active"        value={liveIds.size}        color={liveIds.size > 0      ? ACC : MUT} />
         <Stat label="Accepted"      value={acceptedJobs.size}   color={acceptedJobs.size > 0 ? ACC : MUT} />
         <Stat label="Cleared Today" value={clearedToday.length} color={MUT} />
+        <Stat label="Trucks Live"   value={activeTrucks}        color={activeTrucks > 0 ? GRN : MUT} />
         {rainSoon && <span style={{ fontSize: 8, color: '#7ab0d0', paddingLeft: 4, borderLeft: '2px solid #1e3a5a' }}>🌧 Rain {hoursUntil === 0 ? 'now' : `~${hoursUntil}h`} ({maxProb}%)</span>}
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button onClick={toggleSharing} style={{ fontSize: 7, fontWeight: 700, padding: '2px 7px', borderRadius: 2, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", letterSpacing: '0.06em', border: `1px solid ${sharing ? GRN + '88' : '#2a2a2a'}`, color: sharing ? GRN : MUT, background: sharing ? GRN + '11' : 'none' }}>
+            📍 {sharing ? 'sharing' : 'share loc'}
+          </button>
           {lastFetch && <span style={{ fontSize: 7, color: MUT, fontFamily: "'IBM Plex Mono',monospace" }}>{countdown}s</span>}
           <span style={{ width: 7, height: 7, borderRadius: '50%', background: healthColor, display: 'inline-block', flexShrink: 0 }} title={isStale ? 'Feed stale' : 'Feed live'} />
         </div>
@@ -229,7 +336,11 @@ export default function OpsTab({ allFeatures, liveIds, lastFetch, countdown, isS
 
       <div style={{ display: 'flex', height: splitHeight, overflow: 'hidden' }}>
         <div style={{ flex: '0 0 60%', position: 'relative' }}>
-          <OpsMap allFeatures={allFeatures} liveIds={liveIds} acceptedJobs={acceptedJobs} onMarkerClick={handleMarkerClick} flyToRef={flyToRef} />
+          <OpsMap
+            allFeatures={allFeatures} liveIds={liveIds} acceptedJobs={acceptedJobs}
+            driverLocations={driverLocations}
+            onMarkerClick={handleMarkerClick} flyToRef={flyToRef}
+          />
         </div>
         <div style={{ flex: '0 0 40%', overflowY: 'auto', borderLeft: '1px solid ' + BRD, display: 'flex', flexDirection: 'column' }}>
           {activeFeatures.length === 0 && clearedToday.length === 0 && (
@@ -237,7 +348,16 @@ export default function OpsTab({ allFeatures, liveIds, lastFetch, countdown, isS
           )}
           {activeFeatures.map(f => {
             const eventId = String(f.properties?.eventId || '');
-            return <OpsCard key={eventId} feature={f} acceptedJob={acceptedJobs.get(eventId) || null} userEmail={userEmail} selected={selectedId === eventId} onCardClick={() => handleCardClick(f)} cardRef={setCardRef(eventId)} />;
+            return (
+              <OpsCard
+                key={eventId} feature={f}
+                acceptedJob={acceptedJobs.get(eventId) || null}
+                nearestDriver={nearestDrivers.get(eventId) || null}
+                selected={selectedId === eventId}
+                onCardClick={() => handleCardClick(f)}
+                cardRef={setCardRef(eventId)}
+              />
+            );
           })}
           {clearedToday.length > 0 && (
             <>
@@ -246,7 +366,15 @@ export default function OpsTab({ allFeatures, liveIds, lastFetch, countdown, isS
               </div>
               {clearedToday.map(f => {
                 const eventId = String(f.properties?.eventId || '');
-                return <OpsCard key={eventId} feature={f} acceptedJob={null} userEmail={userEmail} selected={selectedId === eventId} onCardClick={() => handleCardClick(f)} cardRef={setCardRef(eventId)} />;
+                return (
+                  <OpsCard
+                    key={eventId} feature={f}
+                    acceptedJob={null} nearestDriver={null}
+                    selected={selectedId === eventId}
+                    onCardClick={() => handleCardClick(f)}
+                    cardRef={setCardRef(eventId)}
+                  />
+                );
               })}
             </>
           )}
