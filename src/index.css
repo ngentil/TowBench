@@ -1,6 +1,7 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
 body { background: #0e0e0e; font-family: 'IBM Plex Mono', monospace; }
-#root { min-height: 100vh; }
+#root { height: 100%; overflow: hidden; }
 
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(6px); }
