@@ -47,10 +47,10 @@ function OpsCard({ feature, acceptedJob, selected, onCardClick, cardRef }) {
   const acceptedElapsed = acceptedJob ? timeIn(acceptedJob.accepted_at) : null;
 
   let stripeColor;
-  if (!isLive)        stripeColor = '#333';
-  else if (isOverdue) stripeColor = '#cc2222';
+  if (!isLive)          stripeColor = '#333';
+  else if (isOverdue)   stripeColor = '#cc2222';
   else if (acceptedJob) stripeColor = ORANGE;
-  else                stripeColor = GRN;
+  else                  stripeColor = GRN;
 
   return (
     <div
@@ -170,7 +170,7 @@ export default function OpsTab({ allFeatures, liveIds, lastFetch, countdown, isS
       const isOverdue = accepted && (Date.now() - new Date(accepted.accepted_at).getTime()) >= 60 * 60 * 1000;
 
       let color, radius, opacity;
-      if (!isLive)        { color = '#555'; radius = 5;  opacity = 0.5; }
+      if (!isLive)        { color = '#555';    radius = 5; opacity = 0.5; }
       else if (isOverdue) { color = '#cc2222'; radius = 9; opacity = 0.95; }
       else if (accepted)  { color = '#cc4422'; radius = 8; opacity = 0.9; }
       else                { color = ORANGE;    radius = 7; opacity = 0.9; }
@@ -201,7 +201,7 @@ export default function OpsTab({ allFeatures, liveIds, lastFetch, countdown, isS
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
       {/* Stats bar */}
       <div style={{ background: SURF, borderBottom: '1px solid ' + BRD, padding: '7px 14px', display: 'flex', alignItems: 'center', gap: 18, flexShrink: 0, flexWrap: 'wrap' }}>
         <Stat label="Active" value={liveIds.size} color={liveIds.size > 0 ? ACC : MUT} />
@@ -226,9 +226,9 @@ export default function OpsTab({ allFeatures, liveIds, lastFetch, countdown, isS
       </div>
 
       {/* Split view */}
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
         {/* Map — 60% */}
-        <div ref={containerRef} style={{ flex: '0 0 60%', height: '100%', position: 'relative' }} />
+        <div ref={containerRef} style={{ flex: '0 0 60%', minHeight: 0, position: 'relative' }} />
 
         {/* Card list — 40% */}
         <div style={{ flex: '0 0 40%', overflowY: 'auto', borderLeft: '1px solid ' + BRD, display: 'flex', flexDirection: 'column' }}>
