@@ -23,7 +23,7 @@ export default function TowingSection({ isAdmin, userEmail, companyConfig, setCo
   const TABS = isAdmin ? [...BASE_TABS, { id: 'settings', label: '⚙ Settings' }] : BASE_TABS;
   const [tab, setTab] = useState('allocations');
 
-  // ── Shared allocation state ────────────────────────────────────────────────────
+  // ── Shared allocation state ───────────────────────────────────────────────────────────────────────────────
   const [allFeatures,  setAllFeatures]  = useState([]);
   const [liveIds,      setLiveIds]      = useState(new Set());
   const [loading,      setLoading]      = useState(true);
@@ -129,7 +129,7 @@ export default function TowingSection({ isAdmin, userEmail, companyConfig, setCo
           </button>
         ))}
       </div>
-      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         {tab === 'allocations' && (
           <TowAllocationsTab
             allFeatures={allFeatures} liveIds={liveIds} loading={loading}
