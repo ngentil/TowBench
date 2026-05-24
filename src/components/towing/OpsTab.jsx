@@ -6,6 +6,27 @@ import useWeather from '../../hooks/useWeather';
 const ORANGE = '#e8670a';
 const POLL_MS = 60_000;
 
+function fmtElapsed(iso) {
+  if (!iso) return null;
+  const diff = Date.now() - new Date(iso).getTime();
+  if (diff < 0) return null;
+  const m = Math.floor(diff / 60000);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  const rm = m % 60;
+  if (h < 24) return rm > 0 ? `${h}h ${rm}m` : `${h}h`;
+  const d = Math.floor(h / 24);
+  const rh = h % 24;
+  return rh > 0 ? `${d}d ${rh}h` : `${d}d`;
+}
+
+function fmtShort(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleString('en-AU', {
+    day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true,
+  });
+}
+
 function timeIn(iso) {
   if (!iso) return null;
   const diff = Date.now() - new Date(iso).getTime();
@@ -157,36 +178,93 @@ export default function OpsTab({ allFeatures, liveIds, lastFetch, countdown, isS
   useEffect(() => {
     const L     = leafletRef.current;
     const layer = layerRef.current;
-    if (!L || !layer) return;
+    const map   = mapRef.current;
+    if (!L || !layer || !map) return;
     layer.clearLayers();
 
     allFeatures.forEach(feature => {
       const coords = feature.geometry?.coordinates;
       if (!coords) return;
-      const lat      = coords[1], lng = coords[0];
-      const eventId  = String(feature.properties?.eventId || '');
-      const isLive   = liveIds.has(eventId);
-      const accepted = acceptedJobs.get(eventId);
-      const isOverdue = accepted && (Date.now() - new Date(accepted.accepted_at).getTime()) >= 60 * 60 * 1000;
+      const lat     = coords[1], lng = coords[0];
+      const p       = feature.properties || {};
+      const logMeta = feature._logMeta;
+      const eventId = String(p.eventId || '');
+      const isLive  = liveIds.has(eventId);
 
-      let color, radius, opacity;
-      if (!isLive)        { color = '#555';    radius = 5; opacity = 0.5; }
-      else if (isOverdue) { color = '#cc2222'; radius = 9; opacity = 0.95; }
-      else if (accepted)  { color = '#cc4422'; radius = 8; opacity = 0.9; }
-      else                { color = ORANGE;    radius = 7; opacity = 0.9; }
+      if (isLive) {
+        // Active allocations — same green dot style as analytics tab
+        const outerM = L.circleMarker([lat, lng], {
+          radius: 14, fillColor: GRN, fillOpacity: 0.15, stroke: false, bubblingMouseEvents: false,
+        });
+        const innerM = L.circleMarker([lat, lng], {
+          radius: 5, fillColor: GRN, fillOpacity: 0.9, color: GRN, weight: 1, bubblingMouseEvents: false,
+        });
+        outerM.addTo(layer);
+        innerM.addTo(layer);
 
-      const marker = L.circleMarker([lat, lng], {
-        radius, fillColor: color, fillOpacity: opacity,
-        color: color, weight: isLive ? 1.5 : 0.5,
-      });
-      marker.on('click', () => {
-        setSelectedId(eventId);
-        const el = cardRefsRef.current.get(eventId);
-        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      });
-      marker.addTo(layer);
+        const road     = p.closedRoadName || '—';
+        const sub      = p.reference?.startIntersectionLocality || '';
+        const cross    = p.reference?.startIntersectionRoadName || '';
+        const desc     = p.description || '';
+        const lanes    = p.numberLanesImpacted;
+        const subType  = p.eventSubType || '';
+        const impact   = p.impact?.impactType || '';
+        const melway   = p.melway || '';
+        const elapsed  = fmtElapsed(logMeta?.firstSeen || p.lastUpdated);
+        const firstSeen = logMeta?.firstSeen ? fmtShort(logMeta.firstSeen) : null;
+        const mapsUrl  = `https://www.google.com/maps?q=${lat},${lng}`;
+
+        const infoRows = [
+          ['Event ID', '#' + (p.eventId || '—')],
+          ...(lanes != null ? [['Lanes', `${lanes} lane${lanes !== 1 ? 's' : ''}`]] : []),
+          ...(impact    ? [['Impact',     impact]]    : []),
+          ...(melway    ? [['Melway',     melway]]    : []),
+          ...(elapsed   ? [['Time in',    elapsed]]   : []),
+          ...(firstSeen ? [['First seen', firstSeen]] : []),
+        ];
+
+        const popupHtml = `
+          <div style="font-family:'IBM Plex Mono',monospace;min-width:210px;max-width:270px;color:#d8d8d8;padding:10px 12px">
+            <div style="font-size:11px;font-weight:700;color:#e8e8e8;margin-bottom:4px;line-height:1.3">${road}</div>
+            ${sub ? `<div style="font-size:8px;color:#555;margin-bottom:8px">${sub}${cross ? ' @ ' + cross : ''}</div>` : '<div style="margin-bottom:8px"></div>'}
+            <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px">
+              <span style="font-size:7px;font-weight:700;padding:1px 5px;border:1px solid #3a8a5a55;border-radius:2px;color:#3a8a5a;background:#3a8a5a18;text-transform:uppercase;letter-spacing:.08em">Active</span>
+              ${subType ? `<span style="font-size:7px;font-weight:700;padding:1px 5px;border:1px solid #3a3a2a;border-radius:2px;color:#c8a84b;background:#c8a84b11;text-transform:uppercase;letter-spacing:.08em">${subType}</span>` : ''}
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:8px">
+              ${infoRows.map(([lbl, val]) => `
+                <div style="background:#111;border:1px solid #1e1e1e;border-radius:2px;padding:4px 6px">
+                  <div style="font-size:6px;color:#444;letter-spacing:.1em;text-transform:uppercase;margin-bottom:2px">${lbl}</div>
+                  <div style="font-size:8px;color:#bbb;word-break:break-all">${val}</div>
+                </div>`).join('')}
+            </div>
+            ${desc ? `<div style="font-size:8px;color:#4a4a4a;line-height:1.5;background:#0a0a0a;padding:5px 7px;border-radius:2px;border:1px solid #181818;margin-bottom:8px">${desc}</div>` : ''}
+            <a href="${mapsUrl}" target="_blank" rel="noopener noreferrer"
+              style="display:inline-flex;align-items:center;gap:4px;font-size:7px;color:#4a6a8a;border:1px solid #1e2e3e;border-radius:2px;padding:3px 7px;text-decoration:none;background:#0a1520;text-transform:uppercase;letter-spacing:.08em;font-family:'IBM Plex Mono',monospace">
+              📍 Maps
+            </a>
+          </div>`;
+
+        const handleClick = () => {
+          L.popup({ closeButton: true, className: 'towbench-popup', maxWidth: 300, offset: [0, -5] })
+            .setLatLng([lat, lng])
+            .setContent(popupHtml)
+            .openOn(map);
+          setSelectedId(eventId);
+          const el = cardRefsRef.current.get(eventId);
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        };
+
+        innerM.on('click', handleClick);
+        outerM.on('click', handleClick);
+      } else {
+        // Cleared allocations — simple grey dot
+        L.circleMarker([lat, lng], {
+          radius: 5, fillColor: '#555', fillOpacity: 0.5, color: '#555', weight: 0.5,
+        }).addTo(layer);
+      }
     });
-  }, [allFeatures, liveIds, acceptedJobs]);
+  }, [allFeatures, liveIds, acceptedJobs]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleCardClick = (feature) => {
     const coords  = feature.geometry?.coordinates;
