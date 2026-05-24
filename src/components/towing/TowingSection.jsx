@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ACC, MUT, BRD, SURF } from '../../lib/styles';
 import TowAllocationsTab from './TowAllocationsTab';
-import TowAnalyticsTab from './TowAnalyticsTab';
 import FleetTab from './FleetTab';
 import { logAllocations, markAllocationsCleared, getRecentAllocations } from '../../lib/db/towing';
 import { supabase } from '../../lib/supabase';
@@ -13,14 +12,19 @@ const POLL_MS = 60_000;
 
 const BASE_TABS = [
   { id: 'allocations', label: '🚦 Tow Allocations' },
-  { id: 'analytics',   label: '📊 Analytics' },
-  { id: 'ops',         label: '🖥 Ops' },
+  { id: 'ops',         label: '🖥 Command Centre' },
   { id: 'fleet',       label: '🚛 Fleet' },
 ];
 
 export default function TowingSection({ isAdmin, userEmail, companyConfig, setCompanyConfig }) {
   const TABS = isAdmin ? [...BASE_TABS, { id: 'settings', label: '⚙ Settings' }] : BASE_TABS;
   const [tab, setTab] = useState('allocations');
+
+  // Redirect stale tab state (e.g. 'analytics') that no longer exists in BASE_TABS
+  useEffect(() => {
+    const ids = TABS.map(t => t.id);
+    if (!ids.includes(tab)) setTab('ops');
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Shared allocation state ───────────────────────────────────────────────────────────────────────────────
   const [allFeatures,  setAllFeatures]  = useState([]);
@@ -139,15 +143,13 @@ export default function TowingSection({ isAdmin, userEmail, companyConfig, setCo
             onAcceptJob={onAcceptJob} onReleaseJob={onReleaseJob}
           />
         )}
-        {tab === 'analytics' && (
-          <TowAnalyticsTab allFeatures={allFeatures} liveIds={liveIds} loading={loading} userEmail={userEmail} />
-        )}
         {tab === 'ops' && (
           <OpsTab
-            allFeatures={allFeatures} liveIds={liveIds}
+            allFeatures={allFeatures} liveIds={liveIds} loading={loading}
             lastFetch={lastFetch} countdown={countdown}
             isStale={lastFetch ? (Date.now() - lastFetch.getTime()) > 3 * POLL_MS : false}
             acceptedJobs={acceptedJobs} userEmail={userEmail}
+            onAcceptJob={onAcceptJob} onReleaseJob={onReleaseJob}
           />
         )}
         {tab === 'fleet' && <FleetTab isAdmin={isAdmin} />}
