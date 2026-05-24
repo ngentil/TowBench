@@ -50,7 +50,7 @@ function OpsCard({ feature, acceptedJob, selected, nearestDriver, onCardClick, c
           <span style={{ fontSize: 7, color: MUT, fontFamily: "'IBM Plex Mono',monospace" }}>#{eventId}</span>
           {isLive && nearestDriver && (
             <span style={{ fontSize: 7, color: '#5a7a9a', fontFamily: "'IBM Plex Mono',monospace" }}>
-              🚛 {nearestDriver.name} {nearestDriver.dist.toFixed(1)}km
+              🚛 {nearestDriver.label} {nearestDriver.dist.toFixed(1)}km
             </span>
           )}
         </div>
@@ -186,29 +186,46 @@ function OpsMap({ allFeatures, liveIds, acceptedJobs, driverLocations, onMarkerC
     (driverLocations || []).forEach(d => {
       const staleMs = now - new Date(d.updated_at).getTime();
       if (staleMs > STALE_MS) return;
-      const fresh   = staleMs < 2 * 60 * 1000;
-      const color   = fresh ? '#3d9e50' : '#cc8800';
-      const name    = d.driver_email.split('@')[0];
-      const rotate  = d.heading != null ? `transform:rotate(${d.heading}deg);` : '';
-      const ago     = Math.floor(staleMs / 60000);
-      const agoStr  = ago === 0 ? 'just now' : `${ago}m ago`;
+      const fresh  = staleMs < 2 * 60 * 1000;
+      const color  = fresh ? '#3d9e50' : '#cc8800';
+      const plate  = d.plate || null;
+      const name   = d.name  || null;
+      const short  = d.driver_email.split('@')[0];
+      const label  = plate || name || short;
+      const rotate = d.heading != null ? `transform:rotate(${d.heading}deg);` : '';
+      const ago    = Math.floor(staleMs / 60000);
+      const agoStr = ago === 0 ? 'just now' : `${ago}m ago`;
+
       const html =
         `<div style="display:flex;flex-direction:column;align-items:center;gap:2px;pointer-events:none">` +
         `<div style="font-size:20px;line-height:1;${rotate}filter:drop-shadow(0 2px 6px rgba(0,0,0,0.9))">🚛</div>` +
-        `<div style="background:${color};color:#000;font-family:'IBM Plex Mono',monospace;font-size:6px;font-weight:700;padding:1px 5px;border-radius:2px;white-space:nowrap;letter-spacing:0.06em;box-shadow:0 1px 4px rgba(0,0,0,0.7)">${name}</div>` +
+        `<div style="background:${color};color:#000;font-family:'IBM Plex Mono',monospace;font-size:7px;font-weight:700;padding:2px 6px;border-radius:2px;white-space:nowrap;letter-spacing:0.08em;box-shadow:0 1px 4px rgba(0,0,0,0.7)">${label}</div>` +
+        (name && plate ? `<div style="background:#0d0d0d;color:#5a5a5a;font-family:'IBM Plex Mono',monospace;font-size:6px;padding:1px 4px;border-radius:2px;white-space:nowrap">${name}</div>` : '') +
         `</div>`;
+
+      const popupRows = [
+        plate  ? ['Plate',    plate]  : null,
+        name   ? ['Driver',   name]   : null,
+        ['Email',    d.driver_email],
+        ['Updated',  agoStr],
+        d.accuracy ? ['Accuracy', `±${Math.round(d.accuracy)}m`] : null,
+      ].filter(Boolean);
+
+      const popupHtml =
+        `<div style="font-family:'IBM Plex Mono',monospace;padding:10px 12px;color:#d8d8d8;min-width:160px">` +
+        `<div style="font-size:11px;font-weight:700;color:#e8e8e8;margin-bottom:8px">${label}</div>` +
+        `<div style="display:grid;grid-template-columns:auto 1fr;gap:3px 10px">` +
+        popupRows.map(([k, v]) =>
+          `<span style="font-size:7px;color:#555;text-transform:uppercase;letter-spacing:.08em;white-space:nowrap">${k}</span>` +
+          `<span style="font-size:8px;color:#aaa;word-break:break-all">${v}</span>`
+        ).join('') +
+        `</div></div>`;
+
       const marker = L.marker([d.lat, d.lng], {
-        icon: L.divIcon({ className: '', html, iconSize: [40, 36], iconAnchor: [20, 36] }),
+        icon: L.divIcon({ className: '', html, iconSize: [50, 40], iconAnchor: [25, 40] }),
         zIndexOffset: 500,
       });
-      marker.bindPopup(
-        `<div style="font-family:'IBM Plex Mono',monospace;padding:8px 10px;color:#d8d8d8;min-width:130px">` +
-        `<div style="font-size:10px;font-weight:700;color:#e8e8e8;margin-bottom:5px">${name}</div>` +
-        `<div style="font-size:8px;color:#5a5a5a">${agoStr}</div>` +
-        `${d.accuracy ? `<div style="font-size:7px;color:#3a3a3a;margin-top:3px">±${Math.round(d.accuracy)}m</div>` : ''}` +
-        `</div>`,
-        { className: 'towbench-popup', closeButton: false }
-      );
+      marker.bindPopup(popupHtml, { className: 'towbench-popup', closeButton: false });
       marker.addTo(layer);
     });
   }, [driverLocations]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -220,12 +237,11 @@ export default function OpsTab({ allFeatures, liveIds, lastFetch, countdown, isS
   const { rainSoon, maxProb, hoursUntil } = useWeather();
   const [selectedId,      setSelectedId]      = useState(null);
   const [splitHeight,     setSplitHeight]     = useState(window.innerHeight - 120);
-  const [sharing,         setSharing]         = useState(() => localStorage.getItem('towbench_share_loc') === 'true');
   const [driverLocations, setDriverLocations] = useState([]);
   const flyToRef    = useRef(null);
   const cardRefsRef = useRef(new Map());
 
-  useDriverLocation(userEmail, sharing);
+  useDriverLocation(userEmail);
 
   // Fetch driver locations + subscribe to realtime
   useEffect(() => {
@@ -280,8 +296,9 @@ export default function OpsTab({ allFeatures, liveIds, lastFetch, countdown, isS
       const [lng, lat] = coords;
       let best = null;
       activeDrvs.forEach(d => {
-        const dist = haversineKm(lat, lng, d.lat, d.lng);
-        if (!best || dist < best.dist) best = { name: d.driver_email.split('@')[0], dist };
+        const dist  = haversineKm(lat, lng, d.lat, d.lng);
+        const label = d.plate || d.name || d.driver_email.split('@')[0];
+        if (!best || dist < best.dist) best = { label, dist };
       });
       if (best) map.set(String(f.properties?.eventId), best);
     });
@@ -290,14 +307,6 @@ export default function OpsTab({ allFeatures, liveIds, lastFetch, countdown, isS
 
   const activeTrucks = driverLocations.filter(d => Date.now() - new Date(d.updated_at).getTime() < STALE_MS).length;
   const healthColor  = isStale ? '#cc2222' : lastFetch && (Date.now() - lastFetch.getTime()) > POLL_MS * 1.5 ? '#cc8800' : '#3d9e50';
-
-  const toggleSharing = () => {
-    setSharing(s => {
-      const next = !s;
-      localStorage.setItem('towbench_share_loc', String(next));
-      return next;
-    });
-  };
 
   const handleMarkerClick = (eventId) => {
     setSelectedId(eventId);
@@ -326,9 +335,7 @@ export default function OpsTab({ allFeatures, liveIds, lastFetch, countdown, isS
         <Stat label="Trucks Live"   value={activeTrucks}        color={activeTrucks > 0 ? GRN : MUT} />
         {rainSoon && <span style={{ fontSize: 8, color: '#7ab0d0', paddingLeft: 4, borderLeft: '2px solid #1e3a5a' }}>🌧 Rain {hoursUntil === 0 ? 'now' : `~${hoursUntil}h`} ({maxProb}%)</span>}
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <button onClick={toggleSharing} style={{ fontSize: 7, fontWeight: 700, padding: '2px 7px', borderRadius: 2, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", letterSpacing: '0.06em', border: `1px solid ${sharing ? GRN + '88' : '#2a2a2a'}`, color: sharing ? GRN : MUT, background: sharing ? GRN + '11' : 'none' }}>
-            📍 {sharing ? 'sharing' : 'share loc'}
-          </button>
+          <span style={{ fontSize: 7, color: GRN, fontFamily: "'IBM Plex Mono',monospace", letterSpacing: '0.06em', opacity: 0.6 }} title="Location sharing active">📍</span>
           {lastFetch && <span style={{ fontSize: 7, color: MUT, fontFamily: "'IBM Plex Mono',monospace" }}>{countdown}s</span>}
           <span style={{ width: 7, height: 7, borderRadius: '50%', background: healthColor, display: 'inline-block', flexShrink: 0 }} title={isStale ? 'Feed stale' : 'Feed live'} />
         </div>
