@@ -1,3 +1,4 @@
 import { createContext, useContext } from 'react';
-export const ThemeContext = createContext(false);
-export const useNightMode = () => useContext(ThemeContext);
+export const ThemeContext = createContext('');
+export const useTheme = () => useContext(ThemeContext);
+export const useNightMode = () => useContext(ThemeContext) !== '';

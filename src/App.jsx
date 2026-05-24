@@ -159,11 +159,14 @@ export default function App() {
   const isAdmin = truck?.is_admin === true;
   const displayPlate = truck?.plate?.toUpperCase() || session?.user?.user_metadata?.plate?.toUpperCase() || '';
 
-  const [nightMode, setNightMode] = useState(() => localStorage.getItem('towbench_night') === '1');
+  const THEMES = ['', 'night', 'amber', 'green'];
+  const THEME_ICONS  = { '': '◻', night: '🔴', amber: '🟠', green: '🟢' };
+  const THEME_LABELS = { '': 'Standard', night: 'Red CRT', amber: 'Amber', green: 'Green' };
+  const [theme, setTheme] = useState(() => localStorage.getItem('towbench_theme') || '');
   useEffect(() => {
-    document.body.setAttribute('data-theme', nightMode ? 'night' : '');
-    localStorage.setItem('towbench_night', nightMode ? '1' : '0');
-  }, [nightMode]);
+    document.body.setAttribute('data-theme', theme);
+    localStorage.setItem('towbench_theme', theme);
+  }, [theme]);
 
   // Register service worker for PWA installability
   useEffect(() => {
@@ -367,16 +370,17 @@ export default function App() {
               </span>
             )}
           </div>
-          <button onClick={() => setNightMode(n => !n)}
-            title={nightMode ? 'Exit night mode' : 'Night shift mode'}
+          <button
+            onClick={() => setTheme(t => THEMES[(THEMES.indexOf(t) + 1) % THEMES.length])}
+            title={`Theme: ${THEME_LABELS[theme]} — click to cycle`}
             style={{ ...btnG, ...sm, fontSize: 10, padding: '3px 8px', letterSpacing: 0 }}>
-            {nightMode ? '☀' : '🌙'}
+            {THEME_ICONS[theme]}
           </button>
           <button onClick={signOut} style={{ ...btnG, ...sm, fontSize: 8 }}>Sign Out</button>
         </div>
       </div>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <ThemeContext.Provider value={nightMode}>
+        <ThemeContext.Provider value={theme}>
           <TowingSection isAdmin={isAdmin} userEmail={session?.user?.email} companyConfig={companyConfig} setCompanyConfig={setCompanyConfig} />
         </ThemeContext.Provider>
       </div>
