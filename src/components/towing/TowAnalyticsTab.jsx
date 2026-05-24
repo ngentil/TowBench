@@ -65,30 +65,64 @@ function BarList({ data, color = ORANGE, maxBars = 10, labelWidth = 110 }) {
 
 function HourChart({ counts }) {
   const max = Math.max(...counts, 1);
+  const BAR_H = 100;
   return (
-    <div style={{ display: 'flex', gap: 2, alignItems: 'flex-end', height: 70, padding: '0 2px' }}>
-      {counts.map((v, h) => (
-        <div key={h} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <div title={`${String(h).padStart(2,'0')}:00 — ${v} job${v!==1?'s':''}`}
-            style={{ width: '100%', background: v > 0 ? ORANGE : '#1c1c1c', borderRadius: '1px 1px 0 0', height: `${Math.max((v/max)*58,v>0?3:0)}px`, transition: 'height 0.5s ease', cursor: 'default' }} />
-          {h % 6 === 0 && <span style={{ fontSize: 6, color: '#444', fontFamily: "'IBM Plex Mono',monospace", marginTop: 2 }}>{String(h).padStart(2,'0')}</span>}
-        </div>
-      ))}
+    <div>
+      <div style={{ display: 'flex', gap: 1, alignItems: 'flex-end', height: BAR_H, padding: '0 1px', position: 'relative' }}>
+        {[0.25, 0.5, 0.75].map(pct => (
+          <div key={pct} style={{ position: 'absolute', left: 0, right: 0, bottom: `${pct * BAR_H}px`, borderTop: '1px solid #1a1a1a', pointerEvents: 'none' }} />
+        ))}
+        {counts.map((v, h) => {
+          const barH = Math.max((v / max) * BAR_H, v > 0 ? 3 : 0);
+          return (
+            <div key={h} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%', position: 'relative' }}>
+              {v > 0 && (
+                <span style={{ position: 'absolute', bottom: barH + 1, fontSize: 6, color: ORANGE, fontFamily: "'IBM Plex Mono',monospace", lineHeight: 1, left: '50%', transform: 'translateX(-50%)', whiteSpace: 'nowrap' }}>{v}</span>
+              )}
+              <div title={`${String(h).padStart(2,'0')}:00 — ${v} job${v!==1?'s':''}`}
+                style={{ width: '100%', background: v > 0 ? ORANGE : '#181818', borderRadius: '1px 1px 0 0', height: `${barH}px`, transition: 'height 0.5s ease', cursor: 'default' }} />
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ display: 'flex', gap: 1, padding: '3px 1px 0', borderTop: '1px solid #252525' }}>
+        {counts.map((_, h) => (
+          <div key={h} style={{ flex: 1, textAlign: 'center' }}>
+            {h % 3 === 0 && <span style={{ fontSize: 6, color: '#555', fontFamily: "'IBM Plex Mono',monospace" }}>{String(h).padStart(2,'0')}</span>}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
 
 function DowChart({ counts }) {
   const max = Math.max(...counts, 1);
+  const BAR_H = 90;
   return (
-    <div style={{ display: 'flex', gap: 4, alignItems: 'flex-end', height: 70 }}>
-      {counts.map((v, d) => (
-        <div key={d} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
-          <div title={`${DAYS[d]} — ${v} job${v!==1?'s':''}`}
-            style={{ width: '100%', background: v > 0 ? ACC : '#1c1c1c', borderRadius: '1px 1px 0 0', height: `${Math.max((v/max)*58,v>0?3:0)}px`, transition: 'height 0.5s ease', cursor: 'default' }} />
-          <span style={{ fontSize: 7, color: MUT }}>{DAYS[d]}</span>
-        </div>
-      ))}
+    <div>
+      <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end', height: BAR_H, position: 'relative' }}>
+        <div style={{ position: 'absolute', left: 0, right: 0, bottom: BAR_H * 0.5, borderTop: '1px solid #1a1a1a', pointerEvents: 'none' }} />
+        {counts.map((v, d) => {
+          const barH = Math.max((v / max) * BAR_H, v > 0 ? 3 : 0);
+          return (
+            <div key={d} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%', position: 'relative' }}>
+              {v > 0 && (
+                <span style={{ position: 'absolute', bottom: barH + 2, fontSize: 7, color: ACC, fontFamily: "'IBM Plex Mono',monospace", lineHeight: 1 }}>{v}</span>
+              )}
+              <div title={`${DAYS[d]} — ${v} job${v!==1?'s':''}`}
+                style={{ width: '100%', background: v > 0 ? ACC : '#181818', borderRadius: '1px 1px 0 0', height: `${barH}px`, transition: 'height 0.5s ease', cursor: 'default' }} />
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ display: 'flex', gap: 6, padding: '4px 0 0', borderTop: '1px solid #252525' }}>
+        {counts.map((_, d) => (
+          <div key={d} style={{ flex: 1, textAlign: 'center' }}>
+            <span style={{ fontSize: 7, color: MUT }}>{DAYS[d]}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -106,6 +140,7 @@ function HeatMap({ points, activeFeatures, showHotspots, showActive, traceMode, 
   const traceModeRef    = useRef(traceMode);
   const onMapClickRef   = useRef(onMapClick);
   const traceStateRef   = useRef({ selected: [], highlights: [] });
+  const makeIconRef     = useRef(null);
   showHotspotsRef.current = showHotspots;
   showActiveRef.current   = showActive;
   traceModeRef.current    = traceMode;
@@ -117,6 +152,22 @@ function HeatMap({ points, activeFeatures, showHotspots, showActive, traceMode, 
     import('leaflet').then(mod => {
       const L = mod.default || mod;
       leafletRef.current = L;
+      if (!document.getElementById('ops-pulse-style')) {
+        const s = document.createElement('style');
+        s.id = 'ops-pulse-style';
+        s.textContent = '@keyframes ops-pulse{0%{transform:translate(-50%,-50%) scale(1);opacity:0.65}70%{transform:translate(-50%,-50%) scale(3.2);opacity:0}100%{transform:translate(-50%,-50%) scale(3.2);opacity:0}}';
+        document.head.appendChild(s);
+      }
+      const makeActiveIcon = (color, sz = 10) => L.divIcon({
+        className: '',
+        html: `<div style="position:relative;width:${sz}px;height:${sz}px">` +
+          `<div style="position:absolute;top:50%;left:50%;width:${sz}px;height:${sz}px;border-radius:50%;background:${color};animation:ops-pulse 2s ease-out infinite"></div>` +
+          `<div style="position:absolute;top:50%;left:50%;width:${sz}px;height:${sz}px;border-radius:50%;background:${color};transform:translate(-50%,-50%);opacity:0.95"></div>` +
+          `</div>`,
+        iconSize: [sz, sz],
+        iconAnchor: [sz / 2, sz / 2],
+      });
+      makeIconRef.current = makeActiveIcon;
       if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
       const map = L.map(containerRef.current, { center: [-37.814, 144.963], zoom: 11, zoomControl: true, attributionControl: false });
       map.getPanes().tilePane.style.filter = 'invert(100%) hue-rotate(180deg) brightness(90%) contrast(90%) saturate(60%)';
@@ -132,20 +183,16 @@ function HeatMap({ points, activeFeatures, showHotspots, showActive, traceMode, 
         L.circleMarker([lat, lng], { radius: 10, fillColor: ORANGE, fillOpacity: 0.22, stroke: false }).addTo(hotLayer);
         L.circleMarker([lat, lng], { radius: 4,  fillColor: '#ffcc66', fillOpacity: 0.6,  stroke: false }).addTo(hotLayer);
       });
-      const handleTraceClick = async (feature, lat, lng, innerM, outerM) => {
+      const handleTraceClick = async (feature, lat, lng, m) => {
         const state = traceStateRef.current;
         if (state.selected.length >= 2) {
           traceLayerRef.current?.clearLayers();
-          state.highlights.forEach(h => {
-            h.inner.setStyle({ radius: 5, fillColor: GRN, fillOpacity: 0.9, color: GRN, weight: 1 });
-            h.outer.setStyle({ fillColor: GRN, fillOpacity: 0.15 });
-          });
+          state.highlights.forEach(h => h.setIcon(makeActiveIcon(GRN)));
           state.selected = []; state.highlights = [];
         }
-        innerM.setStyle({ radius: 7, fillColor: '#cc2222', fillOpacity: 1, color: '#ff6644', weight: 2 });
-        outerM.setStyle({ fillColor: '#cc2222', fillOpacity: 0.22 });
+        m.setIcon(makeActiveIcon('#cc2222', 12));
         state.selected.push({ feature, lat, lng });
-        state.highlights.push({ inner: innerM, outer: outerM });
+        state.highlights.push(m);
         if (state.selected.length < 2) return;
         const [a, b] = state.selected;
         try {
@@ -171,9 +218,12 @@ function HeatMap({ points, activeFeatures, showHotspots, showActive, traceMode, 
         const lat = coords[1], lng = coords[0];
         const p = feature.properties || {};
         const logMeta = feature._logMeta;
-        const outerM = L.circleMarker([lat,lng], { radius: 14, fillColor: GRN, fillOpacity: 0.15, stroke: false, bubblingMouseEvents: false });
-        const innerM = L.circleMarker([lat,lng], { radius: 5, fillColor: GRN, fillOpacity: 0.9, color: GRN, weight: 1, bubblingMouseEvents: false });
-        outerM.addTo(activeLayer); innerM.addTo(activeLayer);
+        const activeM = L.marker([lat,lng], {
+          icon: makeActiveIcon(GRN),
+          bubblingMouseEvents: false,
+          zIndexOffset: 100,
+        });
+        activeM.addTo(activeLayer);
         const road=p.closedRoadName||'—', sub=p.reference?.startIntersectionLocality||'', cross=p.reference?.startIntersectionRoadName||'';
         const eventId=p.eventId||'—', desc=p.description||'', lanes=p.numberLanesImpacted, subType=p.eventSubType||'', impact=p.impact?.impactType||'', melway=p.melway||'';
         const elapsed=timeIn(logMeta?.firstSeen||p.lastUpdated), firstSeen=logMeta?.firstSeen?fmtShort(logMeta.firstSeen):null;
@@ -186,10 +236,10 @@ function HeatMap({ points, activeFeatures, showHotspots, showActive, traceMode, 
         ];
         const popupHtml=`<div style="font-family:'IBM Plex Mono',monospace;min-width:210px;max-width:270px;color:#d8d8d8;padding:10px 12px"><div style="font-size:11px;font-weight:700;color:#e8e8e8;margin-bottom:4px;line-height:1.3">${road}</div>${sub?`<div style="font-size:8px;color:#555;margin-bottom:8px">${sub}${cross?' @ '+cross:''}</div>`:'<div style="margin-bottom:8px"></div>'}<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px"><span style="font-size:7px;font-weight:700;padding:1px 5px;border:1px solid #3a8a5a55;border-radius:2px;color:#3a8a5a;background:#3a8a5a18;text-transform:uppercase;letter-spacing:.08em">Active</span>${subType?`<span style="font-size:7px;font-weight:700;padding:1px 5px;border:1px solid #3a3a2a;border-radius:2px;color:#c8a84b;background:#c8a84b11;text-transform:uppercase;letter-spacing:.08em">${subType}</span>`:''}</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:8px">${infoRows.map(([lbl,val])=>`<div style="background:#111;border:1px solid #1e1e1e;border-radius:2px;padding:4px 6px"><div style="font-size:6px;color:#444;letter-spacing:.1em;text-transform:uppercase;margin-bottom:2px">${lbl}</div><div style="font-size:8px;color:#bbb;word-break:break-all">${val}</div></div>`).join('')}</div>${desc?`<div style="font-size:8px;color:#4a4a4a;line-height:1.5;background:#0a0a0a;padding:5px 7px;border-radius:2px;border:1px solid #181818;margin-bottom:8px">${desc}</div>`:''}<a href="${mapsUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:4px;font-size:7px;color:#4a6a8a;border:1px solid #1e2e3e;border-radius:2px;padding:3px 7px;text-decoration:none;background:#0a1520;text-transform:uppercase;letter-spacing:.08em;font-family:'IBM Plex Mono',monospace">📍 Maps</a></div>`;
         const handleClick=()=>{
-          if(traceModeRef.current){handleTraceClick(feature,lat,lng,innerM,outerM);}
+          if(traceModeRef.current){handleTraceClick(feature,lat,lng,activeM);}
           else{L.popup({closeButton:true,className:'towbench-popup',maxWidth:300,offset:[0,-5]}).setLatLng([lat,lng]).setContent(popupHtml).openOn(map);}
         };
-        innerM.on('click',handleClick); outerM.on('click',handleClick);
+        activeM.on('click',handleClick);
       });
       (annotations||[]).forEach(ann=>{
         if(!ann.lat||!ann.lng)return;
@@ -235,7 +285,8 @@ function HeatMap({ points, activeFeatures, showHotspots, showActive, traceMode, 
     if(!traceMode){
       traceLayerRef.current?.clearLayers();
       const state=traceStateRef.current;
-      state.highlights.forEach(h=>{h.inner.setStyle({radius:5,fillColor:GRN,fillOpacity:0.9,color:GRN,weight:1});h.outer.setStyle({fillColor:GRN,fillOpacity:0.15});});
+      const makeIcon=makeIconRef.current;
+      if(makeIcon)state.highlights.forEach(m=>m.setIcon(makeIcon(GRN)));
       state.selected=[];state.highlights=[];
     }
   },[traceMode]);
