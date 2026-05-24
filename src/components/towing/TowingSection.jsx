@@ -129,7 +129,7 @@ export default function TowingSection({ isAdmin, userEmail, companyConfig, setCo
           </button>
         ))}
       </div>
-      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         {tab === 'allocations' && (
           <TowAllocationsTab
             allFeatures={allFeatures} liveIds={liveIds} loading={loading}
