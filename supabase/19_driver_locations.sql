@@ -5,6 +5,8 @@ create table driver_locations (
   lng           float8      not null,
   heading       float8,
   accuracy      float8,
+  plate         text,
+  name          text,
   updated_at    timestamptz not null default now()
 );
 
