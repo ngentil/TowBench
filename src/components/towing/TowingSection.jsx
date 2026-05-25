@@ -7,6 +7,7 @@ import { supabase } from '../../lib/supabase';
 import AdminSettings from '../admin/AdminSettings';
 import OpsTab from './OpsTab';
 import TowAnalyticsTab from './TowAnalyticsTab';
+import TowInsTab from './TowInsTab';
 import { VICROADS_URL, VICROADS_KEY } from '../../lib/constants';
 
 const POLL_MS = 60_000;
@@ -19,6 +20,7 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, co
   //   super_admin: All tabs
   const TABS = [
     { id: 'allocations', label: '🚦 Tow Allocations', roles: ['driver','dispatch','admin','super_admin'] },
+    { id: 'towins',      label: '🏭 Tow Ins',         roles: ['driver','dispatch','admin','super_admin'] },
     { id: 'ops',         label: '🗺 Map',             roles: ['dispatch','admin','super_admin'] },
     { id: 'analytics',   label: '📊 Analytics',       roles: ['dispatch','admin','super_admin'] },
     { id: 'fleet',       label: '🚛 Fleet',            roles: ['dispatch','admin','super_admin'] },
@@ -179,6 +181,9 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, co
             onAcceptJob={onAcceptJob} onReleaseJob={onUnassignJob}
             companyConfig={companyConfig}
           />
+        )}
+        {tab === 'towins' && (
+          <TowInsTab companyId={companyId} userEmail={userEmail} isDispatch={isDispatch} />
         )}
         {tab === 'analytics' && (
           <TowAnalyticsTab allFeatures={allFeatures} liveIds={liveIds} loading={loading} userEmail={userEmail} />
