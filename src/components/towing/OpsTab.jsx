@@ -118,6 +118,7 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
   const [driverLocations, setDriverLocations] = useState([]);
   const [selectedEventId, setSelectedEventId] = useState(null);
   const [cardPos,         setCardPos]         = useState({ x: 0, y: 0 });
+  const [mapReady,        setMapReady]        = useState(false);
 
   const containerRef      = useRef(null);
   const mapRef            = useRef(null);
@@ -220,6 +221,8 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
         selectedLatLngRef.current = null;
       });
 
+      setMapReady(true);
+
       // drawRoute stored in ref so Leaflet handlers always call the latest version
       drawRouteRef.current = async (allocLat, allocLng, eventId) => {
         const pos = userPosRef.current;
@@ -293,7 +296,7 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
         }
       });
     });
-  }, [allFeatures, liveIds, acceptedJobs]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mapReady, allFeatures, liveIds, acceptedJobs]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Rebuild cleared layer (last 24h only)
   useEffect(() => {
@@ -310,7 +313,7 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
       if (firstSeenMs < cutoff) return;
       L.circleMarker([coords[1], coords[0]], { radius: 5, fillColor: '#555', fillOpacity: 0.55, color: '#444', weight: 0.5 }).addTo(layer);
     });
-  }, [allFeatures, liveIds]);
+  }, [mapReady, allFeatures, liveIds]);
 
   // Rebuild hotspot layer (all-time density)
   useEffect(() => {
@@ -326,7 +329,7 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
       L.circleMarker([lat, lng], { radius: 8,  fillColor: ORANGE, fillOpacity: 0.22, stroke: false }).addTo(layer);
       L.circleMarker([lat, lng], { radius: 3,  fillColor: '#ffcc66', fillOpacity: 0.6, stroke: false }).addTo(layer);
     });
-  }, [allFeatures]);
+  }, [mapReady, allFeatures]);
 
   // Rebuild truck layer
   useEffect(() => {
@@ -350,7 +353,7 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
         zIndexOffset: 400,
       }).bindTooltip(label, { permanent: false, direction: 'top', className: 'towbench-tooltip' }).addTo(layer);
     });
-  }, [userPos, driverLocations, userEmail]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mapReady, userPos, driverLocations, userEmail]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Show/hide layers based on toggles
   useEffect(() => {
@@ -378,7 +381,7 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* Layer toggle bar */}
-      <div style={{ padding: '6px 10px', display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0, flexWrap: 'wrap', background: '#0a0a0a', borderBottom: '1px solid ' + BRD }}>
+      <div style={{ padding: '6px 10px', display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0, overflowX: 'auto', overflowY: 'hidden', scrollbarWidth: 'none', background: '#0a0a0a', borderBottom: '1px solid ' + BRD }}>
         <LayerBadge active={showActive}   onClick={() => setShowActive(v  => !v)}  color={GRN}    label={`🟢 Active ${liveCount}`} />
         <LayerBadge active={showCleared}  onClick={() => setShowCleared(v => !v)}  color="#666"   label={`⚫ Cleared ${clearedCount}`} />
         <LayerBadge active={showHotspots} onClick={() => setShowHotspots(v => !v)} color={ORANGE} label="🟠 Hotspots" />
