@@ -11,24 +11,28 @@ import { VICROADS_URL, VICROADS_KEY } from '../../lib/constants';
 
 const POLL_MS = 60_000;
 
-const BASE_TABS = [
-  { id: 'allocations', label: '🚦 Tow Allocations' },
-  { id: 'ops',         label: '🗺 Map' },
-  { id: 'analytics',   label: '📊 Analytics' },
-  { id: 'fleet',       label: '🚛 Fleet' },
-];
+export default function TowingSection({ role, isAdmin, isDispatch, userEmail, companyId, companyConfig, setCompanyConfig }) {
+  // Tab visibility by role:
+  //   driver:    Allocations only
+  //   dispatch:  Allocations, Map, Analytics, Fleet
+  //   admin:     All above + Settings
+  //   super_admin: All tabs
+  const TABS = [
+    { id: 'allocations', label: '🚦 Tow Allocations', roles: ['driver','dispatch','admin','super_admin'] },
+    { id: 'ops',         label: '🗺 Map',             roles: ['dispatch','admin','super_admin'] },
+    { id: 'analytics',   label: '📊 Analytics',       roles: ['dispatch','admin','super_admin'] },
+    { id: 'fleet',       label: '🚛 Fleet',            roles: ['dispatch','admin','super_admin'] },
+    { id: 'settings',    label: '⚙ Settings',         roles: ['admin','super_admin'] },
+  ].filter(t => !role || t.roles.includes(role));
 
-export default function TowingSection({ isAdmin, userEmail, companyConfig, setCompanyConfig }) {
-  const TABS = isAdmin ? [...BASE_TABS, { id: 'settings', label: '⚙ Settings' }] : BASE_TABS;
   const [tab, setTab] = useState('allocations');
 
-  // Redirect stale tab state that no longer exists in TABS
   useEffect(() => {
     const ids = TABS.map(t => t.id);
     if (!ids.includes(tab)) setTab('allocations');
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Shared allocation state ───────────────────────────────────────────────────────────────────────────────
+  // ── Shared allocation state ─────────────────────────────────────────────
   const [allFeatures,  setAllFeatures]  = useState([]);
   const [liveIds,      setLiveIds]      = useState(new Set());
   const [loading,      setLoading]      = useState(true);
@@ -42,7 +46,7 @@ export default function TowingSection({ isAdmin, userEmail, companyConfig, setCo
     try {
       const { data } = await supabase
         .from('job_accepted')
-        .select('id, event_id, accepted_by, accepted_at')
+        .select('id, event_id, accepted_by, accepted_at, company_id')
         .is('released_at', null);
       if (data) {
         const map = new Map();
@@ -52,15 +56,33 @@ export default function TowingSection({ isAdmin, userEmail, companyConfig, setCo
     } catch (e) { console.warn('fetchAcceptedJobs:', e.message); }
   }, []);
 
-  const onAcceptJob = useCallback(async (eventId) => {
-    if (!userEmail) return;
-    await supabase.from('job_accepted').insert({ event_id: String(eventId), accepted_by: userEmail });
+  const onAcceptJob = useCallback(async (eventId, daPin, truckDaNumber) => {
+    if (!userEmail) return { ok: false, err: 'Not logged in' };
+    const last4 = String(truckDaNumber || '').slice(-4);
+    if (last4 && daPin !== last4) return { ok: false, err: 'Incorrect DA PIN' };
+    const { error } = await supabase.from('job_accepted').insert({
+      event_id: String(eventId),
+      accepted_by: userEmail,
+      company_id: companyId || null,
+    });
+    if (error) return { ok: false, err: error.message };
     fetchAcceptedJobs();
-  }, [userEmail, fetchAcceptedJobs]);
+    return { ok: true };
+  }, [userEmail, companyId, fetchAcceptedJobs]);
 
-  const onReleaseJob = useCallback(async (acceptanceId) => {
-    await supabase.from('job_accepted').update({ released_at: new Date().toISOString() }).eq('id', acceptanceId);
-    fetchAcceptedJobs();
+  const onUnassignJob = useCallback(async (acceptanceId) => {
+    const { error } = await supabase.rpc('dispatch_unassign_job', { p_job_accepted_id: acceptanceId });
+    if (!error) fetchAcceptedJobs();
+    return { ok: !error, err: error?.message };
+  }, [fetchAcceptedJobs]);
+
+  const onAllocateToPlate = useCallback(async (eventId, plate) => {
+    const { error } = await supabase.rpc('dispatch_allocate_job', {
+      p_event_id: String(eventId),
+      p_plate:    plate.trim().toUpperCase().replace(/\s+/g, ''),
+    });
+    if (!error) fetchAcceptedJobs();
+    return { ok: !error, err: error?.message };
   }, [fetchAcceptedJobs]);
 
   const mergeFeatures = (live, logged) => {
@@ -124,6 +146,8 @@ export default function TowingSection({ isAdmin, userEmail, companyConfig, setCo
     return () => clearInterval(t);
   }, []);
 
+  const isStale = lastFetch ? (Date.now() - lastFetch.getTime()) > 3 * POLL_MS : false;
+
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div style={{ background: SURF, borderBottom: '1px solid ' + BRD, overflowX: 'auto', overflowY: 'hidden', display: 'flex', scrollbarWidth: 'none' }}>
@@ -139,26 +163,28 @@ export default function TowingSection({ isAdmin, userEmail, companyConfig, setCo
           <TowAllocationsTab
             allFeatures={allFeatures} liveIds={liveIds} loading={loading}
             err={err} lastFetch={lastFetch} countdown={countdown}
-            fetchAllocations={fetchAllocations}
-            isStale={lastFetch ? (Date.now() - lastFetch.getTime()) > 3 * POLL_MS : false}
+            fetchAllocations={fetchAllocations} isStale={isStale}
             acceptedJobs={acceptedJobs} userEmail={userEmail}
-            onAcceptJob={onAcceptJob} onReleaseJob={onReleaseJob}
+            role={role} isDispatch={isDispatch} companyId={companyId}
+            onAcceptJob={onAcceptJob}
+            onUnassignJob={onUnassignJob}
+            onAllocateToPlate={onAllocateToPlate}
           />
         )}
         {tab === 'ops' && (
           <OpsTab
             allFeatures={allFeatures} liveIds={liveIds} loading={loading}
-            lastFetch={lastFetch} countdown={countdown}
-            isStale={lastFetch ? (Date.now() - lastFetch.getTime()) > 3 * POLL_MS : false}
+            lastFetch={lastFetch} countdown={countdown} isStale={isStale}
             acceptedJobs={acceptedJobs} userEmail={userEmail}
-            onAcceptJob={onAcceptJob} onReleaseJob={onReleaseJob}
+            onAcceptJob={onAcceptJob} onReleaseJob={onUnassignJob}
+            companyConfig={companyConfig}
           />
         )}
         {tab === 'analytics' && (
           <TowAnalyticsTab allFeatures={allFeatures} liveIds={liveIds} loading={loading} userEmail={userEmail} />
         )}
-        {tab === 'fleet' && <FleetTab isAdmin={isAdmin} />}
-        {tab === 'settings' && isAdmin && <AdminSettings companyConfig={companyConfig} setCompanyConfig={setCompanyConfig} />}
+        {tab === 'fleet'    && <FleetTab isAdmin={isAdmin} />}
+        {tab === 'settings' && isAdmin && <AdminSettings companyConfig={companyConfig} setCompanyConfig={setCompanyConfig} companyId={companyId} />}
       </div>
     </div>
   );

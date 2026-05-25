@@ -1,13 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './lib/supabase';
-import { BG, SURF, BRD, TXT, MUT, ACC, RED, btnA, btnG, sm } from './lib/styles';
+import { BG, SURF, BRD, TXT, MUT, ACC, RED, GRN, btnA, btnG, sm } from './lib/styles';
 import TowingSection from './components/towing/TowingSection';
 import { ThemeContext } from './lib/ThemeContext';
-
-function normalizePlate(raw) {
-  const s = raw.toUpperCase().replace(/\s+/g, '');
-  return /^TOW[A-Z0-9]{1,3}$/.test(s) ? s : null;
-}
 
 function getGreeting(name) {
   const h = new Date().getHours();
@@ -27,137 +22,517 @@ function requestGPS() {
   }
 }
 
-export default function App() {
-  const [session,           setSession]           = useState(null);
-  const [authChecked,       setAuthChecked]       = useState(false);
-  const [truck,             setTruck]             = useState(null);
-  const [driverDisplayName, setDriverDisplayName] = useState('');
-  const [greeting,          setGreeting]          = useState('');
-  const [showGreeting,      setShowGreeting]      = useState(false);
-  const [showOrigin,        setShowOrigin]        = useState(false);
-  const [companyConfig,     setCompanyConfig]     = useState({ company_name: 'TowBench', accent_color: '#e8670a', logo_url: null });
-  const logoClickRef = React.useRef({ count: 0, timer: null });
+const inputStyle = {
+  background: '#0a0a0a', border: '1px solid #252525', color: TXT,
+  fontFamily: "'IBM Plex Mono',monospace", fontSize: 14,
+  padding: '9px 10px', borderRadius: 2, width: '100%', outline: 'none', boxSizing: 'border-box',
+};
+const labelStyle = { fontSize: 9, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 };
+const formStyle  = {
+  background: SURF, border: '1px solid ' + BRD, borderTop: '2px solid ' + ACC,
+  borderRadius: 3, padding: 20, display: 'flex', flexDirection: 'column', gap: 12,
+};
 
-  const [step,        setStep]       = useState(1);
-  const [plate,       setPlate]      = useState('');
-  const [truckInfo,   setTruckInfo]  = useState(null);
-  const [email,       setEmail]      = useState('');
-  const [accessCode,  setAccessCode] = useState('');
-  const [driverName,  setDriverName] = useState('');
-  const [password,    setPassword]   = useState('');
-  const [confirmPwd,  setConfirmPwd] = useState('');
-  const [loggingIn,   setLoggingIn]  = useState(false);
-  const [loginErr,    setLoginErr]   = useState('');
-  const [requesting,  setRequesting] = useState(false);
+// ── Driver login / signup ────────────────────────────────────────────────────
+
+function DriverFlow({ onSuccess }) {
+  const [step,        setStep]        = useState(1); // 1=plate, 2=password or signup
+  const [plate,       setPlate]       = useState('');
+  const [truckInfo,   setTruckInfo]   = useState(null); // from get_truck_by_plate
+  const [email,       setEmail]       = useState('');
+  const [password,    setPassword]    = useState('');
+  const [confirmPwd,  setConfirmPwd]  = useState('');
+  const [accessCode,  setAccessCode]  = useState('');
+  const [firstName,   setFirstName]   = useState('');
+  const [lastName,    setLastName]    = useState('');
+  const [daNumber,    setDaNumber]    = useState('');
+  const [address,     setAddress]     = useState('');
+  const [licenceFile, setLicenceFile] = useState(null);
+  const [licencePreview, setLicencePreview] = useState(null);
+  const [signupStep,  setSignupStep]  = useState(1); // 1=photo, 2=da+name, 3=code+email+pw
+  const [busy,        setBusy]        = useState(false);
+  const [err,         setErr]         = useState('');
   const [requestSent, setRequestSent] = useState(false);
 
-  const loadTruck = async (userEmail, welcome = false) => {
-    const [truckRes, userRes] = await Promise.all([
-      supabase.from('tow_trucks').select('*').eq('auth_email', userEmail).single(),
-      supabase.auth.getUser(),
-    ]);
-    const truckData = truckRes.data || null;
-    const name = truckData?.driver_name || userRes.data?.user?.user_metadata?.driver_name || '';
-    setTruck(truckData);
-    setDriverDisplayName(name);
-    if (welcome && name) {
-      setGreeting(getGreeting(name));
-      setShowGreeting(true);
-      setTimeout(() => setShowGreeting(false), 3500);
-    }
-  };
+  const normPlate = p => p.toUpperCase().replace(/\s+/g, '');
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setAuthChecked(true);
-      if (session) loadTruck(session.user.email, false);
-    });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      setSession(session);
-      if (session) {
-        const greetKey = `towbench_greeted_${session.user.id}`;
-        const firstSignIn = event === 'SIGNED_IN' && !sessionStorage.getItem(greetKey);
-        if (firstSignIn) sessionStorage.setItem(greetKey, '1');
-        loadTruck(session.user.email, firstSignIn);
-        if (event === 'SIGNED_IN') requestGPS();
-      } else {
-        setTruck(null);
-        setDriverDisplayName('');
-      }
-    });
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const handlePlateSubmit = async (e) => {
+  const handlePlateSubmit = async e => {
     e.preventDefault();
-    setLoginErr('');
-    const normalized = normalizePlate(plate);
-    if (!normalized) {
-      setLoginErr('Enter your plate in the format TOW followed by letters/numbers (e.g. TOW933).');
-      return;
-    }
-    setLoggingIn(true);
-    const { data, error } = await supabase.rpc('get_truck_auth_info', { p_plate: normalized });
-    setLoggingIn(false);
-    if (error) { setLoginErr('Something went wrong. Try again.'); return; }
+    setErr('');
+    if (!plate.trim()) { setErr('Enter your truck plate.'); return; }
+    setBusy(true);
+    const { data, error } = await supabase.rpc('get_truck_by_plate', { p_plate: normPlate(plate) });
+    setBusy(false);
+    if (error) { setErr('Something went wrong. Try again.'); return; }
+    if (!data) { setErr('Plate not found in the fleet. Contact your dispatcher.'); return; }
     setTruckInfo(data);
-    setEmail(data?.email || '');
+    setEmail(data.email || '');
     setStep(2);
   };
 
-  const handlePasswordSubmit = async (e) => {
+  const handleSignIn = async e => {
     e.preventDefault();
-    setLoginErr('');
-    if (!truckInfo.registered) {
-      if (!email.trim() || !/\S+@\S+\.\S+/.test(email)) { setLoginErr('Enter a valid email address.'); return; }
-      if (!truckInfo.is_admin && !accessCode.trim())     { setLoginErr('Enter your access code.'); return; }
-      if (!driverName.trim())                            { setLoginErr('Please enter your name.'); return; }
-      if (password.length < 6)                           { setLoginErr('Password must be at least 6 characters.'); return; }
-      if (password !== confirmPwd)                       { setLoginErr('Passwords do not match.'); return; }
+    setErr('');
+    if (!password) { setErr('Enter your password.'); return; }
+    setBusy(true);
+    const { error } = await supabase.auth.signInWithPassword({ email: truckInfo.email, password });
+    setBusy(false);
+    if (error) { setErr('Incorrect password.'); return; }
+    onSuccess();
+  };
+
+  const handleSignupNext = async () => {
+    setErr('');
+    if (signupStep === 1) {
+      if (!licenceFile) { setErr('Please upload a photo of your towing licence.'); return; }
+      setSignupStep(2);
+    } else if (signupStep === 2) {
+      if (!firstName.trim()) { setErr('Enter your first name.'); return; }
+      if (!lastName.trim())  { setErr('Enter your last name.'); return; }
+      if (!daNumber.trim())  { setErr('Enter your full DA number.'); return; }
+      setSignupStep(3);
     }
-    setLoggingIn(true);
-    if (truckInfo.registered) {
-      const { error } = await supabase.auth.signInWithPassword({ email: truckInfo.email, password });
-      if (error) { setLoginErr('Incorrect password.'); setLoggingIn(false); return; }
-    } else {
-      if (!truckInfo.is_admin) {
-        const { data: valid } = await supabase.rpc('validate_invite_code', { p_code: accessCode.trim() });
-        if (!valid) { setLoginErr('Invalid or already used access code.'); setLoggingIn(false); return; }
+  };
+
+  const handleSignupSubmit = async e => {
+    e.preventDefault();
+    setErr('');
+    if (!accessCode.trim())                           { setErr('Enter your access code.'); return; }
+    if (!email.trim() || !/\S+@\S+\.\S+/.test(email)) { setErr('Enter a valid email address.'); return; }
+    if (password.length < 6)                           { setErr('Password must be at least 6 characters.'); return; }
+    if (password !== confirmPwd)                       { setErr('Passwords do not match.'); return; }
+
+    setBusy(true);
+
+    // Validate invite code
+    const { data: codeRows } = await supabase.rpc('validate_invite_code', { p_code: accessCode.trim() });
+    const codeRow = Array.isArray(codeRows) ? codeRows[0] : codeRows;
+    if (!codeRow?.valid) { setErr('Invalid or already used access code.'); setBusy(false); return; }
+
+    // Create auth account
+    const { data: authData, error: authErr } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: { data: { plate: normPlate(plate), first_name: firstName.trim(), last_name: lastName.trim() } },
+    });
+    if (authErr) { setErr(authErr.message); setBusy(false); return; }
+
+    const userId = authData.user?.id;
+
+    // Upload licence photo
+    let licenceUrl = null;
+    if (licenceFile && userId) {
+      const ext = licenceFile.name.split('.').pop();
+      const path = `${userId}/licence.${ext}`;
+      const { error: uploadErr } = await supabase.storage
+        .from('licence-photos')
+        .upload(path, licenceFile, { upsert: true });
+      if (!uploadErr) {
+        const { data: urlData } = supabase.storage.from('licence-photos').getPublicUrl(path);
+        licenceUrl = urlData?.publicUrl || null;
       }
-      const { error } = await supabase.auth.signUp({
-        email: email.trim(),
-        password,
-        options: { data: { driver_name: driverName.trim(), plate: normalizePlate(plate) } },
+    }
+
+    // Link email to truck + set driver fields
+    await supabase.rpc('link_plate_to_email', { p_plate: normPlate(plate), p_email: email.trim() });
+    await supabase.from('tow_trucks').update({
+      first_name: firstName.trim(),
+      last_name: lastName.trim(),
+      da_number: daNumber.trim(),
+      licence_address: address.trim() || null,
+      licence_photo_url: licenceUrl,
+      approved: false,
+    }).eq('auth_email', email.trim().toLowerCase());
+
+    // Create user_profile as driver
+    if (userId) {
+      await supabase.from('user_profiles').insert({
+        id: userId,
+        company_id: codeRow.company_id || truckInfo.company_id,
+        role: 'driver',
       });
-      if (error) { setLoginErr(error.message); setLoggingIn(false); return; }
-      await supabase.rpc('link_plate_to_email', { p_plate: normalizePlate(plate), p_email: email.trim() });
-      if (!truckInfo.is_admin) {
-        await supabase.rpc('consume_invite_code', { p_code: accessCode.trim(), p_plate: normalizePlate(plate) });
-      }
     }
-    setLoggingIn(false);
+
+    // Consume code
+    await supabase.rpc('consume_invite_code', { p_code: accessCode.trim(), p_used_by: normPlate(plate) });
+
+    setBusy(false);
+    onSuccess();
   };
 
   const handleRequestAccess = async () => {
-    const normalized = normalizePlate(plate);
-    if (!normalized) return;
-    setRequesting(true);
-    await supabase.rpc('request_access', { p_plate: normalized });
-    setRequesting(false);
+    if (!plate.trim()) return;
+    setBusy(true);
+    await supabase.rpc('request_access', { p_plate: normPlate(plate) }).catch(() => {});
+    setBusy(false);
     setRequestSent(true);
   };
 
-  const signOut = () => {
-    if (session?.user?.id) sessionStorage.removeItem(`towbench_greeted_${session.user.id}`);
-    supabase.auth.signOut();
-    setStep(1); setPlate(''); setTruckInfo(null);
-    setEmail(''); setAccessCode(''); setDriverName(''); setPassword(''); setConfirmPwd(''); setLoginErr('');
-    setRequestSent(false); setRequesting(false);
+  const goBack = () => {
+    setStep(1); setErr(''); setEmail(''); setPassword(''); setConfirmPwd('');
+    setAccessCode(''); setFirstName(''); setLastName(''); setDaNumber(''); setAddress('');
+    setLicenceFile(null); setLicencePreview(null); setSignupStep(1); setTruckInfo(null); setRequestSent(false);
   };
 
-  const isAdmin = truck?.is_admin === true;
-  const displayPlate = truck?.plate?.toUpperCase() || session?.user?.user_metadata?.plate?.toUpperCase() || '';
+  if (step === 1) {
+    return (
+      <form onSubmit={handlePlateSubmit} style={formStyle}>
+        <div>
+          <div style={labelStyle}>Truck Number Plate</div>
+          <input type="text" value={plate} onChange={e => setPlate(e.target.value.toUpperCase())}
+            placeholder="e.g. TOW933 or 1AB2CD" required autoFocus autoCapitalize="characters"
+            style={{ ...inputStyle, fontSize: 18, letterSpacing: '0.18em', textTransform: 'uppercase' }} />
+        </div>
+        {err && <div style={{ fontSize: 9, color: RED, lineHeight: 1.5 }}>{err}</div>}
+        <button type="submit" disabled={busy}
+          style={{ ...btnA, width: '100%', opacity: busy ? 0.5 : 1, marginTop: 4 }}>
+          {busy ? 'Checking…' : 'Continue →'}
+        </button>
+      </form>
+    );
+  }
+
+  // Step 2: existing user → sign in
+  if (truckInfo?.registered) {
+    return (
+      <form onSubmit={handleSignIn} style={formStyle}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontSize: 13, color: ACC, fontWeight: 700, letterSpacing: '0.14em' }}>{normPlate(plate)}</span>
+          <button type="button" onClick={goBack}
+            style={{ fontSize: 8, color: MUT, background: 'none', border: 'none', cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace" }}>
+            ← change
+          </button>
+        </div>
+        <div>
+          <div style={labelStyle}>Password</div>
+          <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+            placeholder="········" required autoFocus minLength={6} style={inputStyle} />
+        </div>
+        {err && <div style={{ fontSize: 9, color: RED, lineHeight: 1.5 }}>{err}</div>}
+        <button type="submit" disabled={busy}
+          style={{ ...btnA, width: '100%', opacity: busy ? 0.5 : 1 }}>
+          {busy ? 'Signing in…' : 'Sign In'}
+        </button>
+      </form>
+    );
+  }
+
+  // Step 2: new user → multi-step signup
+  return (
+    <div style={formStyle}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{ fontSize: 13, color: ACC, fontWeight: 700, letterSpacing: '0.14em' }}>{normPlate(plate)}</span>
+        <button type="button" onClick={goBack}
+          style={{ fontSize: 8, color: MUT, background: 'none', border: 'none', cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace" }}>
+          ← change
+        </button>
+      </div>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 4 }}>
+        {[1,2,3].map(n => (
+          <div key={n} style={{
+            flex: 1, height: 3, borderRadius: 2,
+            background: n <= signupStep ? ACC : '#2a2a2a',
+          }} />
+        ))}
+      </div>
+      <div style={{ fontSize: 8, color: '#5a8a5a', lineHeight: 1.6 }}>
+        {signupStep === 1 && 'Step 1 of 3 — Upload your towing licence photo'}
+        {signupStep === 2 && 'Step 2 of 3 — Your DA number and personal details'}
+        {signupStep === 3 && 'Step 3 of 3 — Access code and account password'}
+      </div>
+
+      {signupStep === 1 && (
+        <div>
+          <div style={labelStyle}>Towing Licence Photo</div>
+          <label style={{ display: 'block', border: `2px dashed ${licenceFile ? ACC : '#333'}`, borderRadius: 2,
+            padding: '20px', textAlign: 'center', cursor: 'pointer', background: '#080808' }}>
+            <input type="file" accept="image/*,application/pdf" style={{ display: 'none' }}
+              onChange={e => {
+                const f = e.target.files?.[0];
+                if (!f) return;
+                setLicenceFile(f);
+                if (f.type.startsWith('image/')) {
+                  const url = URL.createObjectURL(f);
+                  setLicencePreview(url);
+                } else {
+                  setLicencePreview(null);
+                }
+              }} />
+            {licencePreview
+              ? <img src={licencePreview} alt="Licence preview" style={{ maxHeight: 120, borderRadius: 2, objectFit: 'contain' }} />
+              : <div style={{ fontSize: 9, color: MUT }}>Tap to upload photo or PDF{licenceFile ? ` · ${licenceFile.name}` : ''}</div>
+            }
+          </label>
+          {licenceFile && !licencePreview && (
+            <div style={{ fontSize: 8, color: MUT, marginTop: 4 }}>📄 {licenceFile.name}</div>
+          )}
+        </div>
+      )}
+
+      {signupStep === 2 && (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div>
+              <div style={labelStyle}>First Name</div>
+              <input type="text" value={firstName} onChange={e => setFirstName(e.target.value)}
+                placeholder="e.g. Alex" autoCapitalize="words" style={inputStyle} />
+            </div>
+            <div>
+              <div style={labelStyle}>Last Name</div>
+              <input type="text" value={lastName} onChange={e => setLastName(e.target.value)}
+                placeholder="e.g. Smith" autoCapitalize="words" style={inputStyle} />
+            </div>
+          </div>
+          <div>
+            <div style={labelStyle}>Full DA Number</div>
+            <input type="text" value={daNumber} onChange={e => setDaNumber(e.target.value)}
+              placeholder="e.g. DA123456" autoCapitalize="characters" style={inputStyle} />
+          </div>
+          <div>
+            <div style={labelStyle}>Licence Address (optional)</div>
+            <input type="text" value={address} onChange={e => setAddress(e.target.value)}
+              placeholder="Street address on your licence" autoCapitalize="words" style={inputStyle} />
+          </div>
+        </>
+      )}
+
+      {signupStep === 3 && (
+        <form onSubmit={handleSignupSubmit} style={{ display: 'contents' }}>
+          <div>
+            <div style={labelStyle}>Access Code</div>
+            <input type="text" value={accessCode}
+              onChange={e => setAccessCode(e.target.value.toUpperCase().replace(/\s/g, ''))}
+              placeholder="XXXXXX" autoCapitalize="characters"
+              style={{ ...inputStyle, letterSpacing: '0.2em', fontSize: 16 }} />
+            <div style={{ marginTop: 6, fontSize: 8, color: MUT, textAlign: 'right' }}>
+              {requestSent ? (
+                <span style={{ color: '#5a8a5a' }}>✓ Request sent — your admin will share a code.</span>
+              ) : (
+                <>Don&apos;t have one?{' '}
+                  <button type="button" onClick={handleRequestAccess} disabled={busy}
+                    style={{ background: 'none', border: 'none', color: ACC, cursor: 'pointer',
+                      fontFamily: "'IBM Plex Mono',monospace", fontSize: 8, padding: 0, textDecoration: 'underline' }}>
+                    {busy ? 'Sending…' : 'Request from admin'}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+          <div>
+            <div style={labelStyle}>Email</div>
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+              placeholder="you@example.com" style={inputStyle} />
+          </div>
+          <div>
+            <div style={labelStyle}>Password</div>
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+              placeholder="········" minLength={6} style={inputStyle} />
+          </div>
+          <div>
+            <div style={labelStyle}>Confirm Password</div>
+            <input type="password" value={confirmPwd} onChange={e => setConfirmPwd(e.target.value)}
+              placeholder="········" minLength={6} style={inputStyle} />
+          </div>
+          {err && <div style={{ fontSize: 9, color: RED, lineHeight: 1.5 }}>{err}</div>}
+          <button type="submit" disabled={busy}
+            style={{ ...btnA, width: '100%', opacity: busy ? 0.5 : 1 }}>
+            {busy ? 'Creating account…' : 'Create Account & Sign In'}
+          </button>
+        </form>
+      )}
+
+      {err && signupStep < 3 && <div style={{ fontSize: 9, color: RED, lineHeight: 1.5 }}>{err}</div>}
+      {signupStep < 3 && (
+        <button type="button" onClick={handleSignupNext} disabled={busy}
+          style={{ ...btnA, width: '100%', opacity: busy ? 0.5 : 1 }}>
+          Next →
+        </button>
+      )}
+      {signupStep > 1 && (
+        <button type="button" onClick={() => { setSignupStep(s => s - 1); setErr(''); }}
+          style={{ ...btnG, ...sm, alignSelf: 'flex-start' }}>
+          ← Back
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ── Dispatcher / Admin login / signup ───────────────────────────────────────
+
+function DispatcherFlow({ onSuccess }) {
+  const [step,        setStep]        = useState(1); // 1=code, 2=company name (admin only), 3=email+pw
+  const [code,        setCode]        = useState('');
+  const [codeResult,  setCodeResult]  = useState(null); // { valid, role, company_id }
+  const [companyName, setCompanyName] = useState('');
+  const [email,       setEmail]       = useState('');
+  const [password,    setPassword]    = useState('');
+  const [confirmPwd,  setConfirmPwd]  = useState('');
+  const [busy,        setBusy]        = useState(false);
+  const [err,         setErr]         = useState('');
+
+  const handleCodeSubmit = async e => {
+    e.preventDefault();
+    setErr('');
+    if (!code.trim()) { setErr('Enter your invite code.'); return; }
+    setBusy(true);
+    const { data: rows } = await supabase.rpc('validate_invite_code', { p_code: code.trim() });
+    setBusy(false);
+    const row = Array.isArray(rows) ? rows[0] : rows;
+    if (!row?.valid) { setErr('Invalid or already used invite code.'); return; }
+    setCodeResult(row);
+    // Admin with no company_id → needs to name their company
+    if (row.role === 'admin' && !row.company_id) {
+      setStep(2);
+    } else {
+      setStep(3);
+    }
+  };
+
+  const handleCompanyNext = e => {
+    e.preventDefault();
+    setErr('');
+    if (!companyName.trim()) { setErr('Enter your company name.'); return; }
+    setStep(3);
+  };
+
+  const handleSignup = async e => {
+    e.preventDefault();
+    setErr('');
+    if (!email.trim() || !/\S+@\S+\.\S+/.test(email)) { setErr('Enter a valid email address.'); return; }
+    if (password.length < 6)                           { setErr('Password must be at least 6 characters.'); return; }
+    if (password !== confirmPwd)                       { setErr('Passwords do not match.'); return; }
+
+    setBusy(true);
+
+    const { data: authData, error: authErr } = await supabase.auth.signUp({ email: email.trim(), password });
+    if (authErr) { setErr(authErr.message); setBusy(false); return; }
+    const userId = authData.user?.id;
+
+    if (codeResult.role === 'admin' && !codeResult.company_id) {
+      // Create company + profile in one call (security definer)
+      const { error: compErr } = await supabase.rpc('create_company_and_admin', { p_company_name: companyName.trim() });
+      if (compErr) { setErr(compErr.message); setBusy(false); return; }
+    } else {
+      // Insert dispatch/admin profile for existing company
+      if (userId) {
+        await supabase.from('user_profiles').insert({
+          id: userId,
+          company_id: codeResult.company_id,
+          role: codeResult.role,
+        });
+      }
+    }
+
+    await supabase.rpc('consume_invite_code', { p_code: code.trim(), p_used_by: email.trim() });
+
+    setBusy(false);
+    onSuccess();
+  };
+
+  return (
+    <>
+      {step === 1 && (
+        <form onSubmit={handleCodeSubmit} style={formStyle}>
+          <div>
+            <div style={labelStyle}>Dispatcher Invite Code</div>
+            <input type="text" value={code}
+              onChange={e => setCode(e.target.value.toUpperCase().replace(/\s/g, ''))}
+              placeholder="XXXXXX" autoFocus autoCapitalize="characters"
+              style={{ ...inputStyle, letterSpacing: '0.2em', fontSize: 16 }} />
+          </div>
+          {err && <div style={{ fontSize: 9, color: RED, lineHeight: 1.5 }}>{err}</div>}
+          <button type="submit" disabled={busy}
+            style={{ ...btnA, width: '100%', opacity: busy ? 0.5 : 1 }}>
+            {busy ? 'Checking…' : 'Continue →'}
+          </button>
+        </form>
+      )}
+      {step === 2 && (
+        <form onSubmit={handleCompanyNext} style={formStyle}>
+          <div style={{ fontSize: 8, color: '#5a8a5a', lineHeight: 1.6 }}>
+            Admin invite — enter your company name to create a new account.
+          </div>
+          <div>
+            <div style={labelStyle}>Company Name</div>
+            <input type="text" value={companyName} onChange={e => setCompanyName(e.target.value)}
+              placeholder="e.g. Smith Towing" autoFocus autoCapitalize="words" style={inputStyle} />
+          </div>
+          {err && <div style={{ fontSize: 9, color: RED, lineHeight: 1.5 }}>{err}</div>}
+          <button type="submit" disabled={busy}
+            style={{ ...btnA, width: '100%', opacity: busy ? 0.5 : 1 }}>
+            Next →
+          </button>
+        </form>
+      )}
+      {step === 3 && (
+        <form onSubmit={handleSignup} style={formStyle}>
+          <div style={{ fontSize: 8, color: '#5a8a5a', lineHeight: 1.6 }}>
+            {codeResult?.role === 'admin' ? `Admin — ${companyName || 'existing company'}` : 'Dispatcher account'}
+          </div>
+          <div>
+            <div style={labelStyle}>Email</div>
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+              placeholder="you@example.com" autoFocus style={inputStyle} />
+          </div>
+          <div>
+            <div style={labelStyle}>Password</div>
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+              placeholder="········" minLength={6} style={inputStyle} />
+          </div>
+          <div>
+            <div style={labelStyle}>Confirm Password</div>
+            <input type="password" value={confirmPwd} onChange={e => setConfirmPwd(e.target.value)}
+              placeholder="········" minLength={6} style={inputStyle} />
+          </div>
+          {err && <div style={{ fontSize: 9, color: RED, lineHeight: 1.5 }}>{err}</div>}
+          <button type="submit" disabled={busy}
+            style={{ ...btnA, width: '100%', opacity: busy ? 0.5 : 1 }}>
+            {busy ? 'Creating account…' : 'Create Account & Sign In'}
+          </button>
+          <button type="button" onClick={() => { setStep(codeResult?.role === 'admin' && !codeResult?.company_id ? 2 : 1); setErr(''); }}
+            style={{ ...btnG, ...sm, alignSelf: 'flex-start' }}>
+            ← Back
+          </button>
+        </form>
+      )}
+    </>
+  );
+}
+
+// ── Pending approval screen ─────────────────────────────────────────────────
+
+function PendingApproval({ plate, onSignOut }) {
+  return (
+    <div style={{ minHeight: '100vh', background: BG, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div style={{ maxWidth: 340, width: '100%', textAlign: 'center' }}>
+        <div style={{ fontSize: 32, marginBottom: 16 }}>⏳</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: TXT, marginBottom: 8, letterSpacing: '0.04em' }}>
+          Account Pending Approval
+        </div>
+        <div style={{ fontSize: 10, color: MUT, lineHeight: 1.8, marginBottom: 24 }}>
+          Your account for <span style={{ color: ACC }}>{plate}</span> has been created.<br />
+          Your dispatcher will review your licence and approve your access.
+        </div>
+        <button onClick={onSignOut} style={{ ...btnG, fontSize: 9 }}>Sign Out</button>
+      </div>
+    </div>
+  );
+}
+
+// ── Main App ─────────────────────────────────────────────────────────────────
+
+export default function App() {
+  const [session,           setSession]           = useState(null);
+  const [authChecked,       setAuthChecked]       = useState(false);
+  const [profile,           setProfile]           = useState(null); // user_profiles row
+  const [truck,             setTruck]             = useState(null); // tow_trucks row (drivers only)
+  const [companyConfig,     setCompanyConfig]     = useState({ company_name: 'TowBench', accent_color: '#e8670a', logo_url: null });
+  const [showGreeting,      setShowGreeting]      = useState(false);
+  const [greeting,          setGreeting]          = useState('');
+  const [showOrigin,        setShowOrigin]        = useState(false);
+  const [loginTab,          setLoginTab]          = useState('driver'); // 'driver' | 'dispatcher'
+  const logoClickRef = React.useRef({ count: 0, timer: null });
 
   const THEMES = ['', 'night', 'amber', 'green'];
   const THEME_ICONS  = { '': '◻', night: '🔴', amber: '🟠', green: '🟢' };
@@ -168,28 +543,81 @@ export default function App() {
     localStorage.setItem('towbench_theme', theme);
   }, [theme]);
 
-  // Register service worker for PWA installability
   useEffect(() => {
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(() => {});
-    }
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
   }, []);
 
-  // Company config: load once + subscribe to realtime changes
+  const loadUserData = async (userId, userEmail, welcome = false) => {
+    const [profileRes, truckRes] = await Promise.all([
+      supabase.from('user_profiles').select('*').eq('id', userId).single(),
+      supabase.from('tow_trucks').select('*').eq('auth_email', userEmail).maybeSingle(),
+    ]);
+    const prof = profileRes.data || null;
+    const tr   = truckRes.data || null;
+    setProfile(prof);
+    setTruck(tr);
+    if (welcome) {
+      const name = tr?.first_name || tr?.driver_name || userEmail.split('@')[0];
+      setGreeting(getGreeting(name));
+      setShowGreeting(true);
+      setTimeout(() => setShowGreeting(false), 3500);
+    }
+  };
+
   useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setAuthChecked(true);
+      if (session) loadUserData(session.user.id, session.user.email, false);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setSession(session);
+      if (session) {
+        const greetKey = `towbench_greeted_${session.user.id}`;
+        const firstSignIn = event === 'SIGNED_IN' && !sessionStorage.getItem(greetKey);
+        if (firstSignIn) sessionStorage.setItem(greetKey, '1');
+        loadUserData(session.user.id, session.user.email, firstSignIn);
+        if (event === 'SIGNED_IN') requestGPS();
+      } else {
+        setProfile(null);
+        setTruck(null);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Company config: load by company_id once profile is known, subscribe to changes
+  useEffect(() => {
+    if (!profile?.company_id) return;
     const applyConfig = cfg => {
       setCompanyConfig(cfg);
       if (cfg.accent_color) document.documentElement.style.setProperty('--acc', cfg.accent_color);
     };
-    supabase.from('company_config').select('*').limit(1).single()
+    supabase.from('company_config').select('*').eq('company_id', profile.company_id).single()
       .then(({ data }) => { if (data) applyConfig(data); })
       .catch(() => {});
     const chan = supabase.channel('company_config_changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'company_config' },
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'company_config',
+          filter: `company_id=eq.${profile.company_id}` },
           payload => { if (payload.new) applyConfig(payload.new); })
       .subscribe();
     return () => supabase.removeChannel(chan);
-  }, []);
+  }, [profile?.company_id]);
+
+  const signOut = () => {
+    if (session?.user?.id) sessionStorage.removeItem(`towbench_greeted_${session.user.id}`);
+    supabase.auth.signOut();
+    setProfile(null); setTruck(null);
+  };
+
+  const role        = profile?.role || null;
+  const isAdmin     = role === 'admin' || role === 'super_admin';
+  const isDispatch  = role === 'dispatch' || isAdmin;
+  const displayName = truck?.first_name
+    ? `${truck.first_name} ${truck.last_name || ''}`.trim()
+    : session?.user?.email?.split('@')[0] || '';
+  const displayPlate = truck?.plate?.toUpperCase() || '';
+  const isPendingApproval = role === 'driver' && truck && !truck.approved;
 
   if (!authChecked) {
     return (
@@ -202,9 +630,6 @@ export default function App() {
   }
 
   if (!session) {
-    const inputStyle = { background: '#0a0a0a', border: '1px solid #252525', color: TXT, fontFamily: "'IBM Plex Mono',monospace", fontSize: 14, padding: '9px 10px', borderRadius: 2, width: '100%', outline: 'none', boxSizing: 'border-box' };
-    const formStyle  = { background: SURF, border: '1px solid ' + BRD, borderTop: '2px solid ' + ACC, borderRadius: 3, padding: 20, display: 'flex', flexDirection: 'column', gap: 12 };
-    const labelStyle = { fontSize: 9, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 };
     return (
       <div style={{ minHeight: '100vh', background: BG, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
         <div style={{ width: '100%', maxWidth: 340 }}>
@@ -217,105 +642,25 @@ export default function App() {
             </div>
           </div>
 
-          {step === 1 ? (
-            <form onSubmit={handlePlateSubmit} style={formStyle}>
-              <div>
-                <div style={labelStyle}>Truck Number Plate</div>
-                <input
-                  type="text"
-                  value={plate}
-                  onChange={e => setPlate(e.target.value.toUpperCase())}
-                  placeholder="TOW933"
-                  required
-                  autoFocus
-                  autoCapitalize="characters"
-                  style={{ ...inputStyle, fontSize: 18, letterSpacing: '0.18em', textTransform: 'uppercase' }}
-                />
-              </div>
-              {loginErr && <div style={{ fontSize: 9, color: RED, lineHeight: 1.5 }}>{loginErr}</div>}
-              <button type="submit" disabled={loggingIn}
-                style={{ ...btnA, width: '100%', opacity: loggingIn ? 0.5 : 1, marginTop: 4 }}>
-                {loggingIn ? 'Checking…' : 'Continue →'}
+          {/* Login tab switcher */}
+          <div style={{ display: 'flex', marginBottom: 16, border: '1px solid ' + BRD, borderRadius: 2, overflow: 'hidden' }}>
+            {['driver', 'dispatcher'].map(t => (
+              <button key={t} onClick={() => setLoginTab(t)}
+                style={{ flex: 1, padding: '8px 0', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em',
+                  textTransform: 'uppercase', cursor: 'pointer', border: 'none',
+                  fontFamily: "'IBM Plex Mono',monospace",
+                  background: loginTab === t ? ACC + '22' : 'transparent',
+                  color: loginTab === t ? ACC : MUT,
+                  borderBottom: loginTab === t ? `2px solid ${ACC}` : '2px solid transparent' }}>
+                {t === 'driver' ? '🚛 Driver' : '📋 Dispatcher'}
               </button>
-            </form>
-          ) : (
-            <form onSubmit={handlePasswordSubmit} style={formStyle}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: 13, color: ACC, fontWeight: 700, letterSpacing: '0.14em' }}>
-                  {normalizePlate(plate) || plate}
-                </span>
-                <button type="button"
-                  onClick={() => { setStep(1); setLoginErr(''); setEmail(''); setAccessCode(''); setPassword(''); setConfirmPwd(''); setDriverName(''); setRequestSent(false); }}
-                  style={{ fontSize: 8, color: MUT, background: 'none', border: 'none', cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace" }}>
-                  ← change
-                </button>
-              </div>
+            ))}
+          </div>
 
-              {!truckInfo?.registered ? (
-                <>
-                  <div style={{ fontSize: 8, color: '#5a8a5a', lineHeight: 1.6 }}>
-                    First login — enter your details and choose a password.
-                  </div>
-                  <div>
-                    <div style={labelStyle}>Email</div>
-                    <input type="email" value={email} onChange={e => setEmail(e.target.value)}
-                      placeholder="you@example.com" required autoFocus style={inputStyle} />
-                  </div>
-                  {!truckInfo?.is_admin && (
-                    <div>
-                      <div style={labelStyle}>Access Code</div>
-                      <input type="text" value={accessCode}
-                        onChange={e => setAccessCode(e.target.value.toUpperCase().replace(/\s/g, ''))}
-                        placeholder="XXXXXX" required autoCapitalize="characters"
-                        style={{ ...inputStyle, letterSpacing: '0.2em', fontSize: 16 }} />
-                      <div style={{ marginTop: 6, fontSize: 8, color: MUT, textAlign: 'right' }}>
-                        {requestSent ? (
-                          <span style={{ color: '#5a8a5a' }}>✓ Request sent — your admin will share a code with you.</span>
-                        ) : (
-                          <>
-                            Don&apos;t have one?{' '}
-                            <button type="button" onClick={handleRequestAccess} disabled={requesting}
-                              style={{ background: 'none', border: 'none', color: ACC, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", fontSize: 8, padding: 0, textDecoration: 'underline', opacity: requesting ? 0.5 : 1 }}>
-                              {requesting ? 'Sending…' : 'Request one from admin'}
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                  <div>
-                    <div style={labelStyle}>Your Name</div>
-                    <input type="text" value={driverName} onChange={e => setDriverName(e.target.value)}
-                      placeholder="e.g. Alex" required autoCapitalize="words" style={inputStyle} />
-                  </div>
-                  <div>
-                    <div style={labelStyle}>Password</div>
-                    <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-                      placeholder="········" required minLength={6} style={inputStyle} />
-                  </div>
-                  <div>
-                    <div style={labelStyle}>Confirm Password</div>
-                    <input type="password" value={confirmPwd} onChange={e => setConfirmPwd(e.target.value)}
-                      placeholder="········" required minLength={6} style={inputStyle} />
-                  </div>
-                </>
-              ) : (
-                <div>
-                  <div style={labelStyle}>Password</div>
-                  <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-                    placeholder="········" required autoFocus minLength={6} style={inputStyle} />
-                </div>
-              )}
-
-              {loginErr && <div style={{ fontSize: 9, color: RED, lineHeight: 1.5 }}>{loginErr}</div>}
-              <button type="submit" disabled={loggingIn}
-                style={{ ...btnA, width: '100%', opacity: loggingIn ? 0.5 : 1, marginTop: 4 }}>
-                {loggingIn
-                  ? (truckInfo?.registered ? 'Signing in…' : 'Creating account…')
-                  : (truckInfo?.registered ? 'Sign In' : 'Create Account & Sign In')}
-              </button>
-            </form>
-          )}
+          {loginTab === 'driver'
+            ? <DriverFlow onSuccess={() => {}} />
+            : <DispatcherFlow onSuccess={() => {}} />
+          }
         </div>
       </div>
     );
@@ -331,12 +676,18 @@ export default function App() {
           <div style={{ fontSize: 26, fontWeight: 700, color: TXT, letterSpacing: '0.02em', fontFamily: "'IBM Plex Mono',monospace" }}>
             {greeting}
           </div>
-          <div style={{ fontSize: 9, color: MUT, marginTop: 10, letterSpacing: '0.16em', textTransform: 'uppercase' }}>
-            {displayPlate}{isAdmin ? ' · Admin' : ''}
-          </div>
+          {displayPlate && (
+            <div style={{ fontSize: 9, color: MUT, marginTop: 10, letterSpacing: '0.16em', textTransform: 'uppercase' }}>
+              {displayPlate}{isAdmin ? ' · Admin' : isDispatch ? ' · Dispatch' : ''}
+            </div>
+          )}
         </div>
       </div>
     );
+  }
+
+  if (isPendingApproval) {
+    return <PendingApproval plate={displayPlate || session.user.email} onSignOut={signOut} />;
   }
 
   return (
@@ -358,20 +709,16 @@ export default function App() {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ fontSize: 10, color: TXT, fontWeight: 700, letterSpacing: '0.12em' }}>
-              {displayPlate}
-            </span>
-            {driverDisplayName && (
-              <span style={{ fontSize: 9, color: MUT }}>· {driverDisplayName}</span>
-            )}
-            {isAdmin && (
-              <span style={{ fontSize: 7, fontWeight: 700, letterSpacing: '0.1em', padding: '1px 5px', border: `1px solid ${ACC}55`, borderRadius: 2, color: ACC, background: ACC + '15', textTransform: 'uppercase' }}>
-                Admin
+            {displayPlate && <span style={{ fontSize: 10, color: TXT, fontWeight: 700, letterSpacing: '0.12em' }}>{displayPlate}</span>}
+            {displayName && <span style={{ fontSize: 9, color: MUT }}>· {displayName}</span>}
+            {role && (
+              <span style={{ fontSize: 7, fontWeight: 700, letterSpacing: '0.1em', padding: '1px 5px',
+                border: `1px solid ${ACC}55`, borderRadius: 2, color: ACC, background: ACC + '15', textTransform: 'uppercase' }}>
+                {role === 'super_admin' ? 'Super Admin' : role}
               </span>
             )}
           </div>
-          <button
-            onClick={() => setTheme(t => THEMES[(THEMES.indexOf(t) + 1) % THEMES.length])}
+          <button onClick={() => setTheme(t => THEMES[(THEMES.indexOf(t) + 1) % THEMES.length])}
             title={`Theme: ${THEME_LABELS[theme]} — click to cycle`}
             style={{ ...btnG, ...sm, fontSize: 10, padding: '3px 8px', letterSpacing: 0 }}>
             {THEME_ICONS[theme]}
@@ -381,7 +728,12 @@ export default function App() {
       </div>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <ThemeContext.Provider value={theme}>
-          <TowingSection isAdmin={isAdmin} userEmail={session?.user?.email} companyConfig={companyConfig} setCompanyConfig={setCompanyConfig} />
+          <TowingSection
+            role={role} isAdmin={isAdmin} isDispatch={isDispatch}
+            userEmail={session?.user?.email}
+            companyId={profile?.company_id}
+            companyConfig={companyConfig} setCompanyConfig={setCompanyConfig}
+          />
         </ThemeContext.Provider>
       </div>
 

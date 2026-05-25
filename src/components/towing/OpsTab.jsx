@@ -133,7 +133,22 @@ function AllocationInfoCard({ feature, acceptedJob, isLive, userEmail, userPos, 
   );
 }
 
-export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, countdown, isStale, acceptedJobs, userEmail, onAcceptJob, onReleaseJob }) {
+function calcPrice(distKm, cfg) {
+  if (!cfg || !cfg.base_fee) return null;
+  const now = new Date();
+  const day  = now.getDay();
+  const isWE = day === 0 || day === 6;
+  const t    = now.toTimeString().slice(0, 5);
+  const start = isWE ? (cfg.after_hours_start_weekend ?? '18:00') : (cfg.after_hours_start_weekday ?? '18:00');
+  const end   = isWE ? (cfg.after_hours_end_weekend   ?? '06:00') : (cfg.after_hours_end_weekday   ?? '06:00');
+  const afterHours = t >= start || t < end;
+  const total = (parseFloat(cfg.base_fee) || 0)
+              + distKm * (parseFloat(cfg.per_km_fee) || 0)
+              + (afterHours ? (parseFloat(cfg.after_hours_fee) || 0) : 0);
+  return total.toFixed(2);
+}
+
+export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, countdown, isStale, acceptedJobs, userEmail, onAcceptJob, onReleaseJob, companyConfig }) {
   useDriverLocation(userEmail);
   const { rainSoon, maxProb, hoursUntil } = useWeather();
 
@@ -423,11 +438,14 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
           }}
           color="#cc2222" label="🔴 Trace" />
 
-        {routeInfo && showTrace && (
-          <span style={{ fontSize: 8, color: '#cc4444', border: '1px solid #cc222255', borderRadius: 2, padding: '2px 7px', fontFamily: "'IBM Plex Mono',monospace", fontWeight: 700, flexShrink: 0 }}>
-            📍 {routeInfo.distKm.toFixed(1)}km{routeInfo.durationMin != null ? ` · ~${routeInfo.durationMin}min` : ' straight'}
-          </span>
-        )}
+        {routeInfo && showTrace && (() => {
+          const price = calcPrice(routeInfo.distKm, companyConfig);
+          return (
+            <span style={{ fontSize: 8, color: '#cc4444', border: '1px solid #cc222255', borderRadius: 2, padding: '2px 7px', fontFamily: "'IBM Plex Mono',monospace", fontWeight: 700, flexShrink: 0 }}>
+              📍 {routeInfo.distKm.toFixed(1)}km{routeInfo.durationMin != null ? ` · ~${routeInfo.durationMin}min` : ' straight'}{price ? ` · $${price}` : ''}
+            </span>
+          );
+        })()}
 
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
           {rainSoon && (
