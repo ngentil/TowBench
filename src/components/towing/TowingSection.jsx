@@ -13,7 +13,7 @@ const POLL_MS = 60_000;
 
 const BASE_TABS = [
   { id: 'allocations', label: '🚦 Tow Allocations' },
-  { id: 'ops',         label: '🖥 Command Centre' },
+  { id: 'ops',         label: '🗺 Map' },
   { id: 'analytics',   label: '📊 Analytics' },
   { id: 'fleet',       label: '🚛 Fleet' },
 ];
