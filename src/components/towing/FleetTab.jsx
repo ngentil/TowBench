@@ -237,7 +237,7 @@ function AvailabilityModal({ truck, onSave, onCancel }) {
   );
 }
 
-export default function FleetTab({ isAdmin }) {
+export default function FleetTab({ isAdmin, companyId }) {
   const [depots,  setDepots]  = useState([]);
   const [trucks,  setTrucks]  = useState([]);
   const [loading, setLoading] = useState(true);
@@ -257,7 +257,7 @@ export default function FleetTab({ isAdmin }) {
   useEffect(() => { load(); }, [load]);
 
   const handleSaveDepot = async (depot) => {
-    const saved = await upsertDepot(depot);
+    const saved = await upsertDepot(!depot.id ? { ...depot, company_id: companyId } : depot);
     setDepots(prev => { const idx = prev.findIndex(d => d.id === saved.id); return idx >= 0 ? prev.map(d => d.id === saved.id ? saved : d) : [...prev, saved]; });
     setDepotForm(null);
   };
@@ -270,7 +270,7 @@ export default function FleetTab({ isAdmin }) {
   };
 
   const handleSaveTruck = async (truck) => {
-    const saved = await upsertTruck(truck);
+    const saved = await upsertTruck(!truck.id ? { ...truck, company_id: companyId } : truck);
     setTrucks(prev => { const idx = prev.findIndex(t => t.id === saved.id); return idx >= 0 ? prev.map(t => t.id === saved.id ? saved : t) : [...prev, saved]; });
     setTruckForm(null);
   };
