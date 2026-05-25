@@ -11,12 +11,12 @@ const row = (label, children) => (
 
 const numInp = (value, onChange, placeholder = '0.00') => (
   <input type="number" min="0" step="0.01" value={value} onChange={onChange} placeholder={placeholder}
-    style={{ ...inp, width: 120 }} />
+    style={{ ...inp, width: '100%', boxSizing: 'border-box' }} />
 );
 
 const timeInp = (value, onChange) => (
   <input type="time" value={value} onChange={onChange}
-    style={{ ...inp, width: 120, fontFamily: "'IBM Plex Mono',monospace" }} />
+    style={{ ...inp, width: '100%', boxSizing: 'border-box', fontFamily: "'IBM Plex Mono',monospace" }} />
 );
 
 export default function AdminSettings({ companyConfig, setCompanyConfig, companyId }) {
