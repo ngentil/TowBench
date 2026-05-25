@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 import { ACC, MUT, BRD, TXT, GRN, RED, SURF, inp, sel, txa, btnA, btnG, btnD, sm, ovly, mdl, mdlH, mdlB, mdlF } from '../../lib/styles';
+import { Highlight } from '../ui/shared';
 
 const FL = ({ t }) => (
   <div style={{ fontSize: 8, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}>{t}</div>
@@ -209,7 +210,7 @@ function TowInForm({ record, depots, userEmail, companyId, onSave, onCancel }) {
   );
 }
 
-function TowInCard({ record, depots, isDispatch, onEdit, onRelease }) {
+function TowInCard({ record, depots, isDispatch, onEdit, onRelease, searchTerm }) {
   const [open, setOpen] = useState(false);
   const depot   = depots.find(d => d.id === record.depot_id);
   const days    = daysIn(record.date_in, record.date_out);
@@ -224,10 +225,10 @@ function TowInCard({ record, depots, isDispatch, onEdit, onRelease }) {
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 12, fontWeight: 700, color: TXT, letterSpacing: '0.1em' }}>
-              {record.plate}
+              <Highlight text={record.plate} term={searchTerm} />
             </span>
             {record.make_model && (
-              <span style={{ fontSize: 9, color: MUT }}>{record.make_model}</span>
+              <span style={{ fontSize: 9, color: MUT }}><Highlight text={record.make_model} term={searchTerm} /></span>
             )}
             <span style={{ fontSize: 7, fontWeight: 700, letterSpacing: '0.08em', padding: '1px 5px',
               border: `1px solid ${released ? '#333' : ACC + '55'}`, borderRadius: 2,
@@ -304,7 +305,7 @@ function TowInCard({ record, depots, isDispatch, onEdit, onRelease }) {
           )}
           {record.notes && (
             <div style={{ marginTop: 10, background: '#0a0a0a', border: '1px solid #1a1a1a', borderRadius: 2, padding: '8px 10px', fontSize: 10, color: MUT, lineHeight: 1.6 }}>
-              {record.notes}
+              <Highlight text={record.notes} term={searchTerm} />
             </div>
           )}
         </div>
@@ -445,7 +446,7 @@ export default function TowInsTab({ companyId, userEmail, isDispatch }) {
                   </div>
                   {yardRecs.map(r => (
                     <TowInCard key={r.id} record={r} depots={depots} isDispatch={isDispatch}
-                      onEdit={setEditRecord} onRelease={handleRelease} />
+                      onEdit={setEditRecord} onRelease={handleRelease} searchTerm={search.trim()} />
                   ))}
                 </div>
               );
