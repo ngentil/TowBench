@@ -8,6 +8,28 @@ import { timeIn, fmtTimer, fmtShort, haversineKm } from '../../lib/utils';
 
 const ORANGE = '#e8870a';
 
+function Highlight({ text, term }) {
+  if (!term || !text) return <>{text || ''}</>;
+  const str = String(text);
+  const lstr = str.toLowerCase();
+  const lterm = term.toLowerCase();
+  const parts = [];
+  let last = 0;
+  let idx = lstr.indexOf(lterm, last);
+  while (idx !== -1) {
+    if (idx > last) parts.push(str.slice(last, idx));
+    parts.push(
+      <mark key={idx} style={{ background: '#c8a84b44', color: '#c8a84b', borderRadius: 1, padding: '0 1px' }}>
+        {str.slice(idx, idx + term.length)}
+      </mark>
+    );
+    last = idx + term.length;
+    idx = lstr.indexOf(lterm, last);
+  }
+  if (last < str.length) parts.push(str.slice(last));
+  return <>{parts}</>;
+}
+
 const suburb = f => f.properties?.reference?.startIntersectionLocality || '';
 
 const SORT_OPTIONS = [
@@ -45,7 +67,7 @@ function StatusBadge({ live }) {
   );
 }
 
-function AllocationCard({ feature, fromLog, userPos, nearbyKm, acceptedJob, userEmail, onAccept, onRelease, handoverNote, onAddNote }) {
+function AllocationCard({ feature, fromLog, userPos, nearbyKm, acceptedJob, userEmail, onAccept, onRelease, handoverNote, onAddNote, searchTerm }) {
   const [open, setOpen]           = useState(false);
   const [noteInput, setNoteInput] = useState('');
   const [showNoteBox, setShowNoteBox] = useState(false);
@@ -90,7 +112,7 @@ function AllocationCard({ feature, fromLog, userPos, nearbyKm, acceptedJob, user
         <span style={{ fontSize: 16, flexShrink: 0 }}>🚛</span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: TXT }}>{road}</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: TXT }}><Highlight text={road} term={searchTerm} /></span>
             <StatusBadge live={isLive} />
             {subType && (
               <span style={{ fontSize: 7, fontWeight: 700, letterSpacing: '0.08em', padding: '1px 5px', border: '1px solid #3a3a2a', borderRadius: 2, color: '#c8a84b', background: '#c8a84b11', textTransform: 'uppercase' }}>
@@ -99,10 +121,10 @@ function AllocationCard({ feature, fromLog, userPos, nearbyKm, acceptedJob, user
             )}
           </div>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 2, flexWrap: 'wrap' }}>
-            {sub && <span style={{ fontSize: 8, color: MUT }}>{sub}</span>}
-            {crossSt && <><span style={{ fontSize: 8, color: '#333' }}>@</span><span style={{ fontSize: 8, color: MUT }}>{crossSt}</span></>}
+            {sub && <span style={{ fontSize: 8, color: MUT }}><Highlight text={sub} term={searchTerm} /></span>}
+            {crossSt && <><span style={{ fontSize: 8, color: '#333' }}>@</span><span style={{ fontSize: 8, color: MUT }}><Highlight text={crossSt} term={searchTerm} /></span></>}
             {(sub || crossSt) && <span style={{ fontSize: 8, color: '#333' }}>·</span>}
-            <span style={{ fontSize: 8, color: ACC, fontFamily: "'IBM Plex Mono',monospace" }}>#{eventId}</span>
+            <span style={{ fontSize: 8, color: ACC, fontFamily: "'IBM Plex Mono',monospace" }}>#<Highlight text={String(eventId)} term={searchTerm} /></span>
           </div>
           {!open && (
             <div style={{ marginTop: 3, display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -167,7 +189,7 @@ function AllocationCard({ feature, fromLog, userPos, nearbyKm, acceptedJob, user
           )}
           {desc && (
             <div style={{ marginTop: 10, fontSize: 10, color: MUT, lineHeight: 1.6, background: '#0a0a0a', padding: '6px 8px', borderRadius: 2, border: '1px solid #1a1a1a' }}>
-              {desc}
+              <Highlight text={desc} term={searchTerm} />
             </div>
           )}
           <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
@@ -614,7 +636,8 @@ export default function TowAllocationsTab({ allFeatures, liveIds, loading, err, 
             <AllocationCard key={f.properties?.eventId || i} feature={f} fromLog={false} userPos={userPos} nearbyKm={nearbyKm}
               acceptedJob={acceptedJobs?.get(String(f.properties?.eventId))} userEmail={userEmail}
               onAccept={onAcceptJob} onRelease={onReleaseJob}
-              handoverNote={handoverNotes.get(String(f.properties?.eventId))} onAddNote={addHandoverNote} />
+              handoverNote={handoverNotes.get(String(f.properties?.eventId))} onAddNote={addHandoverNote}
+              searchTerm={searchTerm.trim()} />
           ))}
           {statusFilter === 'all' && cleared.length > 0 && <div style={{ marginTop: 12 }} />}
         </>
@@ -627,7 +650,8 @@ export default function TowAllocationsTab({ allFeatures, liveIds, loading, err, 
           {cleared.map((f, i) => (
             <AllocationCard key={f.properties?.eventId || i} feature={f} fromLog={true} userPos={userPos} nearbyKm={nearbyKm}
               acceptedJob={null} userEmail={userEmail} onAccept={null} onRelease={null}
-              handoverNote={handoverNotes.get(String(f.properties?.eventId))} onAddNote={addHandoverNote} />
+              handoverNote={handoverNotes.get(String(f.properties?.eventId))} onAddNote={addHandoverNote}
+              searchTerm={searchTerm.trim()} />
           ))}
         </>
       )}
