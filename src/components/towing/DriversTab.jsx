@@ -5,6 +5,7 @@ import {
   inp, txa, btnA, btnG, sm, ovly, mdl, mdlH, mdlB, mdlF,
 } from '../../lib/styles';
 import { Highlight } from '../ui/shared';
+import { RosterCalendar } from './RosterCalendar';
 
 const FL = ({ t }) => (
   <div style={{ fontSize: 8, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}>{t}</div>
@@ -26,6 +27,7 @@ function DriverEditModal({ truck, depots, onSave, onCancel }) {
   const [depotId,    setDepotId]    = useState(truck.depot_id     || '');
   const [status,     setStatus]     = useState(truck.status       || 'available');
   const [notes,      setNotes]      = useState(truck.notes        || '');
+  const [schedule,   setSchedule]   = useState(truck.schedule     || {});
   const [saving,     setSaving]     = useState(false);
   const [err,        setErr]        = useState('');
 
@@ -39,6 +41,7 @@ function DriverEditModal({ truck, depots, onSave, onCancel }) {
         depot_id:   depotId          || null,
         status,
         notes:      notes.trim()     || null,
+        schedule,
       })
       .eq('id', truck.id)
       .select('*, depot:depots(id,name,suburb)')
@@ -91,6 +94,10 @@ function DriverEditModal({ truck, depots, onSave, onCancel }) {
           <div>
             <FL t="Notes" />
             <textarea style={{ ...txa, ...inp }} value={notes} onChange={e => setNotes(e.target.value)} />
+          </div>
+          <div style={{ borderTop: '1px solid #1a1a1a', paddingTop: 12 }}>
+            <FL t="Availability Roster" />
+            <RosterCalendar value={schedule} onChange={setSchedule} />
           </div>
           {err && <div style={{ fontSize: 9, color: RED }}>{err}</div>}
         </div>

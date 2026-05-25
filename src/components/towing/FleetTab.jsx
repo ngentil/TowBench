@@ -80,7 +80,6 @@ function TruckForm({ truck, depots, onSave, onCancel }) {
   const [depotId,    setDepotId]    = useState(truck?.depot_id    || (depots[0]?.id || ''));
   const [status,     setStatus]     = useState(truck?.status      || 'available');
   const [notes,      setNotes]      = useState(truck?.notes       || '');
-  const [schedule,   setSchedule]   = useState(truck?.schedule    || {});
   const [saving,     setSaving]     = useState(false);
   const [err,        setErr]        = useState('');
 
@@ -99,7 +98,6 @@ function TruckForm({ truck, depots, onSave, onCancel }) {
         depot_id:    depotId,
         status,
         notes:       notes.trim() || null,
-        schedule,
       });
     } catch (e) { setErr(e.message); }
     setSaving(false);
@@ -121,10 +119,6 @@ function TruckForm({ truck, depots, onSave, onCancel }) {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div><FL t="Depot *" /><select style={{ ...sel, width: '100%' }} value={depotId} onChange={e => setDepotId(e.target.value)}><option value="">— select depot —</option>{depots.map(d => <option key={d.id} value={d.id}>{d.name}{d.suburb ? ` — ${d.suburb}` : ''}</option>)}</select></div>
             <div><FL t="Status" /><select style={{ ...sel, width: '100%' }} value={status} onChange={e => setStatus(e.target.value)}>{STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
-          </div>
-          <div style={{ borderTop: '1px solid #1a1a1a', paddingTop: 10 }}>
-            <div style={{ fontSize: 8, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 6 }}>Availability Roster</div>
-            <RosterCalendar value={schedule} onChange={setSchedule} />
           </div>
           <div><FL t="Notes" /><textarea style={{ ...txa, minHeight: 56 }} value={notes} onChange={e => setNotes(e.target.value)} placeholder="e.g. Every second weekend on call day and night…" /></div>
           {err && <div style={{ fontSize: 9, color: RED }}>{err}</div>}
