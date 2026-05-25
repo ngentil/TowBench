@@ -6,13 +6,15 @@ import { logAllocations, markAllocationsCleared, getRecentAllocations } from '..
 import { supabase } from '../../lib/supabase';
 import AdminSettings from '../admin/AdminSettings';
 import OpsTab from './OpsTab';
+import TowAnalyticsTab from './TowAnalyticsTab';
 import { VICROADS_URL, VICROADS_KEY } from '../../lib/constants';
 
 const POLL_MS = 60_000;
 
 const BASE_TABS = [
   { id: 'allocations', label: '🚦 Tow Allocations' },
-  { id: 'ops',         label: '🖥 Command Centre' },
+  { id: 'ops',         label: '🖵 Command Centre' },
+  { id: 'analytics',   label: '📊 Analytics' },
   { id: 'fleet',       label: '🚛 Fleet' },
 ];
 
@@ -20,13 +22,11 @@ export default function TowingSection({ isAdmin, userEmail, companyConfig, setCo
   const TABS = isAdmin ? [...BASE_TABS, { id: 'settings', label: '⚙ Settings' }] : BASE_TABS;
   const [tab, setTab] = useState('allocations');
 
-  // Redirect stale tab state (e.g. 'analytics') that no longer exists in BASE_TABS
   useEffect(() => {
     const ids = TABS.map(t => t.id);
-    if (!ids.includes(tab)) setTab('ops');
+    if (!ids.includes(tab)) setTab('allocations');
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Shared allocation state ───────────────────────────────────────────────────────────────────────────────
   const [allFeatures,  setAllFeatures]  = useState([]);
   const [liveIds,      setLiveIds]      = useState(new Set());
   const [loading,      setLoading]      = useState(true);
@@ -151,6 +151,9 @@ export default function TowingSection({ isAdmin, userEmail, companyConfig, setCo
             acceptedJobs={acceptedJobs} userEmail={userEmail}
             onAcceptJob={onAcceptJob} onReleaseJob={onReleaseJob}
           />
+        )}
+        {tab === 'analytics' && (
+          <TowAnalyticsTab allFeatures={allFeatures} liveIds={liveIds} loading={loading} userEmail={userEmail} />
         )}
         {tab === 'fleet' && <FleetTab isAdmin={isAdmin} />}
         {tab === 'settings' && isAdmin && <AdminSettings companyConfig={companyConfig} setCompanyConfig={setCompanyConfig} />}
