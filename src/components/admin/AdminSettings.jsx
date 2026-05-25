@@ -11,12 +11,12 @@ const row = (label, children) => (
 
 const numInp = (value, onChange, placeholder = '0.00') => (
   <input type="number" min="0" step="0.01" value={value} onChange={onChange} placeholder={placeholder}
-    style={{ ...inp, width: 120 }} />
+    style={{ ...inp, width: '100%', boxSizing: 'border-box' }} />
 );
 
 const timeInp = (value, onChange) => (
   <input type="time" value={value} onChange={onChange}
-    style={{ ...inp, width: 120, fontFamily: "'IBM Plex Mono',monospace" }} />
+    style={{ ...inp, width: '100%', boxSizing: 'border-box', fontFamily: "'IBM Plex Mono',monospace" }} />
 );
 
 export default function AdminSettings({ companyConfig, setCompanyConfig, companyId }) {
@@ -35,6 +35,10 @@ export default function AdminSettings({ companyConfig, setCompanyConfig, company
   const [ahEndWD,    setAhEndWD]    = useState(companyConfig.after_hours_end_weekday   ?? '06:00');
   const [ahStartWE,  setAhStartWE]  = useState(companyConfig.after_hours_start_weekend ?? '18:00');
   const [ahEndWE,    setAhEndWE]    = useState(companyConfig.after_hours_end_weekend   ?? '06:00');
+  const [storageCarCover,  setStorageCarCover]  = useState(String(companyConfig.storage_car_undercover  ?? '0'));
+  const [storageBikeCover, setStoageBikeCover] = useState(String(companyConfig.storage_bike_undercover ?? '0'));
+  const [storageCarYard,   setStorageCarYard]   = useState(String(companyConfig.storage_car_yard        ?? '0'));
+  const [storageBikeYard,  setStorageBikeYard]  = useState(String(companyConfig.storage_bike_yard       ?? '0'));
   const [priceSaving, setPriceSaving] = useState(false);
   const [priceSaved,  setPriceSaved]  = useState(false);
 
@@ -82,6 +86,10 @@ export default function AdminSettings({ companyConfig, setCompanyConfig, company
       after_hours_end_weekday:   ahEndWD,
       after_hours_start_weekend: ahStartWE,
       after_hours_end_weekend:   ahEndWE,
+      storage_car_undercover:    parseFloat(storageCarCover)  || 0,
+      storage_bike_undercover:   parseFloat(storageBikeCover) || 0,
+      storage_car_yard:          parseFloat(storageCarYard)   || 0,
+      storage_bike_yard:         parseFloat(storageBikeYard)  || 0,
       updated_at: new Date().toISOString(),
     };
     const { data, error } = await supabase.from('company_config')
@@ -182,6 +190,25 @@ export default function AdminSettings({ companyConfig, setCompanyConfig, company
         </div>
         <div style={{ fontSize: 8, color: MUT, marginBottom: 14, lineHeight: 1.6 }}>
           After-hours spans midnight — any time ≥ start OR &lt; end counts.
+        </div>
+        <div style={{ fontSize: 8, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 10, marginTop: 4 }}>Storage ($ per day)</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+          <div>
+            <div style={{ fontSize: 8, color: MUT, marginBottom: 5 }}>Motor car, under cover</div>
+            {numInp(storageCarCover, e => setStorageCarCover(e.target.value))}
+          </div>
+          <div>
+            <div style={{ fontSize: 8, color: MUT, marginBottom: 5 }}>Motor cycle, under cover</div>
+            {numInp(storageBikeCover, e => setStoageBikeCover(e.target.value))}
+          </div>
+          <div>
+            <div style={{ fontSize: 8, color: MUT, marginBottom: 5 }}>Motor car, locked yard</div>
+            {numInp(storageCarYard, e => setStorageCarYard(e.target.value))}
+          </div>
+          <div>
+            <div style={{ fontSize: 8, color: MUT, marginBottom: 5 }}>Motor cycle, locked yard</div>
+            {numInp(storageBikeYard, e => setStorageBikeYard(e.target.value))}
+          </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button onClick={savePricing} disabled={priceSaving}
