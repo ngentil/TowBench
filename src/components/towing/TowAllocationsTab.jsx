@@ -67,12 +67,87 @@ function StatusBadge({ live }) {
   );
 }
 
-function AllocationCard({ feature, fromLog, userPos, nearbyKm, acceptedJob, userEmail, onAccept, onRelease, handoverNotes, onAddNote, onEditNote, searchTerm }) {
+// DA PIN modal for accepting a job
+function DaPinModal({ onConfirm, onCancel, busy, err }) {
+  const [pin, setPin] = useState('');
+  return (
+    <div onClick={e => e.stopPropagation()}
+      style={{ position: 'fixed', inset: 0, background: '#000000cc', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div style={{ background: '#111', border: '1px solid #2a2a2a', borderTop: `2px solid ${ACC}`, borderRadius: 3, padding: '20px 24px', maxWidth: 300, width: '100%', fontFamily: "'IBM Plex Mono',monospace" }}>
+        <div style={{ fontSize: 10, color: MUT, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 14 }}>Confirm DA</div>
+        <div style={{ fontSize: 9, color: MUT, marginBottom: 12, lineHeight: 1.6 }}>Enter the last 4 digits of your DA number to accept this job</div>
+        <input type="text" inputMode="numeric" maxLength={4}
+          value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+          placeholder="_ _ _ _" autoFocus
+          style={{ background: '#0a0a0a', border: `1px solid ${err ? '#cc2222' : '#333'}`, color: TXT,
+            fontFamily: "'IBM Plex Mono',monospace", fontSize: 20, letterSpacing: '0.5em',
+            padding: '8px 12px', borderRadius: 2, width: '100%', outline: 'none', boxSizing: 'border-box', textAlign: 'center' }} />
+        {err && <div style={{ fontSize: 8, color: '#cc4444', marginTop: 6 }}>{err}</div>}
+        <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+          <button onClick={() => onConfirm(pin)} disabled={busy || pin.length < 4}
+            style={{ flex: 1, padding: '7px 0', fontSize: 9, fontWeight: 700, color: pin.length === 4 && !busy ? '#000' : MUT,
+              background: pin.length === 4 && !busy ? ACC : '#222', border: 'none', borderRadius: 2,
+              cursor: pin.length === 4 && !busy ? 'pointer' : 'not-allowed', fontFamily: "'IBM Plex Mono',monospace" }}>
+            {busy ? 'Accepting…' : 'Confirm'}
+          </button>
+          <button onClick={onCancel}
+            style={{ padding: '7px 14px', fontSize: 9, color: MUT, background: 'none', border: '1px solid #2a2a2a', borderRadius: 2, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace" }}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Dispatcher: allocate to plate modal
+function AllocateModal({ eventId, onConfirm, onCancel, busy, err }) {
+  const [platePart, setPlatePart] = useState('');
+  return (
+    <div onClick={e => e.stopPropagation()}
+      style={{ position: 'fixed', inset: 0, background: '#000000cc', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div style={{ background: '#111', border: '1px solid #2a2a2a', borderTop: `2px solid ${ACC}`, borderRadius: 3, padding: '20px 24px', maxWidth: 300, width: '100%', fontFamily: "'IBM Plex Mono',monospace" }}>
+        <div style={{ fontSize: 10, color: MUT, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 14 }}>Allocate to Truck</div>
+        <div style={{ fontSize: 9, color: MUT, marginBottom: 12, lineHeight: 1.6 }}>Enter the truck plate to assign job #{eventId}</div>
+        <input type="text"
+          value={platePart} onChange={e => setPlatePart(e.target.value.toUpperCase().replace(/\s/g, ''))}
+          placeholder="e.g. TOW933" autoFocus autoCapitalize="characters"
+          style={{ background: '#0a0a0a', border: `1px solid ${err ? '#cc2222' : '#333'}`, color: TXT,
+            fontFamily: "'IBM Plex Mono',monospace", fontSize: 16, letterSpacing: '0.2em',
+            padding: '8px 12px', borderRadius: 2, width: '100%', outline: 'none', boxSizing: 'border-box', textTransform: 'uppercase' }} />
+        {err && <div style={{ fontSize: 8, color: '#cc4444', marginTop: 6 }}>{err}</div>}
+        <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+          <button onClick={() => onConfirm(platePart)} disabled={busy || !platePart.trim()}
+            style={{ flex: 1, padding: '7px 0', fontSize: 9, fontWeight: 700,
+              color: platePart.trim() && !busy ? '#000' : MUT,
+              background: platePart.trim() && !busy ? ACC : '#222', border: 'none', borderRadius: 2,
+              cursor: platePart.trim() && !busy ? 'pointer' : 'not-allowed', fontFamily: "'IBM Plex Mono',monospace" }}>
+            {busy ? 'Assigning…' : 'Assign'}
+          </button>
+          <button onClick={onCancel}
+            style={{ padding: '7px 14px', fontSize: 9, color: MUT, background: 'none', border: '1px solid #2a2a2a', borderRadius: 2, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace" }}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AllocationCard({ feature, fromLog, userPos, nearbyKm, acceptedJob, userEmail, role, isDispatch, companyId, onAccept, onUnassign, onAllocateToPlate, handoverNotes, onAddNote, onEditNote, searchTerm }) {
   const [open, setOpen]               = useState(false);
   const [noteInput, setNoteInput]     = useState('');
   const [showNoteBox, setShowNoteBox] = useState(false);
   const [editingNoteId, setEditingNoteId] = useState(null);
   const [editInput, setEditInput]     = useState('');
+  const [showPinModal,      setShowPinModal]      = useState(false);
+  const [showAllocModal,    setShowAllocModal]    = useState(false);
+  const [pinBusy,           setPinBusy]           = useState(false);
+  const [pinErr,            setPinErr]            = useState('');
+  const [allocBusy,         setAllocBusy]         = useState(false);
+  const [allocErr,          setAllocErr]          = useState('');
+  const [unassignBusy,      setUnassignBusy]      = useState(false);
+
   const p          = feature.properties || {};
   const road       = p.closedRoadName || '—';
   const sub        = suburb(feature);
@@ -102,13 +177,49 @@ function AllocationCard({ feature, fromLog, userPos, nearbyKm, acceptedJob, user
   const isAcceptedByMe    = isLive && acceptedJob && acceptedJob.accepted_by === userEmail;
   const isAcceptedByOther = isLive && acceptedJob && acceptedJob.accepted_by !== userEmail;
   const acceptedElapsed   = acceptedJob ? fmtTimer(acceptedJob.accepted_at) : null;
-  const isOverdue         = isAcceptedByMe && (Date.now() - new Date(acceptedJob.accepted_at).getTime()) >= 60 * 60 * 1000;
+  // Dispatch can unassign if the accepted job belongs to their company
+  const canUnassign = isDispatch && acceptedJob && (acceptedJob.company_id === companyId || role === 'super_admin');
 
-  const borderLeft = isNearby || isOverdue ? '3px solid #cc2222' : `3px solid ${isLive ? GRN : '#333'}`;
-  const border     = isNearby || isOverdue ? '1px solid #cc222255' : '1px solid #252525';
+  const borderLeft = isNearby ? '3px solid #cc2222' : `3px solid ${isLive ? GRN : '#333'}`;
+  const border     = isNearby ? '1px solid #cc222255' : '1px solid #252525';
+
+  const handlePinConfirm = async (pin) => {
+    setPinBusy(true); setPinErr('');
+    const result = await onAccept(String(eventId), pin);
+    setPinBusy(false);
+    if (result?.ok === false) { setPinErr(result.err || 'Error'); return; }
+    setShowPinModal(false);
+  };
+
+  const handleAllocConfirm = async (plate) => {
+    setAllocBusy(true); setAllocErr('');
+    const result = await onAllocateToPlate(String(eventId), plate);
+    setAllocBusy(false);
+    if (result?.ok === false) { setAllocErr(result.err || 'Truck not found'); return; }
+    setShowAllocModal(false);
+  };
+
+  const handleUnassign = async (e) => {
+    e.stopPropagation();
+    if (!window.confirm('Release this allocation globally? Any company can then accept it.')) return;
+    setUnassignBusy(true);
+    await onUnassign(acceptedJob.id);
+    setUnassignBusy(false);
+  };
 
   return (
-    <div className={(isNearby || isOverdue) ? 'nearby-pulse' : ''}
+    <>
+    {showPinModal && (
+      <DaPinModal busy={pinBusy} err={pinErr}
+        onConfirm={handlePinConfirm}
+        onCancel={() => { setShowPinModal(false); setPinErr(''); }} />
+    )}
+    {showAllocModal && (
+      <AllocateModal eventId={String(eventId)} busy={allocBusy} err={allocErr}
+        onConfirm={handleAllocConfirm}
+        onCancel={() => { setShowAllocModal(false); setAllocErr(''); }} />
+    )}
+    <div className={isNearby ? 'nearby-pulse' : ''}
       style={{ background: '#0d0d0d', border, borderLeft, borderRadius: 2, marginBottom: 6, overflow: 'hidden' }}>
       <div onClick={() => setOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', cursor: 'pointer' }}>
         <span style={{ fontSize: 16, flexShrink: 0 }}>🚛</span>
@@ -155,28 +266,40 @@ function AllocationCard({ feature, fromLog, userPos, nearbyKm, acceptedJob, user
           )}
         </div>
         <div style={{ flexShrink: 0, textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-          {isLive && !acceptedJob && (
-            <button onClick={e => { e.stopPropagation(); onAccept && onAccept(String(eventId)); }}
+          {/* Accept button — drivers only, when not yet accepted */}
+          {isLive && !acceptedJob && role === 'driver' && (
+            <button onClick={e => { e.stopPropagation(); setShowPinModal(true); setPinErr(''); }}
               style={{ background: GRN + '11', border: `1px solid ${GRN}55`, borderRadius: 2, color: GRN, fontSize: 8, padding: '3px 7px', cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>
               ✓ Accept
             </button>
           )}
-          {isAcceptedByMe && (
-            <>
-              <span style={{ fontSize: 7, color: isOverdue ? '#cc4444' : ACC, fontFamily: "'IBM Plex Mono',monospace", whiteSpace: 'nowrap' }}>
-                {isOverdue ? `⚠ ${acceptedElapsed}` : `✓ ${acceptedElapsed}`}
-              </span>
-              <button onClick={e => { e.stopPropagation(); onRelease && onRelease(acceptedJob.id); }}
-                style={{ background: '#1a0000', border: '1px solid #cc222255', borderRadius: 2, color: '#cc6666', fontSize: 8, padding: '3px 7px', cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>
-                ✕ Release
-              </button>
-            </>
+          {/* Dispatcher: Allocate to plate (when job is open) */}
+          {isLive && !acceptedJob && isDispatch && (
+            <button onClick={e => { e.stopPropagation(); setShowAllocModal(true); setAllocErr(''); }}
+              style={{ background: ACC + '11', border: `1px solid ${ACC}55`, borderRadius: 2, color: ACC, fontSize: 8, padding: '3px 7px', cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>
+              📋 Allocate
+            </button>
           )}
-          {isAcceptedByOther && (
-            <span style={{ fontSize: 7, color: MUT, border: '1px solid #2a2a2a', borderRadius: 2, padding: '2px 5px', whiteSpace: 'nowrap', maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', display: 'block' }}
-              title={`Accepted by ${acceptedJob.accepted_by}`}>
-              🔒 {acceptedJob.accepted_by.split('@')[0]}
+          {/* My accepted badge (driver) */}
+          {isAcceptedByMe && (
+            <span style={{ fontSize: 7, color: ACC, fontFamily: "'IBM Plex Mono',monospace", whiteSpace: 'nowrap' }}>
+              ✓ {acceptedElapsed}
             </span>
+          )}
+          {/* Accepted by someone else badge */}
+          {acceptedJob && !isAcceptedByMe && (
+            <span style={{ fontSize: 7, color: '#c8a84b', border: '1px solid #3a3000', borderRadius: 2, padding: '2px 5px', whiteSpace: 'nowrap',
+              maxWidth: isDispatch ? 140 : 90, overflow: 'hidden', textOverflow: 'ellipsis', display: 'block' }}
+              title={isDispatch ? `Allocated: ${acceptedJob.accepted_by}` : 'Allocated'}>
+              🔒 {isDispatch ? acceptedJob.accepted_by.split('@')[0] : 'Allocated'}
+            </span>
+          )}
+          {/* Dispatcher unassign — releases globally */}
+          {isLive && canUnassign && (
+            <button onClick={handleUnassign} disabled={unassignBusy}
+              style={{ background: '#1a0000', border: '1px solid #cc222255', borderRadius: 2, color: '#cc6666', fontSize: 8, padding: '3px 7px', cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", letterSpacing: '0.06em', whiteSpace: 'nowrap', opacity: unassignBusy ? 0.5 : 1 }}>
+              ✕ Unassign
+            </button>
           )}
           <span style={{ fontSize: 8, color: MUT }}>{open ? '▲' : '▼'}</span>
         </div>
@@ -184,9 +307,9 @@ function AllocationCard({ feature, fromLog, userPos, nearbyKm, acceptedJob, user
 
       {open && (
         <div style={{ padding: '0 12px 12px', borderTop: '1px solid #1a1a1a' }}>
-          {isOverdue && (
-            <div style={{ marginTop: 10, padding: '7px 10px', background: '#1a0000', border: '1px solid #cc222255', borderRadius: 2, fontSize: 9, color: '#cc4444', lineHeight: 1.5 }}>
-              ⚠ Accepted {acceptedElapsed} ago — call to clear (Accident Allocations)
+          {isAcceptedByMe && (
+            <div style={{ marginTop: 10, padding: '6px 10px', background: ACC + '11', border: `1px solid ${ACC}33`, borderRadius: 2, fontSize: 9, color: ACC }}>
+              ✓ Accepted by you — {acceptedElapsed}
             </div>
           )}
           {desc && (
@@ -344,10 +467,11 @@ function AllocationCard({ feature, fromLog, userPos, nearbyKm, acceptedJob, user
         </div>
       )}
     </div>
+    </>
   );
 }
 
-export default function TowAllocationsTab({ allFeatures, liveIds, loading, err, lastFetch, countdown, fetchAllocations, isStale, acceptedJobs, userEmail, onAcceptJob, onReleaseJob }) {
+export default function TowAllocationsTab({ allFeatures, liveIds, loading, err, lastFetch, countdown, fetchAllocations, isStale, acceptedJobs, userEmail, role, isDispatch, companyId, onAcceptJob, onUnassignJob, onAllocateToPlate }) {
   const { rainSoon, maxProb, hoursUntil } = useWeather();
   const [handoverNotes, setHandoverNotes] = useState(new Map());
 
@@ -692,7 +816,8 @@ export default function TowAllocationsTab({ allFeatures, liveIds, loading, err, 
           {active.map((f, i) => (
             <AllocationCard key={f.properties?.eventId || i} feature={f} fromLog={false} userPos={userPos} nearbyKm={nearbyKm}
               acceptedJob={acceptedJobs?.get(String(f.properties?.eventId))} userEmail={userEmail}
-              onAccept={onAcceptJob} onRelease={onReleaseJob}
+              role={role} isDispatch={isDispatch} companyId={companyId}
+              onAccept={onAcceptJob} onUnassign={onUnassignJob} onAllocateToPlate={onAllocateToPlate}
               handoverNotes={handoverNotes.get(String(f.properties?.eventId)) || []} onAddNote={addHandoverNote} onEditNote={editHandoverNote}
               searchTerm={searchTerm.trim()} />
           ))}
@@ -706,7 +831,9 @@ export default function TowAllocationsTab({ allFeatures, liveIds, loading, err, 
           </div>
           {cleared.map((f, i) => (
             <AllocationCard key={f.properties?.eventId || i} feature={f} fromLog={true} userPos={userPos} nearbyKm={nearbyKm}
-              acceptedJob={null} userEmail={userEmail} onAccept={null} onRelease={null}
+              acceptedJob={null} userEmail={userEmail}
+              role={role} isDispatch={isDispatch} companyId={companyId}
+              onAccept={null} onUnassign={null} onAllocateToPlate={null}
               handoverNotes={handoverNotes.get(String(f.properties?.eventId)) || []} onAddNote={addHandoverNote} onEditNote={editHandoverNote}
               searchTerm={searchTerm.trim()} />
           ))}
