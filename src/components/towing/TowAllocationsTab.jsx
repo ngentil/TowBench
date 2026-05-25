@@ -239,7 +239,7 @@ function AllocationCard({ feature, fromLog, userPos, nearbyKm, acceptedJob, user
               <div style={{ fontSize: 7, color: '#6a5a20', letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 4 }}>Handover Note</div>
               <div style={{ fontSize: 9, color: '#c8a84b', lineHeight: 1.6 }}>{handoverNote.note}</div>
               <div style={{ fontSize: 7, color: '#4a4010', marginTop: 4 }}>
-                {handoverNote.created_by?.split('@')[0]} · expires {fmtShort(handoverNote.expires_at)}
+                {handoverNote.created_by?.split('@')[0]} · {fmtShort(handoverNote.created_at || handoverNote.expires_at)}
               </div>
             </div>
           )}
@@ -321,9 +321,8 @@ export default function TowAllocationsTab({ allFeatures, liveIds, loading, err, 
       try {
         const { data } = await supabase
           .from('map_notes')
-          .select('id, allocation_id, note, created_by, expires_at')
-          .not('allocation_id', 'is', null)
-          .gt('expires_at', new Date().toISOString());
+          .select('id, allocation_id, note, created_by, created_at, expires_at')
+          .not('allocation_id', 'is', null);
         if (data) {
           const map = new Map();
           data.forEach(n => map.set(String(n.allocation_id), n));
@@ -335,9 +334,8 @@ export default function TowAllocationsTab({ allFeatures, liveIds, loading, err, 
   }, []);
 
   const addHandoverNote = useCallback(async (eventId, note, userEmail) => {
-    const expires_at = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
     const { data } = await supabase.from('map_notes')
-      .insert({ allocation_id: String(eventId), note, created_by: userEmail, expires_at })
+      .insert({ allocation_id: String(eventId), note, created_by: userEmail })
       .select().single();
     if (data) setHandoverNotes(prev => new Map(prev).set(String(eventId), data));
   }, []);
