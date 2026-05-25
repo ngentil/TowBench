@@ -111,6 +111,11 @@ function AllocationCard({ feature, fromLog, userPos, nearbyKm, acceptedJob, user
                   📍 {distKm.toFixed(1)}km away
                 </span>
               )}
+              {!isNearby && isLive && distKm !== null && (
+                <span style={{ fontSize: 7, color: MUT, border: '1px solid #2a2a2a', borderRadius: 2, padding: '1px 4px', fontFamily: "'IBM Plex Mono',monospace" }}>
+                  📍 {distKm.toFixed(1)}km
+                </span>
+              )}
               {elapsed && (
                 <span style={{ fontSize: 7, color: ORANGE, border: `1px solid ${ORANGE}44`, borderRadius: 2, padding: '1px 4px', fontFamily: "'IBM Plex Mono',monospace", fontWeight: 700 }}>
                   ⏱ {elapsed}
@@ -549,7 +554,7 @@ export default function TowAllocationsTab({ allFeatures, liveIds, loading, err, 
                 </button>
               ))}
             </div>
-            <div style={{ marginBottom: 12, display: 'flex', gap: 6, alignItems: 'center' }}>
+            <div style={{ marginBottom: 12, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
               <span style={{ fontSize: 8, color: MUT, letterSpacing: '0.08em', textTransform: 'uppercase', flexShrink: 0 }}>📍 Nearby pulse</span>
               {NEARBY_OPTS.map(km => (
                 <button key={km} onClick={() => setRadius(km)}
@@ -560,6 +565,16 @@ export default function TowAllocationsTab({ allFeatures, liveIds, loading, err, 
                   {km === 0 ? 'Off' : `${km}km`}
                 </button>
               ))}
+              <input
+                type="number" min="1" max="999"
+                placeholder="km"
+                value={nearbyKm > 0 && !NEARBY_OPTS.includes(nearbyKm) ? nearbyKm : ''}
+                onChange={e => { const v = Number(e.target.value); if (v > 0) setRadius(v); }}
+                style={{ width: 44, background: '#0a0a0a',
+                  border: `1px solid ${nearbyKm > 0 && !NEARBY_OPTS.includes(nearbyKm) ? '#cc2222' : '#2a2a2a'}`,
+                  color: TXT, fontFamily: "'IBM Plex Mono',monospace", fontSize: 8, padding: '3px 5px',
+                  borderRadius: 2, outline: 'none', textAlign: 'center' }}
+              />
             </div>
           </>
         );
