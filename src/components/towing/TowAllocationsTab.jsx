@@ -67,10 +67,12 @@ function StatusBadge({ live }) {
   );
 }
 
-function AllocationCard({ feature, fromLog, userPos, nearbyKm, acceptedJob, userEmail, onAccept, onRelease, handoverNote, onAddNote, searchTerm }) {
-  const [open, setOpen]           = useState(false);
-  const [noteInput, setNoteInput] = useState('');
+function AllocationCard({ feature, fromLog, userPos, nearbyKm, acceptedJob, userEmail, onAccept, onRelease, handoverNotes, onAddNote, onEditNote, searchTerm }) {
+  const [open, setOpen]               = useState(false);
+  const [noteInput, setNoteInput]     = useState('');
   const [showNoteBox, setShowNoteBox] = useState(false);
+  const [editingNoteId, setEditingNoteId] = useState(null);
+  const [editInput, setEditInput]     = useState('');
   const p          = feature.properties || {};
   const road       = p.closedRoadName || '—';
   const sub        = suburb(feature);
@@ -234,41 +236,74 @@ function AllocationCard({ feature, fromLog, userPos, nearbyKm, acceptedJob, user
             )}
           </div>
 
-          {handoverNote && (
-            <div style={{ marginTop: 12, background: '#0d0c00', border: '1px solid #3a3000', borderLeft: '3px solid #c8a84b', borderRadius: 2, padding: '8px 10px' }}>
-              <div style={{ fontSize: 7, color: '#6a5a20', letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 4 }}>Handover Note</div>
-              <div style={{ fontSize: 9, color: '#c8a84b', lineHeight: 1.6 }}>{handoverNote.note}</div>
-              <div style={{ fontSize: 7, color: '#4a4010', marginTop: 4 }}>
-                {handoverNote.created_by?.split('@')[0]} · {fmtShort(handoverNote.created_at || handoverNote.expires_at)}
+          {handoverNotes.length > 0 && (
+            <div style={{ marginTop: 12 }}>
+              <div style={{ fontSize: 7, color: '#6a5a20', letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 6 }}>
+                Handover Notes ({handoverNotes.length})
               </div>
+              {handoverNotes.map(hn => (
+                <div key={hn.id} style={{ background: '#0d0c00', border: '1px solid #3a3000', borderLeft: '3px solid #c8a84b', borderRadius: 2, padding: '8px 10px', marginBottom: 6 }}>
+                  {editingNoteId === hn.id ? (
+                    <div>
+                      <textarea
+                        value={editInput} onChange={e => setEditInput(e.target.value)}
+                        style={{ width: '100%', background: '#0a0a0a', border: '1px solid #3a3000', color: TXT, fontFamily: "'IBM Plex Mono',monospace", fontSize: 10, padding: '6px 8px', borderRadius: 2, outline: 'none', resize: 'vertical', minHeight: 56, boxSizing: 'border-box' }}
+                      />
+                      <div style={{ display: 'flex', gap: 6, marginTop: 5 }}>
+                        <button onClick={async () => { if (editInput.trim()) { await onEditNote(hn.id, String(eventId), editInput.trim()); setEditingNoteId(null); } }}
+                          style={{ fontSize: 8, fontWeight: 700, padding: '3px 8px', background: '#c8a84b22', border: '1px solid #c8a84b55', color: '#c8a84b', borderRadius: 2, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace" }}>
+                          Save
+                        </button>
+                        <button onClick={() => setEditingNoteId(null)}
+                          style={{ fontSize: 8, padding: '3px 8px', background: 'none', border: '1px solid #2a2a2a', color: MUT, borderRadius: 2, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace" }}>
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{ fontSize: 9, color: '#c8a84b', lineHeight: 1.6 }}>
+                        <Highlight text={hn.note} term={searchTerm} />
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+                        <div style={{ fontSize: 7, color: '#4a4010' }}>
+                          {hn.created_by?.split('@')[0]} · {fmtShort(hn.created_at || hn.expires_at)}
+                        </div>
+                        <button onClick={() => { setEditingNoteId(hn.id); setEditInput(hn.note); }}
+                          style={{ fontSize: 7, padding: '2px 6px', background: 'none', border: '1px solid #3a3000', color: '#6a5a20', borderRadius: 2, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace" }}>
+                          Edit
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
             </div>
           )}
 
-          {!handoverNote && (
-            showNoteBox ? (
-              <div style={{ marginTop: 10 }}>
-                <textarea
-                  value={noteInput} onChange={e => setNoteInput(e.target.value)}
-                  placeholder="Handover note…"
-                  style={{ width: '100%', background: '#0a0a0a', border: '1px solid #2a2a2a', color: TXT, fontFamily: "'IBM Plex Mono',monospace", fontSize: 10, padding: '6px 8px', borderRadius: 2, outline: 'none', resize: 'vertical', minHeight: 56, boxSizing: 'border-box' }}
-                />
-                <div style={{ display: 'flex', gap: 6, marginTop: 5 }}>
-                  <button onClick={async () => { if (noteInput.trim()) { await onAddNote(String(eventId), noteInput.trim(), userEmail); setNoteInput(''); setShowNoteBox(false); } }}
-                    style={{ fontSize: 8, fontWeight: 700, padding: '3px 8px', background: '#c8a84b22', border: '1px solid #c8a84b55', color: '#c8a84b', borderRadius: 2, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace" }}>
-                    Save Note
-                  </button>
-                  <button onClick={() => setShowNoteBox(false)}
-                    style={{ fontSize: 8, padding: '3px 8px', background: 'none', border: '1px solid #2a2a2a', color: MUT, borderRadius: 2, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace" }}>
-                    Cancel
-                  </button>
-                </div>
+          {showNoteBox ? (
+            <div style={{ marginTop: 10 }}>
+              <textarea
+                value={noteInput} onChange={e => setNoteInput(e.target.value)}
+                placeholder="Handover note…"
+                style={{ width: '100%', background: '#0a0a0a', border: '1px solid #2a2a2a', color: TXT, fontFamily: "'IBM Plex Mono',monospace", fontSize: 10, padding: '6px 8px', borderRadius: 2, outline: 'none', resize: 'vertical', minHeight: 56, boxSizing: 'border-box' }}
+              />
+              <div style={{ display: 'flex', gap: 6, marginTop: 5 }}>
+                <button onClick={async () => { if (noteInput.trim()) { await onAddNote(String(eventId), noteInput.trim(), userEmail); setNoteInput(''); setShowNoteBox(false); } }}
+                  style={{ fontSize: 8, fontWeight: 700, padding: '3px 8px', background: '#c8a84b22', border: '1px solid #c8a84b55', color: '#c8a84b', borderRadius: 2, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace" }}>
+                  Save Note
+                </button>
+                <button onClick={() => setShowNoteBox(false)}
+                  style={{ fontSize: 8, padding: '3px 8px', background: 'none', border: '1px solid #2a2a2a', color: MUT, borderRadius: 2, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace" }}>
+                  Cancel
+                </button>
               </div>
-            ) : (
-              <button onClick={() => setShowNoteBox(true)}
-                style={{ marginTop: 10, fontSize: 8, color: '#6a5a20', border: '1px dashed #3a3000', background: 'none', borderRadius: 2, padding: '3px 8px', cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace" }}>
-                + Handover Note
-              </button>
-            )
+            </div>
+          ) : (
+            <button onClick={() => setShowNoteBox(true)}
+              style={{ marginTop: 10, fontSize: 8, color: '#6a5a20', border: '1px dashed #3a3000', background: 'none', borderRadius: 2, padding: '3px 8px', cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace" }}>
+              + Add Note
+            </button>
           )}
 
           {!isLive && logMeta?.firstSeen && (
@@ -325,7 +360,11 @@ export default function TowAllocationsTab({ allFeatures, liveIds, loading, err, 
           .not('allocation_id', 'is', null);
         if (data) {
           const map = new Map();
-          data.forEach(n => map.set(String(n.allocation_id), n));
+          data.forEach(n => {
+            const key = String(n.allocation_id);
+            if (!map.has(key)) map.set(key, []);
+            map.get(key).push(n);
+          });
           setHandoverNotes(map);
         }
       } catch { /* table may not exist yet */ }
@@ -337,7 +376,25 @@ export default function TowAllocationsTab({ allFeatures, liveIds, loading, err, 
     const { data } = await supabase.from('map_notes')
       .insert({ allocation_id: String(eventId), note, created_by: userEmail })
       .select().single();
-    if (data) setHandoverNotes(prev => new Map(prev).set(String(eventId), data));
+    if (data) setHandoverNotes(prev => {
+      const next = new Map(prev);
+      const key = String(eventId);
+      next.set(key, [...(next.get(key) || []), data]);
+      return next;
+    });
+  }, []);
+
+  const editHandoverNote = useCallback(async (noteId, eventId, note) => {
+    const { data } = await supabase.from('map_notes')
+      .update({ note })
+      .eq('id', noteId)
+      .select().single();
+    if (data) setHandoverNotes(prev => {
+      const next = new Map(prev);
+      const key = String(eventId);
+      next.set(key, (next.get(key) || []).map(n => n.id === noteId ? data : n));
+      return next;
+    });
   }, []);
 
   const [userPos, setUserPos] = useState(null);
@@ -458,7 +515,9 @@ export default function TowAllocationsTab({ allFeatures, liveIds, loading, err, 
     ? timeFiltered.filter(f => {
         const p = f.properties || {};
         const hay = [p.closedRoadName, p.reference?.startIntersectionLocality, p.eventId, p.description, p.eventSubType, p.reference?.startIntersectionRoadName].join(' ').toLowerCase();
-        return hay.includes(searchTerm.toLowerCase());
+        if (hay.includes(searchTerm.toLowerCase())) return true;
+        const notes = handoverNotes.get(String(p.eventId)) || [];
+        return notes.some(n => n.note.toLowerCase().includes(searchTerm.toLowerCase()));
       })
     : timeFiltered;
   const sorted  = [...searched].sort(sortFn);
@@ -562,7 +621,7 @@ export default function TowAllocationsTab({ allFeatures, liveIds, loading, err, 
             </div>
             <div style={{ marginBottom: 8, display: 'flex', gap: 6, alignItems: 'center' }}>
               <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
-                placeholder="Search road, suburb, event ID…"
+                placeholder="Search road, suburb, event ID, notes…"
                 style={{ flex: 1, background: '#0a0a0a', border: '1px solid #252525', color: TXT, fontFamily: "'IBM Plex Mono',monospace", fontSize: 11, padding: '6px 10px', borderRadius: 2, outline: 'none' }} />
               {['all', 'active', 'cleared'].map(s => (
                 <button key={s} onClick={() => setStatusFilter(s)}
@@ -634,7 +693,7 @@ export default function TowAllocationsTab({ allFeatures, liveIds, loading, err, 
             <AllocationCard key={f.properties?.eventId || i} feature={f} fromLog={false} userPos={userPos} nearbyKm={nearbyKm}
               acceptedJob={acceptedJobs?.get(String(f.properties?.eventId))} userEmail={userEmail}
               onAccept={onAcceptJob} onRelease={onReleaseJob}
-              handoverNote={handoverNotes.get(String(f.properties?.eventId))} onAddNote={addHandoverNote}
+              handoverNotes={handoverNotes.get(String(f.properties?.eventId)) || []} onAddNote={addHandoverNote} onEditNote={editHandoverNote}
               searchTerm={searchTerm.trim()} />
           ))}
           {statusFilter === 'all' && cleared.length > 0 && <div style={{ marginTop: 12 }} />}
@@ -648,7 +707,7 @@ export default function TowAllocationsTab({ allFeatures, liveIds, loading, err, 
           {cleared.map((f, i) => (
             <AllocationCard key={f.properties?.eventId || i} feature={f} fromLog={true} userPos={userPos} nearbyKm={nearbyKm}
               acceptedJob={null} userEmail={userEmail} onAccept={null} onRelease={null}
-              handoverNote={handoverNotes.get(String(f.properties?.eventId))} onAddNote={addHandoverNote}
+              handoverNotes={handoverNotes.get(String(f.properties?.eventId)) || []} onAddNote={addHandoverNote} onEditNote={editHandoverNote}
               searchTerm={searchTerm.trim()} />
           ))}
         </>
