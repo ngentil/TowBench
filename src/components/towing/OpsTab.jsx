@@ -31,7 +31,7 @@ function InfoRow({ label, value }) {
   );
 }
 
-function AllocationInfoCard({ feature, acceptedJob, isLive, userEmail, onAcceptJob, onReleaseJob, onClose, pos }) {
+function AllocationInfoCard({ feature, acceptedJob, isLive, userEmail, userPos, onAcceptJob, onReleaseJob, onClose, pos }) {
   const props   = feature.properties || {};
   const eventId = String(props.eventId || '');
   const road    = props.closedRoadName || '—';
@@ -41,10 +41,24 @@ function AllocationInfoCard({ feature, acceptedJob, isLive, userEmail, onAcceptJ
   const lanes   = props.numberLanesImpacted;
   const firstSeen = feature._logMeta?.firstSeen || props.lastUpdated;
 
+  const coords = feature.geometry?.coordinates;
+  const lat = coords ? coords[1] : null;
+  const lng = coords ? coords[0] : null;
+  const distKm = (userPos && lat != null) ? haversineKm(userPos.lat, userPos.lng, lat, lng) : null;
+  const mapsUrl = lat != null ? `https://www.google.com/maps?q=${lat},${lng}` : null;
+  const svUrl   = lat != null ? `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lng}` : null;
+
   const isAcceptedByMe    = isLive && acceptedJob && acceptedJob.accepted_by === userEmail;
   const isAcceptedByOther = isLive && acceptedJob && acceptedJob.accepted_by !== userEmail;
   const isOverdue = acceptedJob && (Date.now() - new Date(acceptedJob.accepted_at).getTime()) >= 60 * 60 * 1000;
   const borderColor = isOverdue ? '#cc2222' : acceptedJob ? '#cc4422' : GRN;
+
+  const linkStyle = {
+    display: 'inline-flex', alignItems: 'center', gap: 4,
+    fontSize: 8, padding: '3px 8px', borderRadius: 2, textDecoration: 'none',
+    fontFamily: "'IBM Plex Mono',monospace", fontWeight: 700,
+    color: '#5a8ab0', border: '1px solid #1e3a5a', background: '#0a1520',
+  };
 
   return (
     <div
@@ -61,7 +75,14 @@ function AllocationInfoCard({ feature, acceptedJob, isLive, userEmail, onAcceptJ
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '7px 8px 5px' }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 10, fontWeight: 700, color: TXT, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{road}</div>
-          <div style={{ fontSize: 8, color: MUT, marginTop: 2 }}>#{eventId}{suburb ? ` · ${suburb}` : ''}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 8, color: MUT }}>#{eventId}{suburb ? ` · ${suburb}` : ''}</span>
+            {distKm != null && (
+              <span style={{ fontSize: 8, fontWeight: 700, color: ORANGE, fontFamily: "'IBM Plex Mono',monospace" }}>
+                📍 {distKm.toFixed(1)}km
+              </span>
+            )}
+          </div>
         </div>
         <button onClick={onClose}
           style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: 13, padding: '0 0 0 6px', lineHeight: 1, flexShrink: 0 }}>×</button>
@@ -74,6 +95,14 @@ function AllocationInfoCard({ feature, acceptedJob, isLive, userEmail, onAcceptJ
         {lanes != null  && <InfoRow label="Lanes"  value={lanes} />}
         {firstSeen      && <InfoRow label="Age"    value={timeIn(firstSeen) || '—'} />}
       </div>
+
+      {/* Map links */}
+      {(mapsUrl || svUrl) && (
+        <div style={{ padding: '5px 8px 7px', borderTop: '1px solid #1e1e1e', display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+          {mapsUrl && <a href={mapsUrl} target="_blank" rel="noopener noreferrer" style={linkStyle}>📍 Maps</a>}
+          {svUrl   && <a href={svUrl}   target="_blank" rel="noopener noreferrer" style={linkStyle}>🔭 Street View</a>}
+        </div>
+      )}
 
       {/* Accept / Release (live only) */}
       {isLive && (
@@ -431,6 +460,7 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
             acceptedJob={selectedAcceptedJob}
             isLive={selectedIsLive}
             userEmail={userEmail}
+            userPos={userPos}
             onAcceptJob={onAcceptJob}
             onReleaseJob={onReleaseJob}
             onClose={() => { setSelectedEventId(null); selectedLatLngRef.current = null; }}
