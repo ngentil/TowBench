@@ -13,7 +13,7 @@ const POLL_MS = 60_000;
 
 const BASE_TABS = [
   { id: 'allocations', label: '🚦 Tow Allocations' },
-  { id: 'ops',         label: '🖵 Command Centre' },
+  { id: 'ops',         label: '🖥 Command Centre' },
   { id: 'analytics',   label: '📊 Analytics' },
   { id: 'fleet',       label: '🚛 Fleet' },
 ];
@@ -22,11 +22,13 @@ export default function TowingSection({ isAdmin, userEmail, companyConfig, setCo
   const TABS = isAdmin ? [...BASE_TABS, { id: 'settings', label: '⚙ Settings' }] : BASE_TABS;
   const [tab, setTab] = useState('allocations');
 
+  // Redirect stale tab state that no longer exists in TABS
   useEffect(() => {
     const ids = TABS.map(t => t.id);
     if (!ids.includes(tab)) setTab('allocations');
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Shared allocation state ───────────────────────────────────────────────────────────────────────────────
   const [allFeatures,  setAllFeatures]  = useState([]);
   const [liveIds,      setLiveIds]      = useState(new Set());
   const [loading,      setLoading]      = useState(true);
