@@ -361,6 +361,7 @@ function DriverFlow({ onSuccess }) {
 // ── Dispatcher / Admin login / signup ───────────────────────────────────────
 
 function DispatcherFlow({ onSuccess }) {
+  const [mode,        setMode]        = useState('signin'); // 'signin' | 'signup'
   const [step,        setStep]        = useState(1); // 1=code, 2=company name (admin only), 3=email+pw
   const [code,        setCode]        = useState('');
   const [codeResult,  setCodeResult]  = useState(null); // { valid, role, company_id }
@@ -370,6 +371,18 @@ function DispatcherFlow({ onSuccess }) {
   const [confirmPwd,  setConfirmPwd]  = useState('');
   const [busy,        setBusy]        = useState(false);
   const [err,         setErr]         = useState('');
+
+  const handleSignIn = async e => {
+    e.preventDefault();
+    setErr('');
+    if (!email.trim() || !/\S+@\S+\.\S+/.test(email)) { setErr('Enter a valid email address.'); return; }
+    if (!password) { setErr('Enter your password.'); return; }
+    setBusy(true);
+    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    setBusy(false);
+    if (error) { setErr('Incorrect email or password.'); return; }
+    onSuccess();
+  };
 
   const handleCodeSubmit = async e => {
     e.preventDefault();
@@ -432,7 +445,36 @@ function DispatcherFlow({ onSuccess }) {
 
   return (
     <>
-      {step === 1 && (
+      {/* Sign-in form */}
+      {mode === 'signin' && (
+        <form onSubmit={handleSignIn} style={formStyle}>
+          <div>
+            <div style={labelStyle}>Email</div>
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+              placeholder="you@example.com" autoFocus style={inputStyle} />
+          </div>
+          <div>
+            <div style={labelStyle}>Password</div>
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+              placeholder="········" minLength={6} style={inputStyle} />
+          </div>
+          {err && <div style={{ fontSize: 9, color: RED, lineHeight: 1.5 }}>{err}</div>}
+          <button type="submit" disabled={busy}
+            style={{ ...btnA, width: '100%', opacity: busy ? 0.5 : 1 }}>
+            {busy ? 'Signing in…' : 'Sign In'}
+          </button>
+          <div style={{ textAlign: 'center', fontSize: 8, color: MUT }}>
+            New dispatcher?{' '}
+            <button type="button" onClick={() => { setMode('signup'); setErr(''); }}
+              style={{ background: 'none', border: 'none', color: ACC, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", fontSize: 8, padding: 0, textDecoration: 'underline' }}>
+              Sign up with invite code
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* Signup flow */}
+      {mode === 'signup' && step === 1 && (
         <form onSubmit={handleCodeSubmit} style={formStyle}>
           <div>
             <div style={labelStyle}>Dispatcher Invite Code</div>
@@ -446,9 +488,16 @@ function DispatcherFlow({ onSuccess }) {
             style={{ ...btnA, width: '100%', opacity: busy ? 0.5 : 1 }}>
             {busy ? 'Checking…' : 'Continue →'}
           </button>
+          <div style={{ textAlign: 'center', fontSize: 8, color: MUT }}>
+            Already have an account?{' '}
+            <button type="button" onClick={() => { setMode('signin'); setErr(''); }}
+              style={{ background: 'none', border: 'none', color: ACC, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", fontSize: 8, padding: 0, textDecoration: 'underline' }}>
+              Sign in
+            </button>
+          </div>
         </form>
       )}
-      {step === 2 && (
+      {mode === 'signup' && step === 2 && (
         <form onSubmit={handleCompanyNext} style={formStyle}>
           <div style={{ fontSize: 8, color: '#5a8a5a', lineHeight: 1.6 }}>
             Admin invite — enter your company name to create a new account.
@@ -465,7 +514,7 @@ function DispatcherFlow({ onSuccess }) {
           </button>
         </form>
       )}
-      {step === 3 && (
+      {mode === 'signup' && step === 3 && (
         <form onSubmit={handleSignup} style={formStyle}>
           <div style={{ fontSize: 8, color: '#5a8a5a', lineHeight: 1.6 }}>
             {codeResult?.role === 'admin' ? `Admin — ${companyName || 'existing company'}` : 'Dispatcher account'}
