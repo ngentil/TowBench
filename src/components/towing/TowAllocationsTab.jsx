@@ -249,7 +249,7 @@ function AllocationCard({ feature, fromLog, userPos, nearbyKm, acceptedJob, user
               <div style={{ marginTop: 10 }}>
                 <textarea
                   value={noteInput} onChange={e => setNoteInput(e.target.value)}
-                  placeholder="Shift note (24h)…"
+                  placeholder="Handover note…"
                   style={{ width: '100%', background: '#0a0a0a', border: '1px solid #2a2a2a', color: TXT, fontFamily: "'IBM Plex Mono',monospace", fontSize: 10, padding: '6px 8px', borderRadius: 2, outline: 'none', resize: 'vertical', minHeight: 56, boxSizing: 'border-box' }}
                 />
                 <div style={{ display: 'flex', gap: 6, marginTop: 5 }}>
