@@ -183,7 +183,7 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, co
         {tab === 'analytics' && (
           <TowAnalyticsTab allFeatures={allFeatures} liveIds={liveIds} loading={loading} userEmail={userEmail} />
         )}
-        {tab === 'fleet'    && <FleetTab isAdmin={isAdmin} />}
+        {tab === 'fleet'    && <FleetTab isAdmin={isAdmin} companyId={companyId} />}
         {tab === 'settings' && isAdmin && <AdminSettings companyConfig={companyConfig} setCompanyConfig={setCompanyConfig} companyId={companyId} />}
       </div>
     </div>
