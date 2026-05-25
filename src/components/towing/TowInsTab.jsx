@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
-import { ACC, MUT, BRD, TXT, GRN, RED, SURF, inp, sel, txa, btnA, btnG, btnD, sm, ovly, mdl, mdlH, mdlB, mdlF } from '../../lib/styles';
+import { ACC, MUT, BRD, TXT, GRN, RED, SURF, inp, txa, btnA, btnG, sm, ovly, mdl, mdlH, mdlB, mdlF } from '../../lib/styles';
+import { Highlight } from '../ui/shared';
 
 const FL = ({ t }) => (
   <div style={{ fontSize: 8, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}>{t}</div>
 );
 
-const VEHICLE_TYPES  = [{ v: 'motor_car', l: 'Motor Car' }, { v: 'motorcycle', l: 'Motorcycle' }];
-const STORAGE_TYPES  = [{ v: 'undercover', l: 'Under Cover' }, { v: 'locked_yard', l: 'Locked Yard' }];
-const FLAG_FIELDS    = [
+const VEHICLE_TYPES = [{ v: 'motor_car', l: 'Motor Car' }, { v: 'motorcycle', l: 'Motorcycle' }];
+const STORAGE_TYPES = [{ v: 'undercover', l: 'Under Cover' }, { v: 'locked_yard', l: 'Locked Yard' }];
+const FLAG_FIELDS   = [
   { key: 'has_photos', label: 'Photos' },
   { key: 'has_keys',   label: 'Keys' },
   { key: 'stolen',     label: 'Stolen' },
@@ -17,15 +18,9 @@ const FLAG_FIELDS    = [
   { key: 'trade',      label: 'Trade' },
   { key: 'insurance',  label: 'Insurance' },
 ];
-
 const FLAG_COLORS = {
-  stolen:   '#cc2222',
-  evidence: '#8844cc',
-  impound:  '#2266cc',
-  trade:    '#2299aa',
-  insurance:'#aa6622',
-  has_photos: GRN,
-  has_keys:   GRN,
+  stolen: '#cc2222', evidence: '#8844cc', impound: '#2266cc',
+  trade: '#2299aa', insurance: '#aa6622', has_photos: GRN, has_keys: GRN,
 };
 
 function daysIn(dateIn, dateOut) {
@@ -36,14 +31,27 @@ function daysIn(dateIn, dateOut) {
 
 function fmtDate(iso) {
   if (!iso) return '—';
-  return new Date(iso).toLocaleString('en-AU', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
+  return new Date(iso).toLocaleString('en-AU', {
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', hour12: true,
+  });
 }
 
-function toLocalDatetimeValue(iso) {
+function toLocal(iso) {
   if (!iso) return '';
   const d = new Date(iso);
-  const pad = n => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function depotLabel(depots, id) {
+  const d = depots.find(x => x.id === id);
+  return d ? `${d.name}${d.suburb ? ` · ${d.suburb}` : ''}` : '—';
+}
+
+function currentDepotId(record, transfers) {
+  const list = (transfers[record.id] || []);
+  return list.length > 0 ? list[list.length - 1].to_depot_id : record.depot_id;
 }
 
 function FlagBadge({ label, flagKey }) {
@@ -57,16 +65,88 @@ function FlagBadge({ label, flagKey }) {
   );
 }
 
-function TowInForm({ record, depots, userEmail, companyId, onSave, onCancel }) {
+// ─── Transfer modal ────────────────────────────────────────────────────────────
+function TransferForm({ towIn, allDepots, fromDepotId, userEmail, onSave, onCancel }) {
+  const [toDepotId, setToDepotId] = useState('');
+  const [xferAt,    setXferAt]    = useState(toLocal(new Date().toISOString()));
+  const [notes,     setNotes]     = useState('');
+  const [saving,    setSaving]    = useState(false);
+  const [err,       setErr]       = useState('');
+
+  const available = allDepots.filter(d => d.id !== fromDepotId);
+
+  const save = async () => {
+    if (!toDepotId) { setErr('Select a destination yard.'); return; }
+    setSaving(true); setErr('');
+    const { data, error } = await supabase.from('tow_in_transfers').insert({
+      tow_in_id:      towIn.id,
+      from_depot_id:  fromDepotId,
+      to_depot_id:    toDepotId,
+      transferred_at: xferAt ? new Date(xferAt).toISOString() : new Date().toISOString(),
+      notes:          notes.trim() || null,
+      created_by:     userEmail,
+    }).select().single();
+    if (error) { setErr(error.message); setSaving(false); return; }
+    onSave(data);
+  };
+
+  return (
+    <div style={ovly} onClick={e => e.target === e.currentTarget && onCancel()}>
+      <div style={{ ...mdl, maxWidth: 400 }}>
+        <div style={mdlH}>
+          <b style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+            Transfer — {towIn.plate}
+          </b>
+          <button style={{ ...btnG, ...sm }} onClick={onCancel}>✕</button>
+        </div>
+        <div style={{ ...mdlB, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div>
+            <FL t="From Yard" />
+            <div style={{ ...inp, color: MUT, cursor: 'not-allowed' }}>{depotLabel(allDepots, fromDepotId)}</div>
+          </div>
+          <div>
+            <FL t="To Yard *" />
+            <select style={inp} value={toDepotId} onChange={e => setToDepotId(e.target.value)} autoFocus>
+              <option value="">— Select destination —</option>
+              {available.map(d => (
+                <option key={d.id} value={d.id}>{d.name}{d.suburb ? ` · ${d.suburb}` : ''}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <FL t="Date / Time of Transfer *" />
+            <input type="datetime-local" style={inp} value={xferAt} onChange={e => setXferAt(e.target.value)} />
+          </div>
+          <div>
+            <FL t="Notes" />
+            <textarea style={{ ...txa, ...inp }} value={notes}
+              onChange={e => setNotes(e.target.value)} placeholder="Reason, job ref, etc." />
+          </div>
+          {err && <div style={{ fontSize: 9, color: RED }}>{err}</div>}
+        </div>
+        <div style={mdlF}>
+          <button style={btnG} onClick={onCancel}>Cancel</button>
+          <button style={{ ...btnA, opacity: saving ? 0.5 : 1 }} disabled={saving} onClick={save}>
+            {saving ? 'Saving…' : 'Log Transfer'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Tow-in log form ───────────────────────────────────────────────────────────
+function TowInForm({ record, formDepots, allDepots, userEmail, companyId, onSave, onCancel }) {
   const isEdit = !!record?.id;
+  const depots = isEdit ? allDepots : formDepots;
 
   const [plate,       setPlate]       = useState(record?.plate        || '');
   const [vtype,       setVtype]       = useState(record?.vehicle_type || 'motor_car');
   const [makeModel,   setMakeModel]   = useState(record?.make_model   || '');
   const [storageType, setStorageType] = useState(record?.storage_type || 'locked_yard');
-  const [depotId,     setDepotId]     = useState(record?.depot_id     || (depots.length === 1 ? depots[0].id : '') );
-  const [dateIn,      setDateIn]      = useState(record?.date_in      ? toLocalDatetimeValue(record.date_in) : toLocalDatetimeValue(new Date().toISOString()));
-  const [dateOut,     setDateOut]     = useState(record?.date_out     ? toLocalDatetimeValue(record.date_out) : '');
+  const [depotId,     setDepotId]     = useState(record?.depot_id     || (depots.length === 1 ? depots[0].id : ''));
+  const [dateIn,      setDateIn]      = useState(record?.date_in ? toLocal(record.date_in) : toLocal(new Date().toISOString()));
+  const [dateOut,     setDateOut]     = useState(record?.date_out ? toLocal(record.date_out) : '');
   const [notes,       setNotes]       = useState(record?.notes        || '');
   const [flags,       setFlags]       = useState(() => {
     const f = {};
@@ -79,8 +159,8 @@ function TowInForm({ record, depots, userEmail, companyId, onSave, onCancel }) {
   const toggleFlag = key => setFlags(prev => ({ ...prev, [key]: !prev[key] }));
 
   const save = async () => {
-    if (!plate.trim())  { setErr('Vehicle plate is required.'); return; }
-    if (!depotId)       { setErr('Select a yard.'); return; }
+    if (!plate.trim()) { setErr('Vehicle plate is required.'); return; }
+    if (!depotId)      { setErr('Select a yard.'); return; }
     setSaving(true); setErr('');
     const payload = {
       plate:        plate.trim().toUpperCase(),
@@ -108,7 +188,10 @@ function TowInForm({ record, depots, userEmail, companyId, onSave, onCancel }) {
     setSaving(false);
   };
 
-  const fld = { ...inp };
+  const showPicker = depots.length > 1;
+  const singleLabel = depots.length === 1
+    ? `${depots[0].name}${depots[0].suburb ? ` · ${depots[0].suburb}` : ''}`
+    : null;
 
   return (
     <div style={ovly} onClick={e => e.target === e.currentTarget && onCancel()}>
@@ -123,13 +206,13 @@ function TowInForm({ record, depots, userEmail, companyId, onSave, onCancel }) {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div>
               <FL t="Vehicle Plate *" />
-              <input style={fld} value={plate}
+              <input style={inp} value={plate}
                 onChange={e => setPlate(e.target.value.toUpperCase())}
                 placeholder="e.g. ABC123" autoCapitalize="characters" autoFocus />
             </div>
             <div>
               <FL t="Make / Model" />
-              <input style={fld} value={makeModel}
+              <input style={inp} value={makeModel}
                 onChange={e => setMakeModel(e.target.value)}
                 placeholder="e.g. Toyota Camry" />
             </div>
@@ -137,44 +220,45 @@ function TowInForm({ record, depots, userEmail, companyId, onSave, onCancel }) {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div>
               <FL t="Vehicle Type" />
-              <select style={fld} value={vtype} onChange={e => setVtype(e.target.value)}>
+              <select style={inp} value={vtype} onChange={e => setVtype(e.target.value)}>
                 {VEHICLE_TYPES.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
               </select>
             </div>
             <div>
               <FL t="Storage Type" />
-              <select style={fld} value={storageType} onChange={e => setStorageType(e.target.value)}>
+              <select style={inp} value={storageType} onChange={e => setStorageType(e.target.value)}>
                 {STORAGE_TYPES.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
               </select>
             </div>
           </div>
-          {depots.length > 1 && (
-            <div>
-              <FL t="Yard *" />
-              <select style={fld} value={depotId} onChange={e => setDepotId(e.target.value)}>
+          <div>
+            <FL t="Yard *" />
+            {showPicker ? (
+              <select style={inp} value={depotId} onChange={e => setDepotId(e.target.value)}>
                 <option value="">— Select yard —</option>
-                {depots.map(d => <option key={d.id} value={d.id}>{d.name}{d.suburb ? ` · ${d.suburb}` : ''}</option>)}
+                {depots.map(d => (
+                  <option key={d.id} value={d.id}>{d.name}{d.suburb ? ` · ${d.suburb}` : ''}</option>
+                ))}
               </select>
-            </div>
-          )}
-          {depots.length === 1 && (
-            <div style={{ fontSize: 8, color: MUT }}>
-              Yard: <span style={{ color: TXT }}>{depots[0].name}{depots[0].suburb ? ` · ${depots[0].suburb}` : ''}</span>
-            </div>
-          )}
+            ) : (
+              <div style={{ ...inp, color: MUT, cursor: 'default' }}>
+                {singleLabel || 'No yard assigned'}
+              </div>
+            )}
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div>
               <FL t="Date In *" />
-              <input type="datetime-local" style={fld} value={dateIn} onChange={e => setDateIn(e.target.value)} />
+              <input type="datetime-local" style={inp} value={dateIn} onChange={e => setDateIn(e.target.value)} />
             </div>
             <div>
               <FL t="Date Out (if released)" />
-              <input type="datetime-local" style={fld} value={dateOut} onChange={e => setDateOut(e.target.value)} />
+              <input type="datetime-local" style={inp} value={dateOut} onChange={e => setDateOut(e.target.value)} />
             </div>
           </div>
           <div>
             <FL t="Notes" />
-            <textarea style={{ ...txa, ...fld }} value={notes}
+            <textarea style={{ ...txa, ...inp }} value={notes}
               onChange={e => setNotes(e.target.value)}
               placeholder="Job number, owner details, etc." />
           </div>
@@ -209,25 +293,31 @@ function TowInForm({ record, depots, userEmail, companyId, onSave, onCancel }) {
   );
 }
 
-function TowInCard({ record, depots, isDispatch, onEdit, onRelease }) {
+// ─── Card ──────────────────────────────────────────────────────────────────────
+function TowInCard({ record, allDepots, transfers, isDispatch, onEdit, onRelease, onTransfer, searchTerm }) {
   const [open, setOpen] = useState(false);
-  const depot   = depots.find(d => d.id === record.depot_id);
-  const days    = daysIn(record.date_in, record.date_out);
-  const released = !!record.date_out;
+
+  const xfers      = transfers[record.id] || [];
+  const curDepotId = xfers.length > 0 ? xfers[xfers.length - 1].to_depot_id : record.depot_id;
+  const days       = daysIn(record.date_in, record.date_out);
+  const released   = !!record.date_out;
   const activeFlags = FLAG_FIELDS.filter(({ key }) => record[key]);
 
   return (
     <div style={{ background: '#0d0d0d', border: '1px solid #252525',
       borderLeft: `3px solid ${released ? '#333' : ACC}`, borderRadius: 2, marginBottom: 6 }}>
+      {/* Row */}
       <div onClick={() => setOpen(o => !o)}
         style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', cursor: 'pointer' }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 12, fontWeight: 700, color: TXT, letterSpacing: '0.1em' }}>
-              {record.plate}
+              <Highlight text={record.plate} term={searchTerm} />
             </span>
             {record.make_model && (
-              <span style={{ fontSize: 9, color: MUT }}>{record.make_model}</span>
+              <span style={{ fontSize: 9, color: MUT }}>
+                <Highlight text={record.make_model} term={searchTerm} />
+              </span>
             )}
             <span style={{ fontSize: 7, fontWeight: 700, letterSpacing: '0.08em', padding: '1px 5px',
               border: `1px solid ${released ? '#333' : ACC + '55'}`, borderRadius: 2,
@@ -244,10 +334,12 @@ function TowInCard({ record, depots, isDispatch, onEdit, onRelease }) {
             <span style={{ fontSize: 8, color: MUT }}>
               {record.storage_type === 'undercover' ? 'Under Cover' : 'Locked Yard'}
             </span>
-            {depot && (
+            <span style={{ fontSize: 8, color: '#333' }}>·</span>
+            <span style={{ fontSize: 8, color: MUT }}>{depotLabel(allDepots, curDepotId)}</span>
+            {xfers.length > 0 && (
               <>
                 <span style={{ fontSize: 8, color: '#333' }}>·</span>
-                <span style={{ fontSize: 8, color: MUT }}>{depot.name}</span>
+                <span style={{ fontSize: 7, color: '#5a5a7a' }}>{xfers.length} transfer{xfers.length !== 1 ? 's' : ''}</span>
               </>
             )}
             <span style={{ fontSize: 8, color: '#333' }}>·</span>
@@ -262,6 +354,12 @@ function TowInCard({ record, depots, isDispatch, onEdit, onRelease }) {
           )}
         </div>
         <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+          {!released && (
+            <button onClick={e => { e.stopPropagation(); onTransfer(record, curDepotId); }}
+              style={{ ...btnG, ...sm, fontSize: 7, color: '#6688cc', borderColor: '#6688cc55' }}>
+              ⇄ Transfer
+            </button>
+          )}
           {isDispatch && !released && (
             <button onClick={e => { e.stopPropagation(); onRelease(record); }}
               style={{ ...btnG, ...sm, fontSize: 7, color: GRN, borderColor: GRN + '55' }}>
@@ -276,17 +374,19 @@ function TowInCard({ record, depots, isDispatch, onEdit, onRelease }) {
         </div>
       </div>
 
+      {/* Expanded */}
       {open && (
         <div style={{ padding: '0 12px 12px', borderTop: '1px solid #1a1a1a' }}>
           <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             {[
-              ['Date In',      fmtDate(record.date_in)],
-              ['Date Out',     record.date_out ? fmtDate(record.date_out) : '—'],
+              ['Date In',         fmtDate(record.date_in)],
+              ['Date Out',        record.date_out ? fmtDate(record.date_out) : '—'],
               ['Days in Storage', `${days} day${days !== 1 ? 's' : ''}`],
-              ['Yard',         depot ? `${depot.name}${depot.suburb ? ` · ${depot.suburb}` : ''}` : '—'],
-              ['Vehicle Type', record.vehicle_type === 'motor_car' ? 'Motor Car' : 'Motorcycle'],
-              ['Storage',      record.storage_type === 'undercover' ? 'Under Cover' : 'Locked Yard'],
-              ['Logged by',    record.created_by?.split('@')[0] || '—'],
+              ['Current Yard',    depotLabel(allDepots, curDepotId)],
+              ['Logged in at',    depotLabel(allDepots, record.depot_id)],
+              ['Vehicle Type',    record.vehicle_type === 'motor_car' ? 'Motor Car' : 'Motorcycle'],
+              ['Storage',         record.storage_type === 'undercover' ? 'Under Cover' : 'Locked Yard'],
+              ['Logged by',       record.created_by?.split('@')[0] || '—'],
             ].map(([label, val]) => (
               <div key={label} style={{ background: SURF, border: '1px solid ' + BRD, borderRadius: 2, padding: '6px 8px' }}>
                 <div style={{ fontSize: 7, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>{label}</div>
@@ -294,6 +394,32 @@ function TowInCard({ record, depots, isDispatch, onEdit, onRelease }) {
               </div>
             ))}
           </div>
+
+          {/* Transfer history */}
+          {xfers.length > 0 && (
+            <div style={{ marginTop: 12 }}>
+              <div style={{ fontSize: 7, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 6 }}>
+                Yard Transfers
+              </div>
+              {[{ transferred_at: record.date_in, from_depot_id: null, to_depot_id: record.depot_id, _initial: true }, ...xfers].map((x, i) => (
+                <div key={x.id || 'initial'} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, fontSize: 9 }}>
+                  <span style={{ color: '#444', fontSize: 7, minWidth: 14, textAlign: 'right' }}>{i + 1}</span>
+                  <span style={{ color: MUT }}>{fmtDate(x.transferred_at)}</span>
+                  {!x._initial && (
+                    <>
+                      <span style={{ color: '#333' }}>·</span>
+                      <span style={{ color: '#666' }}>{depotLabel(allDepots, x.from_depot_id)}</span>
+                      <span style={{ color: '#4466aa', fontSize: 8 }}>→</span>
+                    </>
+                  )}
+                  <span style={{ color: TXT, fontWeight: 700 }}>{depotLabel(allDepots, x.to_depot_id)}</span>
+                  {x.notes && <span style={{ color: '#444', fontSize: 8 }}>· {x.notes}</span>}
+                  {x._initial && <span style={{ color: '#333', fontSize: 7 }}>(logged in)</span>}
+                </div>
+              ))}
+            </div>
+          )}
+
           {activeFlags.length > 0 && (
             <div style={{ marginTop: 10 }}>
               <div style={{ fontSize: 7, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 6 }}>Flags</div>
@@ -304,7 +430,7 @@ function TowInCard({ record, depots, isDispatch, onEdit, onRelease }) {
           )}
           {record.notes && (
             <div style={{ marginTop: 10, background: '#0a0a0a', border: '1px solid #1a1a1a', borderRadius: 2, padding: '8px 10px', fontSize: 10, color: MUT, lineHeight: 1.6 }}>
-              {record.notes}
+              <Highlight text={record.notes} term={searchTerm} />
             </div>
           )}
         </div>
@@ -313,30 +439,59 @@ function TowInCard({ record, depots, isDispatch, onEdit, onRelease }) {
   );
 }
 
+// ─── Main tab ──────────────────────────────────────────────────────────────────
 export default function TowInsTab({ companyId, userEmail, isDispatch }) {
-  const [records,    setRecords]    = useState([]);
-  const [depots,     setDepots]     = useState([]);
-  const [loading,    setLoading]    = useState(true);
-  const [showForm,   setShowForm]   = useState(false);
-  const [editRecord, setEditRecord] = useState(null);
-  const [filter,     setFilter]     = useState('active'); // 'active' | 'released' | 'all'
-  const [yardFilter, setYardFilter] = useState('all');
-  const [search,     setSearch]     = useState('');
+  const [records,       setRecords]       = useState([]);
+  const [allDepots,     setAllDepots]     = useState([]);
+  const [formDepots,    setFormDepots]    = useState([]);
+  const [transfers,     setTransfers]     = useState({}); // { tow_in_id: [transfer, ...] }
+  const [loading,       setLoading]       = useState(true);
+  const [showForm,      setShowForm]      = useState(false);
+  const [editRecord,    setEditRecord]    = useState(null);
+  const [xferTarget,    setXferTarget]    = useState(null); // { record, fromDepotId }
+  const [filter,        setFilter]        = useState('active');
+  const [yardFilter,    setYardFilter]    = useState('all');
+  const [search,        setSearch]        = useState('');
 
   const load = useCallback(async () => {
     if (!companyId) return;
-    const [{ data: recs }, { data: deps }] = await Promise.all([
+
+    const [{ data: recs }, { data: deps }, { data: xfers }, { data: trucks }] = await Promise.all([
       supabase.from('tow_ins').select('*').eq('company_id', companyId).order('date_in', { ascending: false }),
       supabase.from('depots').select('*').eq('company_id', companyId).order('name'),
+      supabase.from('tow_in_transfers').select('*').order('transferred_at'),
+      // driver's assigned trucks — tells us which depots a driver can log into
+      supabase.from('tow_trucks').select('depot_id').eq('auth_email', userEmail).eq('company_id', companyId),
     ]);
-    setRecords(recs || []);
-    setDepots(deps || []);
+
+    const recList  = recs  || [];
+    const depList  = deps  || [];
+    const xferList = xfers || [];
+
+    // Build transfers map: tow_in_id → sorted array
+    const xferMap = {};
+    xferList.forEach(x => {
+      if (!xferMap[x.tow_in_id]) xferMap[x.tow_in_id] = [];
+      xferMap[x.tow_in_id].push(x);
+    });
+
+    // Depot picker for the log form: drivers see only their truck's depot(s); dispatch sees all
+    let fDepots = depList;
+    if (!isDispatch && trucks && trucks.length > 0) {
+      const ids = new Set(trucks.map(t => t.depot_id).filter(Boolean));
+      fDepots = depList.filter(d => ids.has(d.id));
+    }
+
+    setRecords(recList);
+    setAllDepots(depList);
+    setFormDepots(fDepots.length > 0 ? fDepots : depList);
+    setTransfers(xferMap);
     setLoading(false);
-  }, [companyId]);
+  }, [companyId, userEmail, isDispatch]);
 
   useEffect(() => { load(); }, [load]);
 
-  const handleSave = (saved) => {
+  const handleSave = saved => {
     setRecords(prev => {
       const idx = prev.findIndex(r => r.id === saved.id);
       return idx >= 0 ? prev.map(r => r.id === saved.id ? saved : r) : [saved, ...prev];
@@ -345,19 +500,30 @@ export default function TowInsTab({ companyId, userEmail, isDispatch }) {
     setEditRecord(null);
   };
 
-  const handleRelease = async (record) => {
-    const now = new Date().toISOString();
+  const handleRelease = async record => {
     const { data, error } = await supabase.from('tow_ins')
-      .update({ date_out: now }).eq('id', record.id).select().single();
+      .update({ date_out: new Date().toISOString() }).eq('id', record.id).select().single();
     if (!error && data) setRecords(prev => prev.map(r => r.id === data.id ? data : r));
   };
+
+  const handleTransferSave = saved => {
+    setTransfers(prev => {
+      const list = [...(prev[saved.tow_in_id] || []), saved];
+      list.sort((a, b) => new Date(a.transferred_at) - new Date(b.transferred_at));
+      return { ...prev, [saved.tow_in_id]: list };
+    });
+    setXferTarget(null);
+  };
+
+  // Resolve current depot per record for filtering/grouping
+  const curDepot = r => currentDepotId(r, transfers);
 
   const filtered = records.filter(r => {
     if (filter === 'active'   && r.date_out)  return false;
     if (filter === 'released' && !r.date_out) return false;
-    if (yardFilter !== 'all'  && r.depot_id !== yardFilter) return false;
+    if (yardFilter !== 'all'  && curDepot(r) !== yardFilter) return false;
     if (search.trim()) {
-      const q = search.toLowerCase();
+      const q   = search.toLowerCase();
       const hay = [r.plate, r.make_model, r.notes].filter(Boolean).join(' ').toLowerCase();
       if (!hay.includes(q)) return false;
     }
@@ -367,29 +533,48 @@ export default function TowInsTab({ companyId, userEmail, isDispatch }) {
   const activeCount   = records.filter(r => !r.date_out).length;
   const releasedCount = records.filter(r =>  r.date_out).length;
 
+  const cardProps = r => ({
+    key: r.id, record: r, allDepots, transfers, isDispatch,
+    onEdit: setEditRecord,
+    onRelease: handleRelease,
+    onTransfer: (rec, fromDepotId) => setXferTarget({ record: rec, fromDepotId }),
+    searchTerm: search.trim(),
+  });
+
   return (
     <div style={{ padding: 16, flex: 1, overflowY: 'auto' }}>
       {(showForm || editRecord) && (
         <TowInForm
           record={editRecord}
-          depots={depots}
+          formDepots={formDepots}
+          allDepots={allDepots}
           userEmail={userEmail}
           companyId={companyId}
           onSave={handleSave}
           onCancel={() => { setShowForm(false); setEditRecord(null); }}
         />
       )}
+      {xferTarget && (
+        <TransferForm
+          towIn={xferTarget.record}
+          allDepots={allDepots}
+          fromDepotId={xferTarget.fromDepotId}
+          userEmail={userEmail}
+          onSave={handleTransferSave}
+          onCancel={() => setXferTarget(null)}
+        />
+      )}
 
+      {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, gap: 8, flexWrap: 'wrap' }}>
         <div>
           <div style={{ fontSize: 13, fontWeight: 700, color: TXT, letterSpacing: '0.06em' }}>🏭 Tow Ins</div>
           <div style={{ fontSize: 9, color: MUT, marginTop: 2 }}>
-            {activeCount > 0 && <span style={{ color: ACC }}>· {activeCount} in storage</span>}
+            {activeCount > 0   && <span style={{ color: ACC }}>· {activeCount} in storage</span>}
             {releasedCount > 0 && <span style={{ marginLeft: 8 }}>· {releasedCount} released</span>}
           </div>
         </div>
-        <button onClick={() => { setEditRecord(null); setShowForm(true); }}
-          style={{ ...btnA, ...sm }}>
+        <button onClick={() => { setEditRecord(null); setShowForm(true); }} style={{ ...btnA, ...sm }}>
           + Log Tow In
         </button>
       </div>
@@ -405,15 +590,16 @@ export default function TowInsTab({ companyId, userEmail, isDispatch }) {
             {f === 'active' ? `In Storage (${activeCount})` : f === 'released' ? `Released (${releasedCount})` : 'All'}
           </button>
         ))}
-        {depots.length > 1 && (
+        {allDepots.length > 1 && (
           <select value={yardFilter} onChange={e => setYardFilter(e.target.value)}
             style={{ ...btnG, ...sm, fontSize: 8, cursor: 'pointer', background: '#0d0d0d' }}>
             <option value="all">All Yards</option>
-            {depots.map(d => <option key={d.id} value={d.id}>{d.name}{d.suburb ? ` · ${d.suburb}` : ''}</option>)}
+            {allDepots.map(d => <option key={d.id} value={d.id}>{d.name}{d.suburb ? ` · ${d.suburb}` : ''}</option>)}
           </select>
         )}
       </div>
 
+      {/* Search */}
       <div style={{ marginBottom: 12 }}>
         <input value={search} onChange={e => setSearch(e.target.value)}
           placeholder="Search plate, make/model, notes…"
@@ -424,18 +610,16 @@ export default function TowInsTab({ companyId, userEmail, isDispatch }) {
       {!loading && filtered.length === 0 && (
         <div style={{ fontSize: 10, color: MUT, textAlign: 'center', padding: '32px 0', lineHeight: 1.8 }}>
           No tow-ins found.<br />
-          <span style={{ fontSize: 8 }}>
-            <button onClick={() => { setEditRecord(null); setShowForm(true); }}
-              style={{ ...btnA, ...sm, marginTop: 10 }}>Log First Tow In</button>
-          </span>
+          <button onClick={() => { setEditRecord(null); setShowForm(true); }}
+            style={{ ...btnA, ...sm, marginTop: 10 }}>Log First Tow In</button>
         </div>
       )}
 
-      {/* Group by yard if showing all yards */}
+      {/* List — grouped by current yard when viewing all */}
       {!loading && filtered.length > 0 && (
-        yardFilter === 'all' && depots.length > 1
-          ? depots.map(d => {
-              const yardRecs = filtered.filter(r => r.depot_id === d.id);
+        yardFilter === 'all' && allDepots.length > 1
+          ? allDepots.map(d => {
+              const yardRecs = filtered.filter(r => curDepot(r) === d.id);
               if (yardRecs.length === 0) return null;
               return (
                 <div key={d.id} style={{ marginBottom: 20 }}>
@@ -443,17 +627,11 @@ export default function TowInsTab({ companyId, userEmail, isDispatch }) {
                     fontWeight: 700, marginBottom: 8, borderLeft: `2px solid ${ACC}`, paddingLeft: 6 }}>
                     {d.name}{d.suburb ? ` · ${d.suburb}` : ''} ({yardRecs.length})
                   </div>
-                  {yardRecs.map(r => (
-                    <TowInCard key={r.id} record={r} depots={depots} isDispatch={isDispatch}
-                      onEdit={setEditRecord} onRelease={handleRelease} />
-                  ))}
+                  {yardRecs.map(r => <TowInCard {...cardProps(r)} />)}
                 </div>
               );
             })
-          : filtered.map(r => (
-              <TowInCard key={r.id} record={r} depots={depots} isDispatch={isDispatch}
-                onEdit={setEditRecord} onRelease={handleRelease} />
-            ))
+          : filtered.map(r => <TowInCard {...cardProps(r)} />)
       )}
     </div>
   );
