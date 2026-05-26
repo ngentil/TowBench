@@ -12,3 +12,9 @@ create policy "admin write truck"
   on tow_trucks for all
   using  (company_id = my_company_id() or my_role() = 'super_admin')
   with check (company_id = my_company_id() or my_role() = 'super_admin');
+
+drop policy if exists "admin write config" on company_config;
+create policy "admin write config"
+  on company_config for all
+  using  (company_id = my_company_id() or my_role() = 'super_admin')
+  with check (company_id = my_company_id() or my_role() = 'super_admin');

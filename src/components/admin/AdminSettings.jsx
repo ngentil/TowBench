@@ -24,8 +24,9 @@ export default function AdminSettings({ companyConfig, setCompanyConfig, company
   const [name,   setName]   = useState(companyConfig.company_name || '');
   const [accent, setAccent] = useState(companyConfig.accent_color || '#e8670a');
   const [logo,   setLogo]   = useState(companyConfig.logo_url || '');
-  const [saving, setSaving] = useState(false);
-  const [saved,  setSaved]  = useState(false);
+  const [saving,    setSaving]    = useState(false);
+  const [saved,     setSaved]     = useState(false);
+  const [brandErr,  setBrandErr]  = useState('');
 
   // Pricing
   const [tradeBaseFee,      setTradeBaseFee]      = useState(String(companyConfig.trade_base_fee          ?? '0'));
@@ -45,6 +46,7 @@ export default function AdminSettings({ companyConfig, setCompanyConfig, company
   const [allowAccidentTwoUp, setAllowAccidentTwoUp] = useState(companyConfig.allow_accident_twoUp ?? false);
   const [priceSaving, setPriceSaving] = useState(false);
   const [priceSaved,  setPriceSaved]  = useState(false);
+  const [priceErr,    setPriceErr]    = useState('');
 
   // Driver approval
   const [pendingDrivers, setPendingDrivers] = useState([]);
@@ -67,7 +69,7 @@ export default function AdminSettings({ companyConfig, setCompanyConfig, company
   };
 
   const saveBranding = async () => {
-    setSaving(true); setSaved(false);
+    setSaving(true); setSaved(false); setBrandErr('');
     const payload = {
       company_name: name.trim() || 'TowBench',
       accent_color: accent,
@@ -75,13 +77,14 @@ export default function AdminSettings({ companyConfig, setCompanyConfig, company
       updated_at: new Date().toISOString(),
     };
     const { data, error } = await supabase.from('company_config')
-      .update(payload).eq('id', companyConfig.id).select().single();
+      .update(payload).eq('company_id', companyId).select().single();
     setSaving(false);
-    if (!error && data) { setCompanyConfig(data); setSaved(true); setTimeout(() => setSaved(false), 2500); }
+    if (error) { setBrandErr(error.message); return; }
+    if (data) { setCompanyConfig(data); setSaved(true); setTimeout(() => setSaved(false), 2500); }
   };
 
   const savePricing = async () => {
-    setPriceSaving(true); setPriceSaved(false);
+    setPriceSaving(true); setPriceSaved(false); setPriceErr('');
     const payload = {
       trade_base_fee:            parseFloat(tradeBaseFee)    || 0,
       accident_base_fee:         parseFloat(accidentBaseFee) || 0,
@@ -101,9 +104,10 @@ export default function AdminSettings({ companyConfig, setCompanyConfig, company
       updated_at: new Date().toISOString(),
     };
     const { data, error } = await supabase.from('company_config')
-      .update(payload).eq('id', companyConfig.id).select().single();
+      .update(payload).eq('company_id', companyId).select().single();
     setPriceSaving(false);
-    if (!error && data) { setCompanyConfig(data); setPriceSaved(true); setTimeout(() => setPriceSaved(false), 2500); }
+    if (error) { setPriceErr(error.message); return; }
+    if (data) { setCompanyConfig(data); setPriceSaved(true); setTimeout(() => setPriceSaved(false), 2500); }
   };
 
   const approveDriver = async (truckId) => {
@@ -151,12 +155,13 @@ export default function AdminSettings({ companyConfig, setCompanyConfig, company
             )}
           </div>
         )}
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 6 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 6, flexWrap: 'wrap' }}>
           <button onClick={saveBranding} disabled={saving}
             style={{ ...btnA, fontSize: 9, padding: '7px 14px', opacity: saving ? 0.6 : 1 }}>
             {saving ? 'Saving…' : 'Save Branding'}
           </button>
-          {saved && <span style={{ fontSize: 9, color: '#3d9e50' }}>✓ Saved</span>}
+          {saved     && <span style={{ fontSize: 9, color: '#3d9e50' }}>✓ Saved</span>}
+          {brandErr  && <span style={{ fontSize: 9, color: '#cc4444' }}>{brandErr}</span>}
         </div>
       </div>
 
@@ -261,12 +266,13 @@ export default function AdminSettings({ companyConfig, setCompanyConfig, company
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <button onClick={savePricing} disabled={priceSaving}
             style={{ ...btnA, fontSize: 9, padding: '7px 14px', opacity: priceSaving ? 0.6 : 1 }}>
             {priceSaving ? 'Saving…' : 'Save Pricing'}
           </button>
           {priceSaved && <span style={{ fontSize: 9, color: '#3d9e50' }}>✓ Saved</span>}
+          {priceErr   && <span style={{ fontSize: 9, color: '#cc4444' }}>{priceErr}</span>}
         </div>
       </div>
 
