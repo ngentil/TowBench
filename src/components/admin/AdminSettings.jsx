@@ -28,17 +28,20 @@ export default function AdminSettings({ companyConfig, setCompanyConfig, company
   const [saved,  setSaved]  = useState(false);
 
   // Pricing
-  const [baseFee,    setBaseFee]    = useState(String(companyConfig.base_fee    ?? '0'));
-  const [perKmFee,   setPerKmFee]   = useState(String(companyConfig.per_km_fee  ?? '0'));
-  const [ahFee,      setAhFee]      = useState(String(companyConfig.after_hours_fee ?? '0'));
-  const [ahStartWD,  setAhStartWD]  = useState(companyConfig.after_hours_start_weekday ?? '18:00');
-  const [ahEndWD,    setAhEndWD]    = useState(companyConfig.after_hours_end_weekday   ?? '06:00');
-  const [ahStartWE,  setAhStartWE]  = useState(companyConfig.after_hours_start_weekend ?? '18:00');
-  const [ahEndWE,    setAhEndWE]    = useState(companyConfig.after_hours_end_weekend   ?? '06:00');
-  const [storageCarCover,  setStorageCarCover]  = useState(String(companyConfig.storage_car_undercover  ?? '0'));
-  const [storageBikeCover, setStoageBikeCover] = useState(String(companyConfig.storage_bike_undercover ?? '0'));
-  const [storageCarYard,   setStorageCarYard]   = useState(String(companyConfig.storage_car_yard        ?? '0'));
-  const [storageBikeYard,  setStorageBikeYard]  = useState(String(companyConfig.storage_bike_yard       ?? '0'));
+  const [tradeBaseFee,      setTradeBaseFee]      = useState(String(companyConfig.trade_base_fee          ?? '0'));
+  const [accidentBaseFee,   setAccidentBaseFee]   = useState(String(companyConfig.accident_base_fee       ?? '0'));
+  const [tradePerKm,        setTradePerKm]        = useState(String(companyConfig.trade_per_km_fee        ?? '0'));
+  const [accidentPerKm,     setAccidentPerKm]     = useState(String(companyConfig.accident_per_km_fee     ?? '0'));
+  const [ahFeeWD,           setAhFeeWD]           = useState(String(companyConfig.after_hours_fee_weekday ?? '0'));
+  const [ahFeeWE,           setAhFeeWE]           = useState(String(companyConfig.after_hours_fee_weekend ?? '0'));
+  const [ahStartWD,         setAhStartWD]         = useState(companyConfig.after_hours_start_weekday ?? '18:00');
+  const [ahEndWD,           setAhEndWD]           = useState(companyConfig.after_hours_end_weekday   ?? '06:00');
+  const [ahStartWE,         setAhStartWE]         = useState(companyConfig.after_hours_start_weekend ?? '18:00');
+  const [ahEndWE,           setAhEndWE]           = useState(companyConfig.after_hours_end_weekend   ?? '06:00');
+  const [storageCarCover,   setStorageCarCover]   = useState(String(companyConfig.storage_car_undercover  ?? '0'));
+  const [storageBikeCover,  setStoageBikeCover]   = useState(String(companyConfig.storage_bike_undercover ?? '0'));
+  const [storageCarYard,    setStorageCarYard]    = useState(String(companyConfig.storage_car_yard        ?? '0'));
+  const [storageBikeYard,   setStorageBikeYard]   = useState(String(companyConfig.storage_bike_yard       ?? '0'));
   const [priceSaving, setPriceSaving] = useState(false);
   const [priceSaved,  setPriceSaved]  = useState(false);
 
@@ -79,9 +82,12 @@ export default function AdminSettings({ companyConfig, setCompanyConfig, company
   const savePricing = async () => {
     setPriceSaving(true); setPriceSaved(false);
     const payload = {
-      base_fee:                  parseFloat(baseFee)  || 0,
-      per_km_fee:                parseFloat(perKmFee) || 0,
-      after_hours_fee:           parseFloat(ahFee)    || 0,
+      trade_base_fee:            parseFloat(tradeBaseFee)    || 0,
+      accident_base_fee:         parseFloat(accidentBaseFee) || 0,
+      trade_per_km_fee:          parseFloat(tradePerKm)      || 0,
+      accident_per_km_fee:       parseFloat(accidentPerKm)   || 0,
+      after_hours_fee_weekday:   parseFloat(ahFeeWD)         || 0,
+      after_hours_fee_weekend:   parseFloat(ahFeeWE)         || 0,
       after_hours_start_weekday: ahStartWD,
       after_hours_end_weekday:   ahEndWD,
       after_hours_start_weekend: ahStartWE,
@@ -155,21 +161,48 @@ export default function AdminSettings({ companyConfig, setCompanyConfig, company
       {/* ── Pricing ──────────────────────────────────────────────── */}
       {sectionHead('Pricing', 'Used in the Trace route pill to estimate job cost')}
       <div style={{ background: SURF, border: '1px solid ' + BRD, borderRadius: 2, padding: '16px 18px', maxWidth: 480, marginBottom: 24 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 14 }}>
+
+        {/* Base fees */}
+        <div style={{ fontSize: 8, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 8 }}>Base Fee</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
           <div>
-            <div style={{ fontSize: 8, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 5 }}>Base Fee ($)</div>
-            {numInp(baseFee, e => setBaseFee(e.target.value))}
+            <div style={{ fontSize: 8, color: MUT, marginBottom: 5 }}>Trade Tow <span style={{ color: '#2a2a2a' }}>· first 10 km</span></div>
+            {numInp(tradeBaseFee, e => setTradeBaseFee(e.target.value))}
           </div>
           <div>
-            <div style={{ fontSize: 8, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 5 }}>Per km ($)</div>
-            {numInp(perKmFee, e => setPerKmFee(e.target.value))}
-          </div>
-          <div>
-            <div style={{ fontSize: 8, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 5 }}>After Hours ($)</div>
-            {numInp(ahFee, e => setAhFee(e.target.value))}
+            <div style={{ fontSize: 8, color: MUT, marginBottom: 5 }}>Accident Tow <span style={{ color: '#2a2a2a' }}>· first 8 km</span></div>
+            {numInp(accidentBaseFee, e => setAccidentBaseFee(e.target.value))}
           </div>
         </div>
-        <div style={{ fontSize: 8, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 10 }}>After Hours Window</div>
+
+        {/* Per km */}
+        <div style={{ fontSize: 8, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 8 }}>Per Kilometre Charge</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+          <div>
+            <div style={{ fontSize: 8, color: MUT, marginBottom: 5 }}>Trade ($/km)</div>
+            {numInp(tradePerKm, e => setTradePerKm(e.target.value))}
+          </div>
+          <div>
+            <div style={{ fontSize: 8, color: MUT, marginBottom: 5 }}>Accident ($/km)</div>
+            {numInp(accidentPerKm, e => setAccidentPerKm(e.target.value))}
+          </div>
+        </div>
+
+        {/* After hours surcharge */}
+        <div style={{ fontSize: 8, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 8 }}>After Hours Surcharge</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 10 }}>
+          <div>
+            <div style={{ fontSize: 8, color: MUT, marginBottom: 5 }}>Weekday ($)</div>
+            {numInp(ahFeeWD, e => setAhFeeWD(e.target.value))}
+          </div>
+          <div>
+            <div style={{ fontSize: 8, color: MUT, marginBottom: 5 }}>Weekend ($)</div>
+            {numInp(ahFeeWE, e => setAhFeeWE(e.target.value))}
+          </div>
+        </div>
+
+        {/* After hours window */}
+        <div style={{ fontSize: 8, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 8 }}>After Hours Window</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 6 }}>
           <div>
             <div style={{ fontSize: 8, color: '#3a3a3a', marginBottom: 4 }}>Weekday Start</div>
@@ -188,11 +221,13 @@ export default function AdminSettings({ companyConfig, setCompanyConfig, company
             {timeInp(ahEndWE, e => setAhEndWE(e.target.value))}
           </div>
         </div>
-        <div style={{ fontSize: 8, color: MUT, marginBottom: 14, lineHeight: 1.6 }}>
+        <div style={{ fontSize: 8, color: MUT, marginBottom: 16, lineHeight: 1.6 }}>
           After-hours spans midnight — any time ≥ start OR &lt; end counts.
         </div>
-        <div style={{ fontSize: 8, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 10, marginTop: 4 }}>Storage ($ per day)</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+
+        {/* Storage */}
+        <div style={{ fontSize: 8, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 8 }}>Storage ($ per day)</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 16 }}>
           <div>
             <div style={{ fontSize: 8, color: MUT, marginBottom: 5 }}>Motor car, under cover</div>
             {numInp(storageCarCover, e => setStorageCarCover(e.target.value))}
@@ -210,6 +245,7 @@ export default function AdminSettings({ companyConfig, setCompanyConfig, company
             {numInp(storageBikeYard, e => setStorageBikeYard(e.target.value))}
           </div>
         </div>
+
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button onClick={savePricing} disabled={priceSaving}
             style={{ ...btnA, fontSize: 9, padding: '7px 14px', opacity: priceSaving ? 0.6 : 1 }}>
