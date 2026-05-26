@@ -43,7 +43,7 @@ export default function AdminSettings({ companyConfig, setCompanyConfig, company
   const [storageBikeCover,   setStoageBikeCover]    = useState(String(companyConfig.storage_bike_undercover ?? '0'));
   const [storageCarYard,     setStorageCarYard]     = useState(String(companyConfig.storage_car_yard        ?? '0'));
   const [storageBikeYard,    setStorageBikeYard]    = useState(String(companyConfig.storage_bike_yard       ?? '0'));
-  const [allowAccidentTwoUp, setAllowAccidentTwoUp] = useState(companyConfig.allow_accident_twoUp ?? false);
+  const [allowAccidentTwoUp, setAllowAccidentTwoUp] = useState(companyConfig.allow_accident_twoup ?? false);
   const [priceSaving, setPriceSaving] = useState(false);
   const [priceSaved,  setPriceSaved]  = useState(false);
   const [priceErr,    setPriceErr]    = useState('');
@@ -100,7 +100,7 @@ export default function AdminSettings({ companyConfig, setCompanyConfig, company
       storage_bike_undercover:   parseFloat(storageBikeCover) || 0,
       storage_car_yard:          parseFloat(storageCarYard)   || 0,
       storage_bike_yard:         parseFloat(storageBikeYard)  || 0,
-      allow_accident_twoUp:      allowAccidentTwoUp,
+      allow_accident_twoup:      allowAccidentTwoUp,
       updated_at: new Date().toISOString(),
     };
     const { data, error } = await supabase.from('company_config')
