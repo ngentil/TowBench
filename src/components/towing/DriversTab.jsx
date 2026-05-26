@@ -221,18 +221,20 @@ function DriverCard({ truck, depots, isDispatch, onEdit, onApprove, searchTerm }
 }
 
 // ─── Invite codes section ─────────────────────────────────────────────────────
-function InviteCodesSection({ companyId }) {
-  const [codes,     setCodes]     = useState([]);
-  const [loading,   setLoading]   = useState(true);
-  const [generating,setGenerating]= useState(false);
-  const [copied,    setCopied]    = useState(null);
+const CODE_TYPE_COLORS = { driver: GRN, dispatch: '#5588cc' };
+
+function InviteCodesSection({ companyId, isAdmin }) {
+  const [codes,      setCodes]      = useState([]);
+  const [loading,    setLoading]    = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [copied,     setCopied]     = useState(null);
+  const [codeType,   setCodeType]   = useState('driver'); // 'driver' | 'dispatch'
 
   const load = useCallback(async () => {
     const { data } = await supabase
       .from('invite_codes')
       .select('*')
       .eq('company_id', companyId)
-      .eq('role', 'driver')
       .order('created_at', { ascending: false });
     setCodes(data || []);
     setLoading(false);
@@ -242,13 +244,11 @@ function InviteCodesSection({ companyId }) {
 
   const generate = async () => {
     setGenerating(true);
-    const { data, error } = await supabase.rpc('generate_invite_code', {
-      p_role: 'driver',
+    const { error } = await supabase.rpc('generate_invite_code', {
+      p_role: codeType,
       p_company_id: companyId,
     });
-    if (!error && data) {
-      await load();
-    }
+    if (!error) await load();
     setGenerating(false);
   };
 
@@ -263,37 +263,59 @@ function InviteCodesSection({ companyId }) {
 
   return (
     <div style={{ marginTop: 24 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, gap: 8, flexWrap: 'wrap' }}>
         <div style={{ fontSize: 9, color: ACC, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
           Invite Codes
         </div>
-        <button onClick={generate} disabled={generating}
-          style={{ ...btnA, ...sm, opacity: generating ? 0.5 : 1 }}>
-          {generating ? 'Generating…' : '+ New Code'}
-        </button>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          {isAdmin && (
+            <div style={{ display: 'flex', border: '1px solid #2a2a2a', borderRadius: 2, overflow: 'hidden' }}>
+              {['driver', 'dispatch'].map(t => (
+                <button key={t} onClick={() => setCodeType(t)}
+                  style={{ fontSize: 7, fontWeight: 700, letterSpacing: '0.08em', padding: '3px 8px',
+                    textTransform: 'uppercase', border: 'none', cursor: 'pointer',
+                    fontFamily: "'IBM Plex Mono',monospace",
+                    background: codeType === t ? CODE_TYPE_COLORS[t] + '22' : '#0d0d0d',
+                    color: codeType === t ? CODE_TYPE_COLORS[t] : MUT }}>
+                  {t === 'driver' ? 'Driver' : 'Dispatcher'}
+                </button>
+              ))}
+            </div>
+          )}
+          <button onClick={generate} disabled={generating}
+            style={{ ...btnA, ...sm, opacity: generating ? 0.5 : 1 }}>
+            {generating ? 'Generating…' : '+ New Code'}
+          </button>
+        </div>
       </div>
       {loading && <div style={{ fontSize: 9, color: MUT }}>Loading…</div>}
       {!loading && unused.length === 0 && (
-        <div style={{ fontSize: 9, color: MUT }}>No active invite codes. Generate one to share with a new driver.</div>
+        <div style={{ fontSize: 9, color: MUT }}>No active invite codes. Generate one to share.</div>
       )}
-      {unused.map(c => (
-        <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#0d0d0d',
-          border: '1px solid #252525', borderRadius: 2, padding: '8px 12px', marginBottom: 4 }}>
-          <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 16, fontWeight: 700,
-            letterSpacing: '0.18em', color: ACC, flex: 1 }}>
-            {c.code}
-          </span>
-          <span style={{ fontSize: 7, color: MUT }}>
-            {new Date(c.created_at).toLocaleDateString('en-AU')}
-          </span>
-          <button onClick={() => copy(c.code)}
-            style={{ ...btnG, ...sm, fontSize: 7,
-              color: copied === c.code ? GRN : MUT,
-              borderColor: copied === c.code ? GRN + '55' : undefined }}>
-            {copied === c.code ? '✓ Copied' : 'Copy'}
-          </button>
-        </div>
-      ))}
+      {unused.map(c => {
+        const typeColor = CODE_TYPE_COLORS[c.role] || GRN;
+        return (
+          <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#0d0d0d',
+            border: `1px solid ${typeColor}33`, borderRadius: 2, padding: '8px 12px', marginBottom: 4 }}>
+            <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 16, fontWeight: 700,
+              letterSpacing: '0.18em', color: typeColor, flex: 1 }}>
+              {c.code}
+            </span>
+            <span style={{ fontSize: 7, fontWeight: 700, letterSpacing: '0.08em', padding: '1px 5px',
+              border: `1px solid ${typeColor}44`, borderRadius: 2, color: typeColor,
+              background: typeColor + '15', textTransform: 'uppercase' }}>
+              {c.role}
+            </span>
+            <span style={{ fontSize: 7, color: MUT }}>{new Date(c.created_at).toLocaleDateString('en-AU')}</span>
+            <button onClick={() => copy(c.code)}
+              style={{ ...btnG, ...sm, fontSize: 7,
+                color: copied === c.code ? GRN : MUT,
+                borderColor: copied === c.code ? GRN + '55' : undefined }}>
+              {copied === c.code ? '✓ Copied' : 'Copy'}
+            </button>
+          </div>
+        );
+      })}
       {used.length > 0 && (
         <details style={{ marginTop: 8 }}>
           <summary style={{ fontSize: 8, color: MUT, cursor: 'pointer', letterSpacing: '0.08em' }}>
@@ -304,6 +326,7 @@ function InviteCodesSection({ companyId }) {
               <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8,
                 fontSize: 8, color: '#333', padding: '4px 0' }}>
                 <span style={{ fontFamily: "'IBM Plex Mono',monospace", letterSpacing: '0.1em' }}>{c.code}</span>
+                <span style={{ fontSize: 7, color: '#2a2a2a' }}>[{c.role}]</span>
                 <span>·</span>
                 <span>{c.used_by || '—'}</span>
                 <span>·</span>
@@ -318,7 +341,7 @@ function InviteCodesSection({ companyId }) {
 }
 
 // ─── Main tab ─────────────────────────────────────────────────────────────────
-export default function DriversTab({ companyId, isDispatch }) {
+export default function DriversTab({ companyId, isDispatch, role }) {
   const [trucks,     setTrucks]     = useState([]);
   const [depots,     setDepots]     = useState([]);
   const [loading,    setLoading]    = useState(true);
@@ -435,7 +458,7 @@ export default function DriversTab({ companyId, isDispatch }) {
         />
       ))}
 
-      {isDispatch && <InviteCodesSection companyId={companyId} />}
+      {isDispatch && <InviteCodesSection companyId={companyId} isAdmin={role === 'admin' || role === 'super_admin'} />}
     </div>
   );
 }
