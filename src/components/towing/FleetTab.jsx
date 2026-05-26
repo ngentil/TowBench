@@ -36,24 +36,47 @@ function StatusBadge({ status }) {
 }
 
 function DepotForm({ depot, onSave, onCancel }) {
-  const [name,    setName]    = useState(depot?.name    || '');
-  const [suburb,  setSuburb]  = useState(depot?.suburb  || '');
-  const [address, setAddress] = useState(depot?.address || '');
-  const [saving,  setSaving]  = useState(false);
-  const [err,     setErr]     = useState('');
+  const [name,           setName]           = useState(depot?.name    || '');
+  const [suburb,         setSuburb]         = useState(depot?.suburb  || '');
+  const [address,        setAddress]        = useState(depot?.address || '');
+  const [addrResults,    setAddrResults]    = useState([]);
+  const [pickedCoords,   setPickedCoords]   = useState(depot?.lat != null ? { lat: depot.lat, lng: depot.lng } : null);
+  const [saving,         setSaving]         = useState(false);
+  const [err,            setErr]            = useState('');
   const fld = { background: '#0a0a0a', border: '1px solid #252525', color: TXT, fontFamily: "'IBM Plex Mono',monospace", fontSize: 11, padding: '6px 8px', borderRadius: 2, outline: 'none', boxSizing: 'border-box', width: '100%' };
+
+  // Debounced Nominatim autocomplete
+  useEffect(() => {
+    if (address.length < 3) { setAddrResults([]); return; }
+    const t = setTimeout(async () => {
+      try {
+        const res  = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=5&countrycodes=au`);
+        const data = await res.json();
+        setAddrResults(data.map(r => ({ label: r.display_name, lat: parseFloat(r.lat), lng: parseFloat(r.lon) })));
+      } catch { setAddrResults([]); }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [address]);
+
+  const pickResult = (r) => {
+    setAddress(r.label.split(',').slice(0, 2).join(',').trim());
+    setPickedCoords({ lat: r.lat, lng: r.lng });
+    setAddrResults([]);
+  };
 
   const save = async () => {
     if (!name.trim()) { setErr('Name required'); return; }
     setSaving(true); setErr('');
     try {
-      let lat = depot?.lat ?? null, lng = depot?.lng ?? null;
-      if (address.trim()) {
+      let lat = pickedCoords?.lat ?? depot?.lat ?? null;
+      let lng = pickedCoords?.lng ?? depot?.lng ?? null;
+      // Fallback: geocode on save if no coords yet
+      if ((lat == null) && address.trim()) {
         try {
           const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address.trim())}&limit=1&countrycodes=au`);
           const results = await res.json();
           if (results[0]) { lat = parseFloat(results[0].lat); lng = parseFloat(results[0].lon); }
-        } catch { /* geocode failure is non-fatal */ }
+        } catch { /* non-fatal */ }
       }
       await onSave({ ...depot, name: name.trim(), suburb: suburb.trim(), address: address.trim() || null, lat, lng });
     } catch (e) { setErr(e.message); }
@@ -70,10 +93,32 @@ function DepotForm({ depot, onSave, onCancel }) {
         <div style={{ ...mdlB, display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div><FL t="Depot Name *" /><input style={fld} value={name} onChange={e => setName(e.target.value)} placeholder="e.g. North Depot" autoFocus /></div>
           <div><FL t="Suburb" /><input style={fld} value={suburb} onChange={e => setSuburb(e.target.value)} placeholder="e.g. Campbellfield" /></div>
-          <div>
+          <div style={{ position: 'relative' }}>
             <FL t="Address (for map routing)" />
-            <input style={fld} value={address} onChange={e => setAddress(e.target.value)} placeholder="e.g. 123 Example St, Campbellfield VIC" />
-            {depot?.lat != null && <div style={{ fontSize: 7, color: '#3a3a3a', marginTop: 3 }}>📍 {depot.lat.toFixed(5)}, {depot.lng.toFixed(5)}</div>}
+            <input
+              style={fld}
+              value={address}
+              onChange={e => { setAddress(e.target.value); setPickedCoords(null); }}
+              placeholder="e.g. 123 Example St, Campbellfield VIC"
+            />
+            {addrResults.length > 0 && (
+              <div style={{ position: 'absolute', left: 0, right: 0, top: '100%', zIndex: 500, background: '#0d0d0d', border: '1px solid #2a2a2a', borderRadius: 2, maxHeight: 160, overflowY: 'auto', marginTop: 2 }}>
+                {addrResults.map((r, i) => (
+                  <div key={i} onClick={() => pickResult(r)}
+                    style={{ padding: '6px 8px', fontSize: 9, color: '#bbb', cursor: 'pointer', borderBottom: '1px solid #1a1a1a', lineHeight: 1.5, fontFamily: "'IBM Plex Mono',monospace" }}
+                    onMouseEnter={e => e.currentTarget.style.background = '#1a1a1a'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                    {r.label}
+                  </div>
+                ))}
+              </div>
+            )}
+            {pickedCoords && (
+              <div style={{ fontSize: 7, color: '#3a7a3a', marginTop: 3 }}>📍 {pickedCoords.lat.toFixed(5)}, {pickedCoords.lng.toFixed(5)}</div>
+            )}
+            {!pickedCoords && depot?.lat != null && (
+              <div style={{ fontSize: 7, color: '#3a3a3a', marginTop: 3 }}>📍 {depot.lat.toFixed(5)}, {depot.lng.toFixed(5)}</div>
+            )}
           </div>
           {err && <div style={{ fontSize: 9, color: RED }}>{err}</div>}
         </div>
