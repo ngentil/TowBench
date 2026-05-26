@@ -38,10 +38,11 @@ export default function AdminSettings({ companyConfig, setCompanyConfig, company
   const [ahEndWD,           setAhEndWD]           = useState(companyConfig.after_hours_end_weekday   ?? '06:00');
   const [ahStartWE,         setAhStartWE]         = useState(companyConfig.after_hours_start_weekend ?? '18:00');
   const [ahEndWE,           setAhEndWE]           = useState(companyConfig.after_hours_end_weekend   ?? '06:00');
-  const [storageCarCover,   setStorageCarCover]   = useState(String(companyConfig.storage_car_undercover  ?? '0'));
-  const [storageBikeCover,  setStoageBikeCover]   = useState(String(companyConfig.storage_bike_undercover ?? '0'));
-  const [storageCarYard,    setStorageCarYard]    = useState(String(companyConfig.storage_car_yard        ?? '0'));
-  const [storageBikeYard,   setStorageBikeYard]   = useState(String(companyConfig.storage_bike_yard       ?? '0'));
+  const [storageCarCover,    setStorageCarCover]    = useState(String(companyConfig.storage_car_undercover  ?? '0'));
+  const [storageBikeCover,   setStoageBikeCover]    = useState(String(companyConfig.storage_bike_undercover ?? '0'));
+  const [storageCarYard,     setStorageCarYard]     = useState(String(companyConfig.storage_car_yard        ?? '0'));
+  const [storageBikeYard,    setStorageBikeYard]    = useState(String(companyConfig.storage_bike_yard       ?? '0'));
+  const [allowAccidentTwoUp, setAllowAccidentTwoUp] = useState(companyConfig.allow_accident_twoUp ?? false);
   const [priceSaving, setPriceSaving] = useState(false);
   const [priceSaved,  setPriceSaved]  = useState(false);
 
@@ -96,6 +97,7 @@ export default function AdminSettings({ companyConfig, setCompanyConfig, company
       storage_bike_undercover:   parseFloat(storageBikeCover) || 0,
       storage_car_yard:          parseFloat(storageCarYard)   || 0,
       storage_bike_yard:         parseFloat(storageBikeYard)  || 0,
+      allow_accident_twoUp:      allowAccidentTwoUp,
       updated_at: new Date().toISOString(),
     };
     const { data, error } = await supabase.from('company_config')
@@ -199,6 +201,19 @@ export default function AdminSettings({ companyConfig, setCompanyConfig, company
             <div style={{ fontSize: 8, color: MUT, marginBottom: 5 }}>Weekend ($)</div>
             {numInp(ahFeeWE, e => setAhFeeWE(e.target.value))}
           </div>
+        </div>
+
+        {/* Two-up for accident */}
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer' }}>
+            <div onClick={() => setAllowAccidentTwoUp(v => !v)} style={{ width: 36, height: 20, borderRadius: 10, background: allowAccidentTwoUp ? ACC : '#2a2a2a', position: 'relative', flexShrink: 0, marginTop: 1, transition: 'background 0.2s', cursor: 'pointer' }}>
+              <div style={{ width: 14, height: 14, borderRadius: 7, background: '#fff', position: 'absolute', top: 3, left: allowAccidentTwoUp ? 19 : 3, transition: 'left 0.2s' }} />
+            </div>
+            <div>
+              <div style={{ fontSize: 9, color: allowAccidentTwoUp ? TXT : MUT }}>Allow two-up / swinger for accident tows</div>
+              <div style={{ fontSize: 7, color: '#333', marginTop: 2, lineHeight: 1.5 }}>Vic law prohibits it at crash scenes — only enable if permitted in your jurisdiction</div>
+            </div>
+          </label>
         </div>
 
         {/* After hours window */}

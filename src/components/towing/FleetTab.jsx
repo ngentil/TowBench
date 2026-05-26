@@ -36,17 +36,27 @@ function StatusBadge({ status }) {
 }
 
 function DepotForm({ depot, onSave, onCancel }) {
-  const [name,   setName]   = useState(depot?.name   || '');
-  const [suburb, setSuburb] = useState(depot?.suburb || '');
-  const [saving, setSaving] = useState(false);
-  const [err,    setErr]    = useState('');
+  const [name,    setName]    = useState(depot?.name    || '');
+  const [suburb,  setSuburb]  = useState(depot?.suburb  || '');
+  const [address, setAddress] = useState(depot?.address || '');
+  const [saving,  setSaving]  = useState(false);
+  const [err,     setErr]     = useState('');
   const fld = { background: '#0a0a0a', border: '1px solid #252525', color: TXT, fontFamily: "'IBM Plex Mono',monospace", fontSize: 11, padding: '6px 8px', borderRadius: 2, outline: 'none', boxSizing: 'border-box', width: '100%' };
 
   const save = async () => {
     if (!name.trim()) { setErr('Name required'); return; }
     setSaving(true); setErr('');
-    try { await onSave({ ...depot, name: name.trim(), suburb: suburb.trim() }); }
-    catch (e) { setErr(e.message); }
+    try {
+      let lat = depot?.lat ?? null, lng = depot?.lng ?? null;
+      if (address.trim()) {
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address.trim())}&limit=1&countrycodes=au`);
+          const results = await res.json();
+          if (results[0]) { lat = parseFloat(results[0].lat); lng = parseFloat(results[0].lon); }
+        } catch { /* geocode failure is non-fatal */ }
+      }
+      await onSave({ ...depot, name: name.trim(), suburb: suburb.trim(), address: address.trim() || null, lat, lng });
+    } catch (e) { setErr(e.message); }
     setSaving(false);
   };
 
@@ -60,6 +70,11 @@ function DepotForm({ depot, onSave, onCancel }) {
         <div style={{ ...mdlB, display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div><FL t="Depot Name *" /><input style={fld} value={name} onChange={e => setName(e.target.value)} placeholder="e.g. North Depot" autoFocus /></div>
           <div><FL t="Suburb" /><input style={fld} value={suburb} onChange={e => setSuburb(e.target.value)} placeholder="e.g. Campbellfield" /></div>
+          <div>
+            <FL t="Address (for map routing)" />
+            <input style={fld} value={address} onChange={e => setAddress(e.target.value)} placeholder="e.g. 123 Example St, Campbellfield VIC" />
+            {depot?.lat != null && <div style={{ fontSize: 7, color: '#3a3a3a', marginTop: 3 }}>📍 {depot.lat.toFixed(5)}, {depot.lng.toFixed(5)}</div>}
+          </div>
           {err && <div style={{ fontSize: 9, color: RED }}>{err}</div>}
         </div>
         <div style={mdlF}>
