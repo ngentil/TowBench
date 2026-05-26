@@ -530,7 +530,7 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
     return t >= cutoff24h;
   }).length;
 
-  const allowAccidentTwoUp = companyConfig?.allow_accident_twoUp ?? false;
+  const allowAccidentTwoUp = companyConfig?.allow_accident_twoup ?? false;
   const tracePrice = traceRoute
     ? calcTracePrice(traceRoute.totalKm, companyConfig, towType, twoUpTrade, twoUpAccident, allowAccidentTwoUp)
     : null;
