@@ -134,6 +134,57 @@ function DepotForm({ depot, onSave, onCancel }) {
   );
 }
 
+function AssignTruckModal({ depot, unassigned, onAssign, onCancel }) {
+  const [selectedId, setSelectedId] = useState('');
+  const [saving,     setSaving]     = useState(false);
+  const fld = { background: '#0a0a0a', border: '1px solid #252525', color: TXT, fontFamily: "'IBM Plex Mono',monospace", fontSize: 11, padding: '6px 8px', borderRadius: 2, outline: 'none', boxSizing: 'border-box', width: '100%' };
+
+  const handle = async () => {
+    if (!selectedId) return;
+    setSaving(true);
+    try { await onAssign(selectedId); } finally { setSaving(false); }
+  };
+
+  return (
+    <div style={ovly} onClick={e => e.target === e.currentTarget && onCancel()}>
+      <div style={{ ...mdl, maxWidth: 380 }}>
+        <div style={mdlH}>
+          <b style={{ fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Assign Truck — {depot.name}</b>
+          <button style={{ ...btnG, ...sm }} onClick={onCancel}>✕</button>
+        </div>
+        <div style={{ ...mdlB }}>
+          {unassigned.length === 0 ? (
+            <div style={{ fontSize: 10, color: MUT, padding: '8px 0', lineHeight: 1.8 }}>
+              No unassigned trucks.<br />
+              <span style={{ fontSize: 9 }}>Use the global <b style={{ color: TXT }}>+ Truck</b> button to register a new one first.</span>
+            </div>
+          ) : (
+            <div>
+              <FL t="Select Truck" />
+              <select style={{ ...sel, ...fld }} value={selectedId} onChange={e => setSelectedId(e.target.value)}>
+                <option value="">— choose a truck —</option>
+                {unassigned.map(t => (
+                  <option key={t.id} value={t.id}>
+                    {t.plate}{t.driver_name ? ` · ${t.driver_name}` : ''}{t.da_number ? ` (DA ${t.da_number})` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+        <div style={mdlF}>
+          <button style={btnG} onClick={onCancel}>Cancel</button>
+          {unassigned.length > 0 && (
+            <button style={{ ...btnA, opacity: saving || !selectedId ? 0.4 : 1 }} disabled={saving || !selectedId} onClick={handle}>
+              {saving ? 'Assigning…' : 'Assign to Depot'}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TruckForm({ truck, depots, onSave, onCancel }) {
   const [plate,      setPlate]      = useState(truck?.plate       || '');
   const [daNumber,   setDaNumber]   = useState(truck?.da_number   || '');
@@ -297,9 +348,10 @@ export default function FleetTab({ isAdmin, companyId }) {
   const [trucks,  setTrucks]  = useState([]);
   const [loading, setLoading] = useState(true);
   const [err,     setErr]     = useState('');
-  const [depotForm,  setDepotForm]  = useState(null);
-  const [truckForm,  setTruckForm]  = useState(null);
-  const [availModal, setAvailModal] = useState(null);
+  const [depotForm,   setDepotForm]   = useState(null);
+  const [truckForm,   setTruckForm]   = useState(null);
+  const [availModal,  setAvailModal]  = useState(null);
+  const [assignModal, setAssignModal] = useState(null); // depot object
 
   const load = useCallback(async () => {
     try {
@@ -330,6 +382,16 @@ export default function FleetTab({ isAdmin, companyId }) {
     const saved = await upsertTruck(!truck.id ? { ...truck, company_id: companyId } : truck);
     setTrucks(prev => { const idx = prev.findIndex(t => t.id === saved.id); return idx >= 0 ? prev.map(t => t.id === saved.id ? saved : t) : [...prev, saved]; });
     setTruckForm(null);
+  };
+
+  const handleAssignTruck = async (truckId) => {
+    const truck = trucks.find(t => t.id === truckId);
+    if (!truck || !assignModal) return;
+    try {
+      const saved = await upsertTruck({ ...truck, depot_id: assignModal.id });
+      setTrucks(prev => prev.map(t => t.id === saved.id ? saved : t));
+      setAssignModal(null);
+    } catch (e) { alert(`Assign failed: ${e.message}`); }
   };
 
   const handleDeleteTruck = async (truck) => {
@@ -391,7 +453,7 @@ export default function FleetTab({ isAdmin, companyId }) {
             <TruckRow key={truck.id} truck={truck} isAdmin={isAdmin} onEdit={() => setTruckForm(truck)} onDelete={() => handleDeleteTruck(truck)} onAvail={() => setAvailModal(truck)} />
           ))}
           {isAdmin && (
-            <button onClick={() => setTruckForm({ depot_id: depot.id })} style={{ fontSize: 8, color: MUT, border: '1px dashed #2a2a2a', borderRadius: 2, background: 'transparent', padding: '4px 10px', cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", marginTop: 4 }}>+ Add truck to {depot.name}</button>
+            <button onClick={() => setAssignModal(depot)} style={{ fontSize: 8, color: MUT, border: '1px dashed #2a2a2a', borderRadius: 2, background: 'transparent', padding: '4px 10px', cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", marginTop: 4 }}>+ Add truck to {depot.name}</button>
           )}
         </div>
       ))}
@@ -405,9 +467,10 @@ export default function FleetTab({ isAdmin, companyId }) {
       )}
       {isAdmin && <AccessRequestsPanel />}
       {isAdmin && <AccessCodesPanel />}
-      {depotForm !== null && <DepotForm depot={depotForm?.id ? depotForm : undefined} onSave={handleSaveDepot} onCancel={() => setDepotForm(null)} />}
-      {truckForm !== null && <TruckForm truck={truckForm?.id ? truckForm : truckForm} depots={depots} onSave={handleSaveTruck} onCancel={() => setTruckForm(null)} />}
-      {availModal !== null && <AvailabilityModal truck={availModal} onSave={async (updated) => { await handleSaveTruck(updated); setAvailModal(null); }} onCancel={() => setAvailModal(null)} />}
+      {depotForm   !== null && <DepotForm depot={depotForm?.id ? depotForm : undefined} onSave={handleSaveDepot} onCancel={() => setDepotForm(null)} />}
+      {truckForm   !== null && <TruckForm truck={truckForm?.id ? truckForm : truckForm} depots={depots} onSave={handleSaveTruck} onCancel={() => setTruckForm(null)} />}
+      {availModal  !== null && <AvailabilityModal truck={availModal} onSave={async (updated) => { await handleSaveTruck(updated); setAvailModal(null); }} onCancel={() => setAvailModal(null)} />}
+      {assignModal !== null && <AssignTruckModal depot={assignModal} unassigned={trucks.filter(t => !t.depot_id)} onAssign={handleAssignTruck} onCancel={() => setAssignModal(null)} />}
     </div>
   );
 }
