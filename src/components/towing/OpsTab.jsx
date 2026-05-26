@@ -134,18 +134,24 @@ function AllocationInfoCard({ feature, acceptedJob, isLive, userEmail, userPos, 
 }
 
 function calcPrice(distKm, cfg) {
-  if (!cfg || !cfg.base_fee) return null;
-  const now = new Date();
-  const day  = now.getDay();
-  const isWE = day === 0 || day === 6;
-  const t    = now.toTimeString().slice(0, 5);
+  if (!cfg) return null;
+  const tradeBase    = parseFloat(cfg.trade_base_fee)    || 0;
+  const accidentBase = parseFloat(cfg.accident_base_fee) || 0;
+  if (!tradeBase && !accidentBase) return null;
+  const now   = new Date();
+  const isWE  = now.getDay() === 0 || now.getDay() === 6;
+  const t     = now.toTimeString().slice(0, 5);
   const start = isWE ? (cfg.after_hours_start_weekend ?? '18:00') : (cfg.after_hours_start_weekday ?? '18:00');
   const end   = isWE ? (cfg.after_hours_end_weekend   ?? '06:00') : (cfg.after_hours_end_weekday   ?? '06:00');
-  const afterHours = t >= start || t < end;
-  const total = (parseFloat(cfg.base_fee) || 0)
-              + distKm * (parseFloat(cfg.per_km_fee) || 0)
-              + (afterHours ? (parseFloat(cfg.after_hours_fee) || 0) : 0);
-  return total.toFixed(2);
+  const afterHours   = t >= start || t < end;
+  const ahSurcharge  = afterHours
+    ? (parseFloat(isWE ? cfg.after_hours_fee_weekend : cfg.after_hours_fee_weekday) || 0)
+    : 0;
+  const tradeTotal    = tradeBase    + Math.max(0, distKm - 10) * (parseFloat(cfg.trade_per_km_fee)    || 0) + ahSurcharge;
+  const accidentTotal = accidentBase + Math.max(0, distKm - 8)  * (parseFloat(cfg.accident_per_km_fee) || 0) + ahSurcharge;
+  if (tradeBase && accidentBase) return `$${tradeTotal.toFixed(2)} – $${accidentTotal.toFixed(2)}`;
+  if (tradeBase)    return `$${tradeTotal.toFixed(2)}`;
+  return `$${accidentTotal.toFixed(2)}`;
 }
 
 export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, countdown, isStale, acceptedJobs, userEmail, onAcceptJob, onReleaseJob, companyConfig }) {
@@ -442,7 +448,7 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
           const price = calcPrice(routeInfo.distKm, companyConfig);
           return (
             <span style={{ fontSize: 8, color: '#cc4444', border: '1px solid #cc222255', borderRadius: 2, padding: '2px 7px', fontFamily: "'IBM Plex Mono',monospace", fontWeight: 700, flexShrink: 0 }}>
-              📍 {routeInfo.distKm.toFixed(1)}km{routeInfo.durationMin != null ? ` · ~${routeInfo.durationMin}min` : ' straight'}{price ? ` · $${price}` : ''}
+              📍 {routeInfo.distKm.toFixed(1)}km{routeInfo.durationMin != null ? ` · ~${routeInfo.durationMin}min` : ' straight'}{price ? ` · ${price}` : ''}
             </span>
           );
         })()}
