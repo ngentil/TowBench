@@ -99,12 +99,13 @@ function DepotForm({ depot, onSave, onCancel }) {
               style={fld}
               value={address}
               onChange={e => { setAddress(e.target.value); setPickedCoords(null); }}
+              onBlur={() => setTimeout(() => setAddrResults([]), 150)}
               placeholder="e.g. 123 Example St, Campbellfield VIC"
             />
             {addrResults.length > 0 && (
-              <div style={{ position: 'absolute', left: 0, right: 0, top: '100%', zIndex: 500, background: '#0d0d0d', border: '1px solid #2a2a2a', borderRadius: 2, maxHeight: 160, overflowY: 'auto', marginTop: 2 }}>
+              <div style={{ position: 'absolute', left: 0, right: 0, top: '100%', zIndex: 500, background: '#0d0d0d', border: '1px solid #2a2a2a', borderRadius: 2, maxHeight: 110, overflowY: 'auto', marginTop: 2 }}>
                 {addrResults.map((r, i) => (
-                  <div key={i} onClick={() => pickResult(r)}
+                  <div key={i} onMouseDown={e => { e.preventDefault(); pickResult(r); }}
                     style={{ padding: '6px 8px', fontSize: 9, color: '#bbb', cursor: 'pointer', borderBottom: '1px solid #1a1a1a', lineHeight: 1.5, fontFamily: "'IBM Plex Mono',monospace" }}
                     onMouseEnter={e => e.currentTarget.style.background = '#1a1a1a'}
                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>

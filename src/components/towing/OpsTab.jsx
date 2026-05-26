@@ -616,6 +616,7 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
                   <input
                     value={searchA}
                     onChange={e => { setSearchA(e.target.value); if (!e.target.value) setPointA(null); }}
+                    onBlur={() => setTimeout(() => setSearchAResults([]), 150)}
                     placeholder="Search address…"
                     style={{ ...traceInp, flex: 1 }}
                   />
@@ -639,7 +640,7 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
                   <div style={{ position: 'absolute', left: 0, right: 0, top: '100%', zIndex: 300, background: '#0d0d0d', border: '1px solid #2a2a2a', borderRadius: 2, maxHeight: 130, overflowY: 'auto', marginTop: 2 }}>
                     {searchAResults.map((r, i) => (
                       <div key={i}
-                        onClick={() => { setPointA(r); setSearchA(r.label.split(',')[0].trim()); setSearchAResults([]); }}
+                        onMouseDown={e => { e.preventDefault(); setPointA(r); setSearchA(r.label.split(',')[0].trim()); setSearchAResults([]); }}
                         style={{ padding: '5px 8px', fontSize: 7, color: '#bbb', cursor: 'pointer', borderBottom: '1px solid #1a1a1a', lineHeight: 1.5 }}
                         onMouseEnter={e => e.currentTarget.style.background = '#1a1a1a'}
                         onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
@@ -674,6 +675,7 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
                     <input
                       value={searchB}
                       onChange={e => { setSearchB(e.target.value); if (!e.target.value) setPointB(null); }}
+                      onBlur={() => setTimeout(() => setSearchBResults([]), 150)}
                       placeholder="Search address…"
                       style={{ ...traceInp, flex: 1 }}
                     />
@@ -697,7 +699,7 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
                     <div style={{ position: 'absolute', left: 0, right: 0, top: '100%', zIndex: 300, background: '#0d0d0d', border: '1px solid #2a2a2a', borderRadius: 2, maxHeight: 130, overflowY: 'auto', marginTop: 2 }}>
                       {searchBResults.map((r, i) => (
                         <div key={i}
-                          onClick={() => { setPointB(r); setSearchB(r.label.split(',')[0].trim()); setSearchBResults([]); }}
+                          onMouseDown={e => { e.preventDefault(); setPointB(r); setSearchB(r.label.split(',')[0].trim()); setSearchBResults([]); }}
                           style={{ padding: '5px 8px', fontSize: 7, color: '#bbb', cursor: 'pointer', borderBottom: '1px solid #1a1a1a', lineHeight: 1.5 }}
                           onMouseEnter={e => e.currentTarget.style.background = '#1a1a1a'}
                           onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
