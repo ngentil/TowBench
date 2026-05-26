@@ -185,7 +185,7 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, co
           />
         )}
         {tab === 'towins' && (
-          <TowInsTab companyId={companyId} userEmail={userEmail} isDispatch={isDispatch} />
+          <TowInsTab companyId={companyId} userEmail={userEmail} isDispatch={isDispatch} companyConfig={companyConfig} />
         )}
         {tab === 'analytics' && (
           <TowAnalyticsTab allFeatures={allFeatures} liveIds={liveIds} loading={loading} userEmail={userEmail} />
