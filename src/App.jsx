@@ -97,17 +97,21 @@ function DriverFlow({ onSuccess }) {
   const handleSignupSubmit = async e => {
     e.preventDefault();
     setErr('');
-    if (!accessCode.trim())                           { setErr('Enter your access code.'); return; }
     if (!email.trim() || !/\S+@\S+\.\S+/.test(email)) { setErr('Enter a valid email address.'); return; }
     if (password.length < 6)                           { setErr('Password must be at least 6 characters.'); return; }
     if (password !== confirmPwd)                       { setErr('Passwords do not match.'); return; }
 
     setBusy(true);
 
-    // Validate invite code
-    const { data: codeRows } = await supabase.rpc('validate_invite_code', { p_code: accessCode.trim() });
-    const codeRow = Array.isArray(codeRows) ? codeRows[0] : codeRows;
-    if (!codeRow?.valid) { setErr('Invalid or already used access code.'); setBusy(false); return; }
+    // Invite code is optional — validate only if supplied
+    let codeRow = null;
+    if (accessCode.trim()) {
+      const { data: codeRows } = await supabase.rpc('validate_invite_code', { p_code: accessCode.trim() });
+      codeRow = Array.isArray(codeRows) ? codeRows[0] : codeRows;
+      if (!codeRow?.valid) { setErr('Invalid or already used access code.'); setBusy(false); return; }
+    }
+
+    const companyId = codeRow?.company_id || truckInfo.company_id;
 
     // Create auth account
     const { data: authData, error: authErr } = await supabase.auth.signUp({
@@ -148,13 +152,15 @@ function DriverFlow({ onSuccess }) {
     if (userId) {
       await supabase.from('user_profiles').insert({
         id: userId,
-        company_id: codeRow.company_id || truckInfo.company_id,
+        company_id: companyId,
         role: 'driver',
       });
     }
 
-    // Consume code
-    await supabase.rpc('consume_invite_code', { p_code: accessCode.trim(), p_used_by: normPlate(plate) });
+    // Consume code only if one was provided
+    if (accessCode.trim() && codeRow) {
+      await supabase.rpc('consume_invite_code', { p_code: accessCode.trim(), p_used_by: normPlate(plate) });
+    }
 
     setBusy(false);
     onSuccess();
@@ -299,23 +305,14 @@ function DriverFlow({ onSuccess }) {
       {signupStep === 3 && (
         <form onSubmit={handleSignupSubmit} style={{ display: 'contents' }}>
           <div>
-            <div style={labelStyle}>Access Code</div>
+            <div style={labelStyle}>Access Code <span style={{ color: MUT, fontWeight: 400 }}>(optional)</span></div>
             <input type="text" value={accessCode}
               onChange={e => setAccessCode(e.target.value.toUpperCase().replace(/\s/g, ''))}
-              placeholder="XXXXXX" autoCapitalize="characters"
+              placeholder="XXXXXX — leave blank if none"
+              autoCapitalize="characters"
               style={{ ...inputStyle, letterSpacing: '0.2em', fontSize: 16 }} />
-            <div style={{ marginTop: 6, fontSize: 8, color: MUT, textAlign: 'right' }}>
-              {requestSent ? (
-                <span style={{ color: '#5a8a5a' }}>✓ Request sent — your admin will share a code.</span>
-              ) : (
-                <>Don&apos;t have one?{' '}
-                  <button type="button" onClick={handleRequestAccess} disabled={busy}
-                    style={{ background: 'none', border: 'none', color: ACC, cursor: 'pointer',
-                      fontFamily: "'IBM Plex Mono',monospace", fontSize: 8, padding: 0, textDecoration: 'underline' }}>
-                    {busy ? 'Sending…' : 'Request from admin'}
-                  </button>
-                </>
-              )}
+            <div style={{ marginTop: 5, fontSize: 8, color: MUT, lineHeight: 1.6 }}>
+              If your dispatcher gave you a code, enter it here — it links you to their company. You can sign up without one and your dispatcher will approve you manually.
             </div>
           </div>
           <div>
@@ -549,6 +546,147 @@ function DispatcherFlow({ onSuccess }) {
   );
 }
 
+// ── Owner / Sole Operator signup ────────────────────────────────────────────
+
+function SoleOperatorFlow({ onSuccess }) {
+  const [step,       setStep]       = useState(1); // 1=company, 2=your name, 3=account
+  const [companyName,setCompanyName]= useState('');
+  const [abn,        setAbn]        = useState('');
+  const [firstName,  setFirstName]  = useState('');
+  const [lastName,   setLastName]   = useState('');
+  const [email,      setEmail]      = useState('');
+  const [password,   setPassword]   = useState('');
+  const [confirmPwd, setConfirmPwd] = useState('');
+  const [busy,       setBusy]       = useState(false);
+  const [err,        setErr]        = useState('');
+
+  const stepLabels = [
+    'Step 1 of 3 — Your company details',
+    'Step 2 of 3 — Your name',
+    'Step 3 of 3 — Account credentials',
+  ];
+
+  const handleNext = e => {
+    e.preventDefault();
+    setErr('');
+    if (step === 1) {
+      if (!companyName.trim()) { setErr('Enter your company name.'); return; }
+      setStep(2);
+    } else if (step === 2) {
+      if (!firstName.trim()) { setErr('Enter your first name.'); return; }
+      if (!lastName.trim())  { setErr('Enter your last name.'); return; }
+      setStep(3);
+    }
+  };
+
+  const handleSubmit = async e => {
+    e.preventDefault();
+    setErr('');
+    if (!email.trim() || !/\S+@\S+\.\S+/.test(email)) { setErr('Enter a valid email address.'); return; }
+    if (password.length < 6)                           { setErr('Password must be at least 6 characters.'); return; }
+    if (password !== confirmPwd)                       { setErr('Passwords do not match.'); return; }
+
+    setBusy(true);
+
+    const { data: authData, error: authErr } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: { data: { first_name: firstName.trim(), last_name: lastName.trim() } },
+    });
+    if (authErr) { setErr(authErr.message); setBusy(false); return; }
+
+    // Create company + admin profile in one atomic RPC
+    const { error: compErr } = await supabase.rpc('create_company_and_admin', {
+      p_company_name: companyName.trim(),
+    });
+    if (compErr) { setErr(compErr.message); setBusy(false); return; }
+
+    setBusy(false);
+    onSuccess();
+  };
+
+  return (
+    <div style={formStyle}>
+      {/* Progress bar */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 2 }}>
+        {[1,2,3].map(n => (
+          <div key={n} style={{ flex: 1, height: 3, borderRadius: 2, background: n <= step ? ACC : '#2a2a2a' }} />
+        ))}
+      </div>
+      <div style={{ fontSize: 8, color: '#5a8a5a', lineHeight: 1.6 }}>{stepLabels[step - 1]}</div>
+
+      {step === 1 && (
+        <form onSubmit={handleNext} style={{ display: 'contents' }}>
+          <div>
+            <div style={labelStyle}>Company Name *</div>
+            <input type="text" value={companyName} onChange={e => setCompanyName(e.target.value)}
+              placeholder="e.g. Smith Towing" autoCapitalize="words" autoFocus style={inputStyle} />
+          </div>
+          <div>
+            <div style={labelStyle}>ABN <span style={{ color: MUT, fontWeight: 400 }}>(optional)</span></div>
+            <input type="text" value={abn} onChange={e => setAbn(e.target.value)}
+              placeholder="e.g. 12 345 678 901" style={inputStyle} />
+          </div>
+          {err && <div style={{ fontSize: 9, color: RED, lineHeight: 1.5 }}>{err}</div>}
+          <button type="submit" style={{ ...btnA, width: '100%' }}>Next →</button>
+        </form>
+      )}
+
+      {step === 2 && (
+        <form onSubmit={handleNext} style={{ display: 'contents' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div>
+              <div style={labelStyle}>First Name *</div>
+              <input type="text" value={firstName} onChange={e => setFirstName(e.target.value)}
+                placeholder="e.g. Alex" autoCapitalize="words" autoFocus style={inputStyle} />
+            </div>
+            <div>
+              <div style={labelStyle}>Last Name *</div>
+              <input type="text" value={lastName} onChange={e => setLastName(e.target.value)}
+                placeholder="e.g. Smith" autoCapitalize="words" style={inputStyle} />
+            </div>
+          </div>
+          {err && <div style={{ fontSize: 9, color: RED, lineHeight: 1.5 }}>{err}</div>}
+          <button type="submit" style={{ ...btnA, width: '100%' }}>Next →</button>
+          <button type="button" onClick={() => { setStep(1); setErr(''); }}
+            style={{ ...btnG, ...sm, alignSelf: 'flex-start' }}>← Back</button>
+        </form>
+      )}
+
+      {step === 3 && (
+        <form onSubmit={handleSubmit} style={{ display: 'contents' }}>
+          <div style={{ fontSize: 8, color: '#5a5a5a', lineHeight: 1.6, background: '#0a0a0a',
+            border: '1px solid #1e1e1e', borderRadius: 2, padding: '7px 10px' }}>
+            🏢 {companyName} · {firstName} {lastName}
+          </div>
+          <div>
+            <div style={labelStyle}>Email *</div>
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+              placeholder="you@example.com" autoFocus style={inputStyle} />
+          </div>
+          <div>
+            <div style={labelStyle}>Password *</div>
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+              placeholder="········" minLength={6} style={inputStyle} />
+          </div>
+          <div>
+            <div style={labelStyle}>Confirm Password *</div>
+            <input type="password" value={confirmPwd} onChange={e => setConfirmPwd(e.target.value)}
+              placeholder="········" minLength={6} style={inputStyle} />
+          </div>
+          {err && <div style={{ fontSize: 9, color: RED, lineHeight: 1.5 }}>{err}</div>}
+          <button type="submit" disabled={busy}
+            style={{ ...btnA, width: '100%', opacity: busy ? 0.5 : 1 }}>
+            {busy ? 'Creating account…' : 'Create Company & Sign In'}
+          </button>
+          <button type="button" onClick={() => { setStep(2); setErr(''); }}
+            style={{ ...btnG, ...sm, alignSelf: 'flex-start' }}>← Back</button>
+        </form>
+      )}
+    </div>
+  );
+}
+
 // ── Pending approval screen ─────────────────────────────────────────────────
 
 function PendingApproval({ plate, onSignOut }) {
@@ -664,7 +802,9 @@ export default function App() {
   const isDispatch  = role === 'dispatch' || isAdmin;
   const displayName = truck?.first_name
     ? `${truck.first_name} ${truck.last_name || ''}`.trim()
-    : session?.user?.email?.split('@')[0] || '';
+    : session?.user?.user_metadata?.first_name
+      ? `${session.user.user_metadata.first_name} ${session.user.user_metadata.last_name || ''}`.trim()
+      : session?.user?.email?.split('@')[0] || '';
   const displayPlate = truck?.plate?.toUpperCase() || '';
   const isPendingApproval = role === 'driver' && truck && !truck.approved;
 
@@ -693,23 +833,26 @@ export default function App() {
 
           {/* Login tab switcher */}
           <div style={{ display: 'flex', marginBottom: 16, border: '1px solid ' + BRD, borderRadius: 2, overflow: 'hidden' }}>
-            {['driver', 'dispatcher'].map(t => (
-              <button key={t} onClick={() => setLoginTab(t)}
-                style={{ flex: 1, padding: '8px 0', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em',
+            {[
+              { id: 'driver',     label: '🚛 Driver' },
+              { id: 'dispatcher', label: '📋 Dispatcher' },
+              { id: 'owner',      label: '🏢 Owner' },
+            ].map(t => (
+              <button key={t.id} onClick={() => setLoginTab(t.id)}
+                style={{ flex: 1, padding: '8px 0', fontSize: 9, fontWeight: 700, letterSpacing: '0.08em',
                   textTransform: 'uppercase', cursor: 'pointer', border: 'none',
                   fontFamily: "'IBM Plex Mono',monospace",
-                  background: loginTab === t ? ACC + '22' : 'transparent',
-                  color: loginTab === t ? ACC : MUT,
-                  borderBottom: loginTab === t ? `2px solid ${ACC}` : '2px solid transparent' }}>
-                {t === 'driver' ? '🚛 Driver' : '📋 Dispatcher'}
+                  background: loginTab === t.id ? ACC + '22' : 'transparent',
+                  color: loginTab === t.id ? ACC : MUT,
+                  borderBottom: loginTab === t.id ? `2px solid ${ACC}` : '2px solid transparent' }}>
+                {t.label}
               </button>
             ))}
           </div>
 
-          {loginTab === 'driver'
-            ? <DriverFlow onSuccess={() => {}} />
-            : <DispatcherFlow onSuccess={() => {}} />
-          }
+          {loginTab === 'driver'     && <DriverFlow onSuccess={() => {}} />}
+          {loginTab === 'dispatcher' && <DispatcherFlow onSuccess={() => {}} />}
+          {loginTab === 'owner'      && <SoleOperatorFlow onSuccess={() => {}} />}
         </div>
       </div>
     );
