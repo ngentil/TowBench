@@ -179,21 +179,22 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
   const [mapReady,        setMapReady]        = useState(false);
 
   // Trace panel
-  const [traceOpen,       setTraceOpen]       = useState(false);
-  const [towType,         setTowType]         = useState('accident');
-  const [fromDepot,       setFromDepot]       = useState(true);
-  const [returnDepot,     setReturnDepot]     = useState(false);
-  const [pointA,          setPointA]          = useState(null);
-  const [pointB,          setPointB]          = useState(null);
-  const [searchA,         setSearchA]         = useState('');
-  const [searchB,         setSearchB]         = useState('');
-  const [searchAResults,  setSearchAResults]  = useState([]);
-  const [searchBResults,  setSearchBResults]  = useState([]);
-  const [clickTarget,     setClickTarget]     = useState(null);
-  const [twoUpTrade,      setTwoUpTrade]      = useState(false);
-  const [twoUpAccident,   setTwoUpAccident]   = useState(false);
-  const [traceRoute,      setTraceRoute]      = useState(null);
-  const [depotPoint,      setDepotPoint]      = useState(null);
+  const [traceOpen,          setTraceOpen]          = useState(false);
+  const [towType,            setTowType]            = useState('accident');
+  const [fromDepot,          setFromDepot]          = useState(true);
+  const [returnDepot,        setReturnDepot]        = useState(true);
+  const [destinationEnabled, setDestinationEnabled] = useState(false);
+  const [pointA,             setPointA]             = useState(null);
+  const [pointB,             setPointB]             = useState(null);
+  const [searchA,            setSearchA]            = useState('');
+  const [searchB,            setSearchB]            = useState('');
+  const [searchAResults,     setSearchAResults]     = useState([]);
+  const [searchBResults,     setSearchBResults]     = useState([]);
+  const [clickTarget,        setClickTarget]        = useState(null);
+  const [twoUpTrade,         setTwoUpTrade]         = useState(false);
+  const [twoUpAccident,      setTwoUpAccident]      = useState(false);
+  const [traceRoute,         setTraceRoute]         = useState(null);
+  const [depotPoint,         setDepotPoint]         = useState(null);
 
   // Refs
   const containerRef      = useRef(null);
@@ -278,7 +279,7 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
     const wps = [];
     if (fromDepot && depotPoint?.lat != null) wps.push(depotPoint);
     if (pointA) wps.push(pointA);
-    if (pointB) wps.push(pointB);
+    if (destinationEnabled && pointB) wps.push(pointB);
     if (returnDepot && depotPoint?.lat != null) wps.push(depotPoint);
     if (wps.length < 2) { routeLayerRef.current?.clearLayers(); setTraceRoute(null); return; }
     let cancelled = false;
@@ -300,7 +301,7 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
       } catch { if (!cancelled) setTraceRoute(null); }
     })();
     return () => { cancelled = true; };
-  }, [traceOpen, fromDepot, returnDepot, depotPoint, pointA, pointB]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [traceOpen, fromDepot, returnDepot, destinationEnabled, depotPoint, pointA, pointB]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Trace pin markers (depot=🔶, A=🟢, B=🔴)
   useEffect(() => {
@@ -320,13 +321,13 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
         zIndexOffset: 201,
       }).bindTooltip('A — Pickup', { permanent: false, direction: 'top', className: 'towbench-tooltip' }).addTo(layer);
     }
-    if (pointB) {
+    if (destinationEnabled && pointB) {
       L.marker([pointB.lat, pointB.lng], {
         icon: L.divIcon({ className: '', html: '<div style="font-size:16px;line-height:1">🔴</div>', iconSize: [16, 16], iconAnchor: [8, 14] }),
         zIndexOffset: 202,
       }).bindTooltip('B — Destination', { permanent: false, direction: 'top', className: 'towbench-tooltip' }).addTo(layer);
     }
-  }, [mapReady, traceOpen, fromDepot, returnDepot, depotPoint, pointA, pointB]);
+  }, [mapReady, traceOpen, fromDepot, returnDepot, destinationEnabled, depotPoint, pointA, pointB]);
 
   // Map cursor crosshair when placing A/B
   useEffect(() => {
@@ -521,6 +522,7 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
     setTraceOpen(false);
     setClickTarget(null);
     setTraceRoute(null);
+    setDestinationEnabled(false);
     setPointA(null); setPointB(null);
     setSearchA(''); setSearchB('');
     setSearchAResults([]); setSearchBResults([]);
@@ -646,46 +648,64 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
                 )}
               </div>
 
-              {/* Point B */}
-              <div style={{ position: 'relative' }}>
-                <div style={{ fontSize: 7, color: '#444', letterSpacing: '0.08em', marginBottom: 3 }}>B — Destination</div>
-                <div style={{ display: 'flex', gap: 4 }}>
-                  <input
-                    value={searchB}
-                    onChange={e => { setSearchB(e.target.value); if (!e.target.value) setPointB(null); }}
-                    placeholder="Search address…"
-                    style={{ ...traceInp, flex: 1 }}
-                  />
-                  <button
-                    onClick={() => setClickTarget(ct => ct === 'B' ? null : 'B')}
-                    title="Click map to place B"
-                    style={{
-                      fontSize: 10, width: 26, borderRadius: 2, cursor: 'pointer', flexShrink: 0,
-                      border: `1px solid ${clickTarget === 'B' ? '#cc444488' : '#2a2a2a'}`,
-                      color: clickTarget === 'B' ? '#cc4444' : '#555',
-                      background: clickTarget === 'B' ? '#cc444411' : 'transparent',
-                      fontFamily: "'IBM Plex Mono',monospace",
-                    }}>✛</button>
+              {/* Destination toggle */}
+              <label style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer' }}>
+                <input type="checkbox" checked={destinationEnabled}
+                  onChange={e => {
+                    setDestinationEnabled(e.target.checked);
+                    if (!e.target.checked) {
+                      setPointB(null); setSearchB(''); setSearchBResults([]);
+                      setClickTarget(ct => ct === 'B' ? null : ct);
+                    }
+                  }}
+                  style={{ flexShrink: 0 }} />
+                <span style={{ fontSize: 8, color: destinationEnabled ? '#cc4444' : '#444' }}>
+                  Destination (optional)
+                </span>
+              </label>
+
+              {/* Point B — only when destination enabled */}
+              {destinationEnabled && (
+                <div style={{ position: 'relative' }}>
+                  <div style={{ fontSize: 7, color: '#444', letterSpacing: '0.08em', marginBottom: 3 }}>B — Destination</div>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <input
+                      value={searchB}
+                      onChange={e => { setSearchB(e.target.value); if (!e.target.value) setPointB(null); }}
+                      placeholder="Search address…"
+                      style={{ ...traceInp, flex: 1 }}
+                    />
+                    <button
+                      onClick={() => setClickTarget(ct => ct === 'B' ? null : 'B')}
+                      title="Click map to place B"
+                      style={{
+                        fontSize: 10, width: 26, borderRadius: 2, cursor: 'pointer', flexShrink: 0,
+                        border: `1px solid ${clickTarget === 'B' ? '#cc444488' : '#2a2a2a'}`,
+                        color: clickTarget === 'B' ? '#cc4444' : '#555',
+                        background: clickTarget === 'B' ? '#cc444411' : 'transparent',
+                        fontFamily: "'IBM Plex Mono',monospace",
+                      }}>✛</button>
+                  </div>
+                  {pointB && (
+                    <div style={{ fontSize: 7, color: '#cc4444', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      🔴 {pointB.label}
+                    </div>
+                  )}
+                  {searchBResults.length > 0 && !pointB && (
+                    <div style={{ position: 'absolute', left: 0, right: 0, top: '100%', zIndex: 300, background: '#0d0d0d', border: '1px solid #2a2a2a', borderRadius: 2, maxHeight: 130, overflowY: 'auto', marginTop: 2 }}>
+                      {searchBResults.map((r, i) => (
+                        <div key={i}
+                          onClick={() => { setPointB(r); setSearchB(r.label.split(',')[0].trim()); setSearchBResults([]); }}
+                          style={{ padding: '5px 8px', fontSize: 7, color: '#bbb', cursor: 'pointer', borderBottom: '1px solid #1a1a1a', lineHeight: 1.5 }}
+                          onMouseEnter={e => e.currentTarget.style.background = '#1a1a1a'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                          {r.label}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                {pointB && (
-                  <div style={{ fontSize: 7, color: '#cc4444', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    🔴 {pointB.label}
-                  </div>
-                )}
-                {searchBResults.length > 0 && !pointB && (
-                  <div style={{ position: 'absolute', left: 0, right: 0, top: '100%', zIndex: 300, background: '#0d0d0d', border: '1px solid #2a2a2a', borderRadius: 2, maxHeight: 130, overflowY: 'auto', marginTop: 2 }}>
-                    {searchBResults.map((r, i) => (
-                      <div key={i}
-                        onClick={() => { setPointB(r); setSearchB(r.label.split(',')[0].trim()); setSearchBResults([]); }}
-                        style={{ padding: '5px 8px', fontSize: 7, color: '#bbb', cursor: 'pointer', borderBottom: '1px solid #1a1a1a', lineHeight: 1.5 }}
-                        onMouseEnter={e => e.currentTarget.style.background = '#1a1a1a'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                        {r.label}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              )}
 
               {/* Return to depot */}
               <label style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer' }}>
@@ -748,9 +768,9 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
                 <div style={{ fontSize: 7, color: '#2a2a2a' }}>
                   {clickTarget
                     ? `Click map to place ${clickTarget}`
-                    : (pointA || pointB)
-                      ? 'Set both A and B to calculate route…'
-                      : 'Search or click ✛ to place points'}
+                    : pointA
+                      ? 'Enable destination or return to depot to calculate a route'
+                      : 'Search or click ✛ to place pickup'}
                 </div>
               )}
             </div>
