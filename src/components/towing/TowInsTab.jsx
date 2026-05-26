@@ -29,6 +29,18 @@ function daysIn(dateIn, dateOut) {
   return Math.max(0, Math.ceil((end - start) / 86400000));
 }
 
+function calcStorageCost(record, cfg) {
+  if (!cfg) return null;
+  const days = daysIn(record.date_in, record.date_out);
+  const isCar = record.vehicle_type === 'motor_car';
+  const isCover = record.storage_type === 'undercover';
+  const rate = isCar
+    ? (isCover ? parseFloat(cfg.storage_car_undercover) || 0 : parseFloat(cfg.storage_car_yard) || 0)
+    : (isCover ? parseFloat(cfg.storage_bike_undercover) || 0 : parseFloat(cfg.storage_bike_yard) || 0);
+  if (!rate) return null;
+  return { days, rate, total: days * rate };
+}
+
 function fmtDate(iso) {
   if (!iso) return '—';
   return new Date(iso).toLocaleString('en-AU', {
@@ -294,7 +306,7 @@ function TowInForm({ record, formDepots, allDepots, userEmail, companyId, onSave
 }
 
 // ─── Card ──────────────────────────────────────────────────────────────────────
-function TowInCard({ record, allDepots, transfers, isDispatch, onEdit, onRelease, onTransfer, searchTerm }) {
+function TowInCard({ record, allDepots, transfers, isDispatch, onEdit, onRelease, onTransfer, searchTerm, companyConfig }) {
   const [open, setOpen] = useState(false);
 
   const xfers      = transfers[record.id] || [];
@@ -302,6 +314,7 @@ function TowInCard({ record, allDepots, transfers, isDispatch, onEdit, onRelease
   const days       = daysIn(record.date_in, record.date_out);
   const released   = !!record.date_out;
   const activeFlags = FLAG_FIELDS.filter(({ key }) => record[key]);
+  const cost       = calcStorageCost(record, companyConfig);
 
   return (
     <div style={{ background: '#0d0d0d', border: '1px solid #252525',
@@ -346,6 +359,14 @@ function TowInCard({ record, allDepots, transfers, isDispatch, onEdit, onRelease
             <span style={{ fontSize: 8, color: released ? MUT : ACC, fontWeight: released ? 400 : 700 }}>
               {days} day{days !== 1 ? 's' : ''}
             </span>
+            {cost && (
+              <>
+                <span style={{ fontSize: 8, color: '#333' }}>·</span>
+                <span style={{ fontSize: 9, fontWeight: 700, color: released ? MUT : GRN, fontFamily: "'IBM Plex Mono',monospace" }}>
+                  ${cost.total.toFixed(2)}
+                </span>
+              </>
+            )}
           </div>
           {!open && activeFlags.length > 0 && (
             <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
@@ -382,10 +403,12 @@ function TowInCard({ record, allDepots, transfers, isDispatch, onEdit, onRelease
               ['Date In',         fmtDate(record.date_in)],
               ['Date Out',        record.date_out ? fmtDate(record.date_out) : '—'],
               ['Days in Storage', `${days} day${days !== 1 ? 's' : ''}`],
+              ...(cost ? [['Storage Cost', `$${cost.total.toFixed(2)}`]] : []),
               ['Current Yard',    depotLabel(allDepots, curDepotId)],
               ['Logged in at',    depotLabel(allDepots, record.depot_id)],
               ['Vehicle Type',    record.vehicle_type === 'motor_car' ? 'Motor Car' : 'Motorcycle'],
               ['Storage',         record.storage_type === 'undercover' ? 'Under Cover' : 'Locked Yard'],
+              ...(cost ? [['Daily Rate', `$${cost.rate.toFixed(2)} / day`]] : []),
               ['Logged by',       record.created_by?.split('@')[0] || '—'],
             ].map(([label, val]) => (
               <div key={label} style={{ background: SURF, border: '1px solid ' + BRD, borderRadius: 2, padding: '6px 8px' }}>
@@ -440,7 +463,7 @@ function TowInCard({ record, allDepots, transfers, isDispatch, onEdit, onRelease
 }
 
 // ─── Main tab ──────────────────────────────────────────────────────────────────
-export default function TowInsTab({ companyId, userEmail, isDispatch }) {
+export default function TowInsTab({ companyId, userEmail, isDispatch, companyConfig }) {
   const [records,       setRecords]       = useState([]);
   const [allDepots,     setAllDepots]     = useState([]);
   const [formDepots,    setFormDepots]    = useState([]);
@@ -539,6 +562,7 @@ export default function TowInsTab({ companyId, userEmail, isDispatch }) {
     onRelease: handleRelease,
     onTransfer: (rec, fromDepotId) => setXferTarget({ record: rec, fromDepotId }),
     searchTerm: search.trim(),
+    companyConfig,
   });
 
   return (
