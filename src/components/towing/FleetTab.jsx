@@ -47,7 +47,7 @@ function DepotForm({ depot, onSave, onCancel }) {
 
   // Debounced Nominatim autocomplete
   useEffect(() => {
-    if (address.length < 3) { setAddrResults([]); return; }
+    if (pickedCoords || address.length < 3) { setAddrResults([]); return; }
     const t = setTimeout(async () => {
       try {
         const res  = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=5&countrycodes=au`);
@@ -56,7 +56,7 @@ function DepotForm({ depot, onSave, onCancel }) {
       } catch { setAddrResults([]); }
     }, 300);
     return () => clearTimeout(t);
-  }, [address]);
+  }, [address, pickedCoords]);
 
   const pickResult = (r) => {
     setAddress(r.label.split(',').slice(0, 2).join(',').trim());
@@ -312,7 +312,7 @@ export default function FleetTab({ isAdmin, companyId }) {
   useEffect(() => { load(); }, [load]);
 
   const handleSaveDepot = async (depot) => {
-    const saved = await upsertDepot(!depot.id ? { ...depot, company_id: companyId } : depot);
+    const saved = await upsertDepot({ ...depot, company_id: companyId });
     setDepots(prev => { const idx = prev.findIndex(d => d.id === saved.id); return idx >= 0 ? prev.map(d => d.id === saved.id ? saved : d) : [...prev, saved]; });
     setDepotForm(null);
   };
