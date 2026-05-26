@@ -161,7 +161,7 @@ function calcTracePrice(totalKm, cfg, towType, twoUpTrade, twoUpAccident, allowA
   return Object.keys(result).length ? result : null;
 }
 
-export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, countdown, isStale, acceptedJobs, userEmail, onAcceptJob, onReleaseJob, companyConfig }) {
+export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, countdown, isStale, acceptedJobs, userEmail, onAcceptJob, onReleaseJob, companyConfig, companyId }) {
   useDriverLocation(userEmail);
   const { rainSoon, maxProb, hoursUntil } = useWeather();
 
@@ -244,15 +244,31 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
     return () => supabase.removeChannel(channel);
   }, []);
 
-  // Fetch depot when trace panel opens
+  // Fetch depot when trace panel opens — try user's truck first, fall back to first company depot
   useEffect(() => {
-    if (!traceOpen || !userEmail) return;
-    supabase.from('tow_trucks')
-      .select('depot:depots(name, lat, lng)')
-      .eq('auth_email', userEmail)
-      .maybeSingle()
-      .then(({ data }) => setDepotPoint(data?.depot ?? null));
-  }, [traceOpen, userEmail]);
+    if (!traceOpen) return;
+    (async () => {
+      // Try the user's own truck depot
+      if (userEmail) {
+        const { data: truck } = await supabase.from('tow_trucks')
+          .select('depot:depots(name, lat, lng)')
+          .eq('auth_email', userEmail)
+          .maybeSingle();
+        if (truck?.depot?.lat != null) { setDepotPoint(truck.depot); return; }
+      }
+      // Fall back to first depot in the company (for admins/dispatchers without a truck)
+      if (companyId) {
+        const { data: depot } = await supabase.from('depots')
+          .select('name, lat, lng')
+          .eq('company_id', companyId)
+          .not('lat', 'is', null)
+          .order('name')
+          .limit(1)
+          .maybeSingle();
+        setDepotPoint(depot ?? null);
+      }
+    })();
+  }, [traceOpen, userEmail, companyId]);
 
   // Nominatim address search (debounced 300ms)
   const geocodeSearch = useCallback(async (query, setResults) => {
