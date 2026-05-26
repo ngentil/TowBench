@@ -195,6 +195,7 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
   const [twoUpAccident,      setTwoUpAccident]      = useState(false);
   const [traceRoute,         setTraceRoute]         = useState(null);
   const [depotPoint,         setDepotPoint]         = useState(null);
+  const [routeTrigger,       setRouteTrigger]       = useState(0);
 
   // Refs
   const containerRef      = useRef(null);
@@ -301,7 +302,7 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
       } catch { if (!cancelled) setTraceRoute(null); }
     })();
     return () => { cancelled = true; };
-  }, [traceOpen, fromDepot, returnDepot, destinationEnabled, depotPoint, pointA, pointB]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [traceOpen, fromDepot, returnDepot, destinationEnabled, depotPoint, pointA, pointB, routeTrigger]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Trace pin markers (depot=🔶, A=🟢, B=🔴)
   useEffect(() => {
@@ -526,6 +527,7 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
     setPointA(null); setPointB(null);
     setSearchA(''); setSearchB('');
     setSearchAResults([]); setSearchBResults([]);
+    setRouteTrigger(0);
   };
 
   return (
@@ -738,10 +740,26 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
 
             {/* Result */}
             <div style={{ padding: '8px 10px' }}>
+              {/* Depot warning */}
+              {(fromDepot || returnDepot) && depotPoint !== undefined && !depotPoint?.lat && (
+                <div style={{ fontSize: 7, color: '#7a5500', background: '#1a1200', border: '1px solid #2a2000', borderRadius: 2, padding: '4px 6px', marginBottom: 6 }}>
+                  ⚠ Depot has no address — add one in Fleet settings
+                </div>
+              )}
+
               {traceRoute ? (
                 <>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: '#cc4444', marginBottom: 5, fontFamily: "'IBM Plex Mono',monospace" }}>
-                    {traceRoute.totalKm.toFixed(1)} km · ~{traceRoute.durationMin} min
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#cc4444', fontFamily: "'IBM Plex Mono',monospace" }}>
+                      {traceRoute.totalKm.toFixed(1)} km · ~{traceRoute.durationMin} min
+                    </div>
+                    <button
+                      onClick={() => setRouteTrigger(t => t + 1)}
+                      style={{
+                        fontSize: 8, padding: '2px 8px', borderRadius: 2, cursor: 'pointer',
+                        fontFamily: "'IBM Plex Mono',monospace", border: '1px solid #cc444488',
+                        color: '#cc4444', background: '#cc444411',
+                      }}>Go!</button>
                   </div>
                   {tracePrice ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -765,12 +783,23 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
                   )}
                 </>
               ) : (
-                <div style={{ fontSize: 7, color: '#2a2a2a' }}>
-                  {clickTarget
-                    ? `Click map to place ${clickTarget}`
-                    : pointA
-                      ? 'Enable destination or return to depot to calculate a route'
-                      : 'Search or click ✛ to place pickup'}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <div style={{ fontSize: 7, color: '#2a2a2a' }}>
+                    {clickTarget
+                      ? `Click map to place ${clickTarget}`
+                      : pointA
+                        ? 'Set a second waypoint or tap Go!'
+                        : 'Search or click ✛ to place pickup'}
+                  </div>
+                  {pointA && !clickTarget && (
+                    <button
+                      onClick={() => setRouteTrigger(t => t + 1)}
+                      style={{
+                        fontSize: 9, padding: '4px 12px', borderRadius: 2, cursor: 'pointer', flexShrink: 0,
+                        fontFamily: "'IBM Plex Mono',monospace", fontWeight: 700, letterSpacing: '0.06em',
+                        border: '1px solid #cc444488', color: '#cc4444', background: '#cc444411',
+                      }}>Go!</button>
+                  )}
                 </div>
               )}
             </div>
