@@ -181,7 +181,7 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, co
             lastFetch={lastFetch} countdown={countdown} isStale={isStale}
             acceptedJobs={acceptedJobs} userEmail={userEmail}
             onAcceptJob={onAcceptJob} onReleaseJob={onUnassignJob}
-            companyConfig={companyConfig}
+            companyConfig={companyConfig} companyId={companyId}
           />
         )}
         {tab === 'towins' && (
