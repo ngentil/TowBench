@@ -319,8 +319,10 @@ export default function FleetTab({ isAdmin, companyId }) {
   const handleDeleteDepot = async (depot) => {
     if (trucks.some(t => t.depot_id === depot.id)) { alert('Remove all trucks from this depot first.'); return; }
     if (!confirm(`Delete depot "${depot.name}"?`)) return;
-    await deleteDepot(depot.id);
-    setDepots(prev => prev.filter(d => d.id !== depot.id));
+    try {
+      await deleteDepot(depot.id);
+      setDepots(prev => prev.filter(d => d.id !== depot.id));
+    } catch (e) { alert(`Delete failed: ${e.message}`); }
   };
 
   const handleSaveTruck = async (truck) => {
@@ -331,8 +333,10 @@ export default function FleetTab({ isAdmin, companyId }) {
 
   const handleDeleteTruck = async (truck) => {
     if (!confirm(`Delete truck ${truck.plate}?`)) return;
-    await deleteTruck(truck.id);
-    setTrucks(prev => prev.filter(t => t.id !== truck.id));
+    try {
+      await deleteTruck(truck.id);
+      setTrucks(prev => prev.filter(t => t.id !== truck.id));
+    } catch (e) { alert(`Delete failed: ${e.message}`); }
   };
 
   const trucksByDepot = depots.map(d => ({ depot: d, trucks: trucks.filter(t => t.depot_id === d.id) }));
