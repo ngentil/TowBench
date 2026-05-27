@@ -8,7 +8,6 @@ import { supabase } from '../../lib/supabase';
 import OpsTab from './OpsTab';
 import TowAnalyticsTab from './TowAnalyticsTab';
 import TowInsTab from './TowInsTab';
-import DispatchTab from './DispatchTab';
 import DriversTab from './DriversTab';
 import BrandingTab from '../admin/BrandingTab';
 import PricingTab from '../admin/PricingTab';
@@ -23,10 +22,10 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, co
   //   dispatch:  Allocations, Map, Analytics, Fleet
   //   admin:     All above + Settings
   //   super_admin: All tabs
+  const allocLabel = (role === 'driver') ? '🚦 Tow Allocations' : '🚨 Dispatch';
   const TABS = [
-    { id: 'allocations',  label: '🚦 Tow Allocations', roles: ['driver','dispatch','admin','super_admin'] },
+    { id: 'allocations',  label: allocLabel,             roles: ['driver','dispatch','admin','super_admin'] },
     { id: 'towins',       label: '🏭 Tow Ins',          roles: ['driver','dispatch','admin','super_admin'] },
-    { id: 'dispatch',     label: '🚨 Dispatch',         roles: ['dispatch','admin','super_admin'] },
     { id: 'drivers',      label: '👤 Drivers',          roles: ['dispatch','admin','super_admin'] },
     { id: 'depots',       label: '🏢 Depots',           roles: ['dispatch','admin','super_admin'] },
     { id: 'fleet',        label: '🚛 Fleet',             roles: ['dispatch','admin','super_admin'] },
@@ -181,6 +180,7 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, co
             onAcceptJob={onAcceptJob}
             onUnassignJob={onUnassignJob}
             onAllocateToPlate={onAllocateToPlate}
+            companyConfig={companyConfig}
           />
         )}
         {tab === 'ops' && (
@@ -194,13 +194,6 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, co
         )}
         {tab === 'towins' && (
           <TowInsTab companyId={companyId} userEmail={userEmail} isDispatch={isDispatch} companyConfig={companyConfig} />
-        )}
-        {tab === 'dispatch' && (
-          <DispatchTab
-            allFeatures={allFeatures} liveIds={liveIds}
-            acceptedJobs={acceptedJobs} companyId={companyId}
-            userEmail={userEmail} companyConfig={companyConfig}
-          />
         )}
         {tab === 'analytics' && (
           <TowAnalyticsTab allFeatures={allFeatures} liveIds={liveIds} loading={loading} userEmail={userEmail} />

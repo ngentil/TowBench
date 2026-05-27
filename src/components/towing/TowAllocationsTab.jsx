@@ -6,6 +6,7 @@ import useWeather from '../../hooks/useWeather';
 import { supabase } from '../../lib/supabase';
 import { timeIn, fmtTimer, fmtShort, haversineKm } from '../../lib/utils';
 import { Highlight } from '../ui/shared';
+import { DispatchModal, CompleteModal } from './DispatchTab';
 
 const ORANGE = '#e8870a';
 
@@ -113,18 +114,15 @@ function AllocateModal({ eventId, onConfirm, onCancel, busy, err }) {
   );
 }
 
-function AllocationCard({ feature, fromLog, userPos, nearbyKm, acceptedJob, userEmail, role, isDispatch, companyId, onAccept, onUnassign, onAllocateToPlate, handoverNotes, onAddNote, onEditNote, searchTerm }) {
+function AllocationCard({ feature, fromLog, userPos, nearbyKm, acceptedJob, userEmail, role, isDispatch, companyId, onAccept, onUnassign, onAllocateToPlate, handoverNotes, onAddNote, onEditNote, searchTerm, dispatchedJob, trucks, depots, onDispatch }) {
   const [open, setOpen]               = useState(false);
   const [noteInput, setNoteInput]     = useState('');
   const [showNoteBox, setShowNoteBox] = useState(false);
   const [editingNoteId, setEditingNoteId] = useState(null);
   const [editInput, setEditInput]     = useState('');
   const [showPinModal,      setShowPinModal]      = useState(false);
-  const [showAllocModal,    setShowAllocModal]    = useState(false);
   const [pinBusy,           setPinBusy]           = useState(false);
   const [pinErr,            setPinErr]            = useState('');
-  const [allocBusy,         setAllocBusy]         = useState(false);
-  const [allocErr,          setAllocErr]          = useState('');
   const [unassignBusy,      setUnassignBusy]      = useState(false);
 
   const p          = feature.properties || {};
@@ -170,14 +168,6 @@ function AllocationCard({ feature, fromLog, userPos, nearbyKm, acceptedJob, user
     setShowPinModal(false);
   };
 
-  const handleAllocConfirm = async (plate) => {
-    setAllocBusy(true); setAllocErr('');
-    const result = await onAllocateToPlate(String(eventId), plate);
-    setAllocBusy(false);
-    if (result?.ok === false) { setAllocErr(result.err || 'Truck not found'); return; }
-    setShowAllocModal(false);
-  };
-
   const handleUnassign = async (e) => {
     e.stopPropagation();
     if (!window.confirm('Release this allocation globally? Any company can then accept it.')) return;
@@ -192,11 +182,6 @@ function AllocationCard({ feature, fromLog, userPos, nearbyKm, acceptedJob, user
       <DaPinModal busy={pinBusy} err={pinErr}
         onConfirm={handlePinConfirm}
         onCancel={() => { setShowPinModal(false); setPinErr(''); }} />
-    )}
-    {showAllocModal && (
-      <AllocateModal eventId={String(eventId)} busy={allocBusy} err={allocErr}
-        onConfirm={handleAllocConfirm}
-        onCancel={() => { setShowAllocModal(false); setAllocErr(''); }} />
     )}
     <div className={isNearby ? 'nearby-pulse' : ''}
       style={{ background: '#0d0d0d', border, borderLeft, borderRadius: 2, marginBottom: 6, overflow: 'hidden' }}>
@@ -252,13 +237,27 @@ function AllocationCard({ feature, fromLog, userPos, nearbyKm, acceptedJob, user
               ✓ Accept
             </button>
           )}
-          {/* Dispatcher: Allocate to plate (when job is open) */}
-          {isLive && !acceptedJob && isDispatch && (
-            <button onClick={e => { e.stopPropagation(); setShowAllocModal(true); setAllocErr(''); }}
-              style={{ background: ACC + '11', border: `1px solid ${ACC}55`, borderRadius: 2, color: ACC, fontSize: 8, padding: '3px 7px', cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>
-              📋 Allocate
+          {/* Dispatcher: Allocate button → opens trace/dispatch modal */}
+          {isLive && isDispatch && (
+            <button onClick={e => { e.stopPropagation(); onDispatch(feature); }}
+              style={{ background: '#cc444411', border: '1px solid #cc444455', borderRadius: 2, color: '#cc4444', fontSize: 8, padding: '3px 7px', cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>
+              ▶ Allocate
             </button>
           )}
+          {/* Driver: dispatched badge showing truck + depot */}
+          {isLive && !isDispatch && dispatchedJob && (() => {
+            const truck = trucks?.find(t => t.id === dispatchedJob.truck_id);
+            const depot = depots?.find(d => d.id === dispatchedJob.from_depot_id);
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+                <span style={{ fontSize: 7, fontWeight: 700, color: ORANGE, border: `1px solid ${ORANGE}55`, borderRadius: 2, padding: '1px 5px', whiteSpace: 'nowrap', fontFamily: "'IBM Plex Mono',monospace" }}>
+                  ALLOCATED
+                </span>
+                {depot && <span style={{ fontSize: 7, color: MUT, whiteSpace: 'nowrap', fontFamily: "'IBM Plex Mono',monospace" }}>{depot.name}</span>}
+                {truck && <span style={{ fontSize: 7, color: TXT, whiteSpace: 'nowrap', fontFamily: "'IBM Plex Mono',monospace" }}>{truck.plate}</span>}
+              </div>
+            );
+          })()}
           {/* My accepted badge (driver) */}
           {isAcceptedByMe && (
             <span style={{ fontSize: 7, color: ACC, fontFamily: "'IBM Plex Mono',monospace", whiteSpace: 'nowrap' }}>
@@ -450,9 +449,43 @@ function AllocationCard({ feature, fromLog, userPos, nearbyKm, acceptedJob, user
   );
 }
 
-export default function TowAllocationsTab({ allFeatures, liveIds, loading, err, lastFetch, countdown, fetchAllocations, isStale, acceptedJobs, userEmail, role, isDispatch, companyId, onAcceptJob, onUnassignJob, onAllocateToPlate }) {
+export default function TowAllocationsTab({ allFeatures, liveIds, loading, err, lastFetch, countdown, fetchAllocations, isStale, acceptedJobs, userEmail, role, isDispatch, companyId, onAcceptJob, onUnassignJob, onAllocateToPlate, companyConfig }) {
   const { rainSoon, maxProb, hoursUntil } = useWeather();
   const [handoverNotes, setHandoverNotes] = useState(new Map());
+
+  // Dispatch integration
+  const [trucks,         setTrucks]         = useState([]);
+  const [depots,         setDepots]         = useState([]);
+  const [storageTypes,   setStorageTypes]   = useState([]);
+  const [dispatchedMap,  setDispatchedMap]  = useState(new Map());
+  const [dispatchTarget, setDispatchTarget] = useState(null);
+  const [completeTarget, setCompleteTarget] = useState(null);
+
+  useEffect(() => {
+    if (!companyId) return;
+    supabase.from('tow_trucks').select('id,plate,first_name,last_name,depot_id').eq('company_id', companyId).eq('approved', true)
+      .then(({ data }) => setTrucks(data || []));
+    supabase.from('depots').select('id,name,suburb,lat,lng').eq('company_id', companyId)
+      .then(({ data }) => setDepots(data || []));
+    supabase.from('storage_types').select('*').eq('company_id', companyId).order('daily_rate', { ascending: false })
+      .then(({ data }) => setStorageTypes(data || []));
+    supabase.from('dispatched_jobs').select('*').eq('company_id', companyId).eq('status', 'in_progress')
+      .then(({ data }) => {
+        const m = new Map();
+        (data || []).forEach(j => { if (j.event_id) m.set(String(j.event_id), j); });
+        setDispatchedMap(m);
+      });
+  }, [companyId]);
+
+  const onDispatchSave = (savedJob) => {
+    setDispatchedMap(prev => new Map(prev).set(String(savedJob.event_id), savedJob));
+    setDispatchTarget(null);
+  };
+
+  const onCompleteSave = (jobId) => {
+    setDispatchedMap(prev => { const m = new Map(prev); for (const [k, v] of m) if (v.id === jobId) m.delete(k); return m; });
+    setCompleteTarget(null);
+  };
 
   useEffect(() => {
     const fetchNotes = async () => {
@@ -629,10 +662,27 @@ export default function TowAllocationsTab({ allFeatures, liveIds, loading, err, 
   const currentSort = SORT_OPTIONS.find(o => o.key === sortBy);
 
   return (
+    <>
+    {dispatchTarget && (
+      <DispatchModal
+        feature={dispatchTarget} trucks={trucks} depots={depots}
+        companyConfig={companyConfig} companyId={companyId} userEmail={userEmail}
+        onSave={onDispatchSave}
+        onCancel={() => setDispatchTarget(null)}
+      />
+    )}
+    {completeTarget && (
+      <CompleteModal
+        job={completeTarget} trucks={trucks} depots={depots}
+        storageTypes={storageTypes} companyId={companyId} userEmail={userEmail}
+        onSave={savedJob => onCompleteSave(savedJob.id)}
+        onCancel={() => setCompleteTarget(null)}
+      />
+    )}
     <div style={{ padding: 16, flex: 1, overflowY: 'auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: TXT, letterSpacing: '0.06em' }}>🚛 Tow Allocations</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: TXT, letterSpacing: '0.06em' }}>{isDispatch ? '🚨 Dispatch' : '🚛 Tow Allocations'}</div>
           <div style={{ fontSize: 9, color: MUT, marginTop: 2 }}>
             VicRoads feed · {{ '24h': 'last 24 hours', '7d': 'last 7 days', '31d': 'last 31 days' }[timeRange]} · {timeFiltered.length} allocation{timeFiltered.length !== 1 ? 's' : ''}
             {active.length > 0 && <span style={{ color: GRN, marginLeft: 8 }}>· {active.length} active · {cleared.length} cleared</span>}
@@ -798,7 +848,10 @@ export default function TowAllocationsTab({ allFeatures, liveIds, loading, err, 
               role={role} isDispatch={isDispatch} companyId={companyId}
               onAccept={onAcceptJob} onUnassign={onUnassignJob} onAllocateToPlate={onAllocateToPlate}
               handoverNotes={handoverNotes.get(String(f.properties?.eventId)) || []} onAddNote={addHandoverNote} onEditNote={editHandoverNote}
-              searchTerm={searchTerm.trim()} />
+              searchTerm={searchTerm.trim()}
+              dispatchedJob={dispatchedMap.get(String(f.properties?.eventId))}
+              trucks={trucks} depots={depots}
+              onDispatch={setDispatchTarget} />
           ))}
           {statusFilter === 'all' && cleared.length > 0 && <div style={{ marginTop: 12 }} />}
         </>
@@ -814,10 +867,12 @@ export default function TowAllocationsTab({ allFeatures, liveIds, loading, err, 
               role={role} isDispatch={isDispatch} companyId={companyId}
               onAccept={null} onUnassign={null} onAllocateToPlate={null}
               handoverNotes={handoverNotes.get(String(f.properties?.eventId)) || []} onAddNote={addHandoverNote} onEditNote={editHandoverNote}
-              searchTerm={searchTerm.trim()} />
+              searchTerm={searchTerm.trim()}
+              dispatchedJob={null} trucks={trucks} depots={depots} onDispatch={setDispatchTarget} />
           ))}
         </>
       )}
     </div>
+    </>
   );
 }

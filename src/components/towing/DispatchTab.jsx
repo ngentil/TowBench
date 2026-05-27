@@ -83,7 +83,7 @@ function AddrDropdown({ results, onPick }) {
 }
 
 // ─── Dispatch modal ────────────────────────────────────────────────────────────
-function DispatchModal({ feature, trucks, depots, companyConfig, companyId, userEmail, onSave, onCancel }) {
+export function DispatchModal({ feature, trucks, depots, companyConfig, companyId, userEmail, onSave, onCancel }) {
   const props   = feature.properties || {};
   const coords  = feature.geometry?.coordinates; // [lng, lat]
   const road    = props.closedRoadName || props.location || '—';
@@ -499,7 +499,7 @@ function DispatchModal({ feature, trucks, depots, companyConfig, companyId, user
 }
 
 // ─── Complete modal ────────────────────────────────────────────────────────────
-function CompleteModal({ job, trucks, depots, storageTypes, companyId, userEmail, onSave, onCancel }) {
+export function CompleteModal({ job, trucks, depots, storageTypes, companyId, userEmail, onSave, onCancel }) {
   const [status,        setStatus]        = useState('in_yard');
   const [plate,         setPlate]         = useState('');
   const [makeModel,     setMakeModel]     = useState('');
