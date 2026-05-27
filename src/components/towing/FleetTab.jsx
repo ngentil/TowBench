@@ -8,6 +8,60 @@ import { RosterCalendar, MiniRoster } from './RosterCalendar';
 const ORANGE = '#e8870a';
 const BLUE   = '#5a7a9a';
 
+// Vehicle types grouped for dropdown — ordered by how common they are in a tow yard
+export const TRUCK_TYPES = [
+  { group: 'Tow Trucks',         options: [
+    'Tilt Tray (Slide-Back)',
+    'Wheel-Lift Tow Truck',
+    'Integrated Carrier',
+    'Underlift / Sling Tow',
+    'Flatbed Wrecker',
+  ]},
+  { group: 'Recovery',           options: [
+    'Light Duty Wrecker',
+    'Medium Duty Wrecker',
+    'Heavy Duty Wrecker',
+    'Semi Recovery (Rotator)',
+  ]},
+  { group: 'Multi-Vehicle Carriers', options: [
+    'Single Car Carrier',
+    '2-Car Carrier',
+    '3-Car Carrier',
+    '4-Car Carrier',
+    '6-Car Carrier',
+    '8-Car Carrier',
+    'B-Double Carrier (10+)',
+    'Enclosed Transporter',
+  ]},
+  { group: 'Specialised',        options: [
+    'Motorcycle Recovery',
+    'Boat / Trailer Recovery',
+    'Bus / Coach Recovery',
+    'Machinery / Plant Transport',
+  ]},
+  { group: 'Yard & Support',     options: [
+    'Service Van',
+    'Roadside Assist Van',
+    'Parts Runner',
+    'Yard Shunter',
+    'Forklift',
+    'Utility Vehicle',
+  ]},
+];
+
+// Flat list for lookups
+const ALL_TRUCK_TYPES = TRUCK_TYPES.flatMap(g => g.options);
+
+function truckEmoji(type) {
+  if (!type) return '🚛';
+  if (type.includes('Motorcycle'))               return '🏍️';
+  if (type.includes('Forklift'))                 return '🏗️';
+  if (type.includes('Van') || type.includes('Roadside') || type.includes('Parts') || type.includes('Utility')) return '🚐';
+  if (type.includes('Heavy Duty') || type.includes('Semi Recovery') || type.includes('Bus') || type.includes('Machinery')) return '🏗️';
+  if (type.includes('Carrier') || type.includes('Transporter')) return '🚌';
+  return '🚛';
+}
+
 const STATUS_OPTIONS = ['available', 'on job', 'unavailable'];
 
 const DAY_LABEL = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -36,30 +90,29 @@ function StatusBadge({ status }) {
 }
 
 function TruckForm({ truck, depots, onSave, onCancel }) {
-  const [plate,      setPlate]      = useState(truck?.plate       || '');
-  const [daNumber,   setDaNumber]   = useState(truck?.da_number   || '');
-  const [driverName, setDriverName] = useState(truck?.driver_name || '');
-  const [depotId,    setDepotId]    = useState(truck?.depot_id    || (depots[0]?.id || ''));
-  const [status,     setStatus]     = useState(truck?.status      || 'available');
-  const [notes,      setNotes]      = useState(truck?.notes       || '');
-  const [saving,     setSaving]     = useState(false);
-  const [err,        setErr]        = useState('');
+  const [plate,     setPlate]     = useState(truck?.plate      || '');
+  const [truckType, setTruckType] = useState(truck?.truck_type || '');
+  const [depotId,   setDepotId]   = useState(truck?.depot_id   || (depots[0]?.id || ''));
+  const [status,    setStatus]    = useState(truck?.status     || 'available');
+  const [notes,     setNotes]     = useState(truck?.notes      || '');
+  const [saving,    setSaving]    = useState(false);
+  const [err,       setErr]       = useState('');
 
   const fld = { background: '#0a0a0a', border: '1px solid #252525', color: TXT, fontFamily: "'IBM Plex Mono',monospace", fontSize: 11, padding: '6px 8px', borderRadius: 2, outline: 'none', boxSizing: 'border-box', width: '100%' };
 
   const save = async () => {
     if (!plate.trim()) { setErr('Plate required'); return; }
+    if (!truckType)    { setErr('Select a vehicle type'); return; }
     if (!depotId)      { setErr('Select a depot'); return; }
     setSaving(true); setErr('');
     try {
       await onSave({
         ...truck,
-        plate:       plate.trim().toUpperCase(),
-        da_number:   daNumber.trim()   || null,
-        driver_name: driverName.trim() || null,
-        depot_id:    depotId,
+        plate:      plate.trim().toUpperCase(),
+        truck_type: truckType,
+        depot_id:   depotId,
         status,
-        notes:       notes.trim() || null,
+        notes:      notes.trim() || null,
       });
     } catch (e) { setErr(e.message); }
     setSaving(false);
@@ -67,27 +120,70 @@ function TruckForm({ truck, depots, onSave, onCancel }) {
 
   return (
     <div style={ovly} onClick={e => e.target === e.currentTarget && onCancel()}>
-      <div style={{ ...mdl, maxWidth: 480, maxHeight: '90vh', overflowY: 'auto' }}>
+      <div style={{ ...mdl, maxWidth: 460, maxHeight: '90vh', overflowY: 'auto' }}>
         <div style={mdlH}>
           <b style={{ fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.1em' }}>{truck?.id ? 'Edit Truck' : 'Add Truck'}</b>
           <button style={{ ...btnG, ...sm }} onClick={onCancel}>✕</button>
         </div>
-        <div style={{ ...mdlB, display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            <div><FL t="Tow Plate *" /><input style={fld} value={plate} onChange={e => setPlate(e.target.value)} placeholder="TOW XXX" autoFocus /></div>
-            <div><FL t="DA Number" /><input style={fld} value={daNumber} onChange={e => setDaNumber(e.target.value)} placeholder="e.g. 12345" /></div>
+        <div style={{ ...mdlB, display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+          {/* Plate */}
+          <div>
+            <FL t="Number Plate *" />
+            <input style={{ ...fld, fontSize: 15, letterSpacing: '0.15em', textTransform: 'uppercase' }}
+              value={plate} onChange={e => setPlate(e.target.value.toUpperCase())}
+              placeholder="e.g. TOW933" autoFocus />
           </div>
-          <div><FL t="Driver Name" /><input style={fld} value={driverName} onChange={e => setDriverName(e.target.value)} placeholder="e.g. John Smith" /></div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            <div><FL t="Depot *" /><select style={{ ...sel, width: '100%' }} value={depotId} onChange={e => setDepotId(e.target.value)}><option value="">— select depot —</option>{depots.map(d => <option key={d.id} value={d.id}>{d.name}{d.suburb ? ` — ${d.suburb}` : ''}</option>)}</select></div>
-            <div><FL t="Status" /><select style={{ ...sel, width: '100%' }} value={status} onChange={e => setStatus(e.target.value)}>{STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
+
+          {/* Vehicle type */}
+          <div>
+            <FL t="Vehicle Type *" />
+            <select style={{ ...sel, width: '100%', fontSize: 11 }} value={truckType} onChange={e => setTruckType(e.target.value)}>
+              <option value="">— Select type —</option>
+              {TRUCK_TYPES.map(group => (
+                <optgroup key={group.group} label={group.group}>
+                  {group.options.map(opt => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+            {truckType && (
+              <div style={{ marginTop: 5, fontSize: 9, color: MUT, fontFamily: "'IBM Plex Mono',monospace" }}>
+                {truckEmoji(truckType)} {truckType}
+              </div>
+            )}
           </div>
-          <div><FL t="Notes" /><textarea style={{ ...txa, minHeight: 56 }} value={notes} onChange={e => setNotes(e.target.value)} placeholder="e.g. Every second weekend on call day and night…" /></div>
+
+          {/* Depot + Status */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div>
+              <FL t="Depot *" />
+              <select style={{ ...sel, width: '100%' }} value={depotId} onChange={e => setDepotId(e.target.value)}>
+                <option value="">— select depot —</option>
+                {depots.map(d => <option key={d.id} value={d.id}>{d.name}{d.suburb ? ` — ${d.suburb}` : ''}</option>)}
+              </select>
+            </div>
+            <div>
+              <FL t="Status" />
+              <select style={{ ...sel, width: '100%' }} value={status} onChange={e => setStatus(e.target.value)}>
+                {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {/* Notes */}
+          <div>
+            <FL t="Notes (optional)" />
+            <textarea style={{ ...txa, minHeight: 48 }} value={notes} onChange={e => setNotes(e.target.value)} placeholder="e.g. Every second weekend on call…" />
+          </div>
+
           {err && <div style={{ fontSize: 9, color: RED }}>{err}</div>}
         </div>
         <div style={mdlF}>
           <button style={btnG} onClick={onCancel}>Cancel</button>
-          <button style={{ ...btnA, opacity: saving || !plate.trim() || !depotId ? 0.4 : 1 }} disabled={saving || !plate.trim() || !depotId} onClick={save}>
+          <button style={{ ...btnA, opacity: saving || !plate.trim() || !truckType || !depotId ? 0.4 : 1 }}
+            disabled={saving || !plate.trim() || !truckType || !depotId} onClick={save}>
             {saving ? 'Saving…' : truck?.id ? 'Save Changes' : 'Add Truck'}
           </button>
         </div>
@@ -392,26 +488,35 @@ function AccessCodesPanel() {
 function TruckRow({ truck, isAdmin, onEdit, onDelete, onAvail }) {
   const hasOverride = truck.override_active;
   const hasRelief   = !!(truck.relief_driver_name || truck.relief_da_number);
-  const sc = hasOverride && !hasRelief ? RED : statusColor(truck.status);
-  const activeDriver = hasRelief ? truck.relief_driver_name : truck.driver_name;
-  const activeDA     = hasRelief ? truck.relief_da_number   : truck.da_number;
-  const activeSched  = hasRelief ? truck.relief_schedule    : truck.schedule;
+  const sc          = hasOverride && !hasRelief ? RED : statusColor(truck.status);
+  const activeSched = hasRelief ? truck.relief_schedule : truck.schedule;
 
   return (
     <div style={{ padding: '8px 10px', background: '#0d0d0d', border: `1px solid ${hasOverride ? (hasRelief ? '#3a3a1a' : '#2a1a1a') : '#252525'}`, borderLeft: `3px solid ${sc}`, borderRadius: 2, marginBottom: 4 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span style={{ fontSize: 14, flexShrink: 0 }}>🚛</span>
+        <span style={{ fontSize: 16, flexShrink: 0 }}>{truckEmoji(truck.truck_type)}</span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: TXT, fontFamily: "'IBM Plex Mono',monospace" }}>{truck.plate}</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: TXT, fontFamily: "'IBM Plex Mono',monospace", letterSpacing: '0.1em' }}>{truck.plate}</span>
             <StatusBadge status={hasOverride && !hasRelief ? 'unavailable' : truck.status} />
-            {hasOverride && !hasRelief && <span style={{ fontSize: 7, fontWeight: 700, letterSpacing: '0.1em', padding: '1px 5px', border: `1px solid ${RED}55`, borderRadius: 2, color: RED, background: RED + '15', textTransform: 'uppercase' }}>{truck.override_reason || 'Away'}</span>}
-            {hasRelief && <span style={{ fontSize: 7, fontWeight: 700, letterSpacing: '0.1em', padding: '1px 5px', border: '1px solid #6a6a1a', borderRadius: 2, color: '#cccc44', background: '#cccc4411', textTransform: 'uppercase' }}>Relief</span>}
-            {activeDA && <span style={{ fontSize: 7, color: hasRelief ? '#cccc44' : MUT, fontFamily: "'IBM Plex Mono',monospace", border: `1px solid ${hasRelief ? '#5a5a14' : '#2a2a2a'}`, borderRadius: 2, padding: '1px 4px' }}>DA {activeDA}</span>}
+            {hasOverride && !hasRelief && (
+              <span style={{ fontSize: 7, fontWeight: 700, letterSpacing: '0.1em', padding: '1px 5px', border: `1px solid ${RED}55`, borderRadius: 2, color: RED, background: RED + '15', textTransform: 'uppercase' }}>
+                {truck.override_reason || 'Away'}
+              </span>
+            )}
+            {hasRelief && (
+              <span style={{ fontSize: 7, fontWeight: 700, letterSpacing: '0.1em', padding: '1px 5px', border: '1px solid #6a6a1a', borderRadius: 2, color: '#cccc44', background: '#cccc4411', textTransform: 'uppercase' }}>Relief</span>
+            )}
           </div>
-          {activeDriver && <div style={{ fontSize: 9, color: hasRelief ? '#cccc44' : TXT, marginTop: 2 }}>{activeDriver}</div>}
-          {hasOverride && truck.override_return_date && <div style={{ fontSize: 8, color: MUT, marginTop: 2 }}>Returns {fmtDate(truck.override_return_date)}</div>}
-          {truck.notes && !hasOverride && <div style={{ fontSize: 8, color: MUT, marginTop: 2 }}>{truck.notes}</div>}
+          {truck.truck_type && (
+            <div style={{ fontSize: 8, color: MUT, marginTop: 2, fontFamily: "'IBM Plex Mono',monospace" }}>{truck.truck_type}</div>
+          )}
+          {hasOverride && truck.override_return_date && (
+            <div style={{ fontSize: 8, color: MUT, marginTop: 2 }}>Returns {fmtDate(truck.override_return_date)}</div>
+          )}
+          {truck.notes && !hasOverride && (
+            <div style={{ fontSize: 8, color: MUT, marginTop: 2 }}>{truck.notes}</div>
+          )}
           <MiniRoster schedule={activeSched} />
         </div>
         {isAdmin && (
