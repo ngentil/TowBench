@@ -10,6 +10,7 @@ import TowAnalyticsTab from './TowAnalyticsTab';
 import TowInsTab from './TowInsTab';
 import DriversTab from './DriversTab';
 import ActiveTowsTab from './ActiveTowsTab';
+import ManualDispatchTab from './ManualDispatchTab';
 import BrandingTab from '../admin/BrandingTab';
 import PricingTab from '../admin/PricingTab';
 import DriverApprovalsTab from '../admin/DriverApprovalsTab';
@@ -23,19 +24,19 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, co
   //   dispatch:  Allocations, Map, Analytics, Fleet
   //   admin:     All above + Settings
   //   super_admin: All tabs
-  const allocLabel = (role === 'driver') ? '🚦 Tow Allocations' : '🚨 Dispatch';
   const TABS = [
-    { id: 'allocations',  label: allocLabel,             roles: ['driver','dispatch','admin','super_admin'] },
-    { id: 'activetows',   label: '🚛 Active Tows',      roles: ['dispatch','admin','super_admin'] },
-    { id: 'towins',       label: '🏭 Tow Ins',          roles: ['driver','dispatch','admin','super_admin'] },
-    { id: 'drivers',      label: '👤 Drivers',          roles: ['dispatch','admin','super_admin'] },
-    { id: 'depots',       label: '🏢 Depots',           roles: ['dispatch','admin','super_admin'] },
-    { id: 'fleet',        label: '🚛 Fleet',             roles: ['dispatch','admin','super_admin'] },
-    { id: 'ops',          label: '🗺 Map',              roles: ['dispatch','admin','super_admin'] },
-    { id: 'analytics',    label: '📊 Analytics',        roles: ['dispatch','admin','super_admin'] },
-    { id: 'pricing',      label: '💰 Pricing',          roles: ['admin','super_admin'] },
-    { id: 'branding',     label: '🎨 Branding',         roles: ['admin','super_admin'] },
-    { id: 'approvals',    label: '✅ Approvals',         roles: ['admin','super_admin'] },
+    { id: 'allocations',  label: '🚦 Tow Allocations',  roles: ['driver','dispatch','admin','super_admin'] },
+    { id: 'dispatch',     label: '🚨 Dispatch',          roles: ['dispatch','admin','super_admin'] },
+    { id: 'activetows',   label: '🚛 Active Tows',       roles: ['dispatch','admin','super_admin'] },
+    { id: 'towins',       label: '🏭 Tow Ins',           roles: ['driver','dispatch','admin','super_admin'] },
+    { id: 'drivers',      label: '👤 Drivers',           roles: ['dispatch','admin','super_admin'] },
+    { id: 'depots',       label: '🏢 Depots',            roles: ['dispatch','admin','super_admin'] },
+    { id: 'fleet',        label: '🚛 Fleet',              roles: ['dispatch','admin','super_admin'] },
+    { id: 'ops',          label: '🗺 Map',               roles: ['dispatch','admin','super_admin'] },
+    { id: 'analytics',    label: '📊 Analytics',         roles: ['dispatch','admin','super_admin'] },
+    { id: 'pricing',      label: '💰 Pricing',           roles: ['admin','super_admin'] },
+    { id: 'branding',     label: '🎨 Branding',          roles: ['admin','super_admin'] },
+    { id: 'approvals',    label: '✅ Approvals',          roles: ['admin','super_admin'] },
   ].filter(t => !role || t.roles.includes(role));
 
   const [tab, setTab] = useState('allocations');
@@ -194,9 +195,8 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, co
             companyConfig={companyConfig} companyId={companyId}
           />
         )}
-        {tab === 'activetows' && (
-          <ActiveTowsTab companyId={companyId} companyConfig={companyConfig} userEmail={userEmail} />
-        )}
+        {tab === 'dispatch'   && <ManualDispatchTab companyId={companyId} companyConfig={companyConfig} userEmail={userEmail} />}
+        {tab === 'activetows' && <ActiveTowsTab companyId={companyId} companyConfig={companyConfig} userEmail={userEmail} />}
         {tab === 'towins' && (
           <TowInsTab companyId={companyId} userEmail={userEmail} isDispatch={isDispatch} companyConfig={companyConfig} />
         )}
