@@ -12,6 +12,7 @@ const BLUE   = '#5a7a9a';
 export const TRUCK_TYPES = [
   { group: 'Tow Trucks',         options: [
     'Tilt Tray (Slide-Back)',
+    'Super Tilt',
     'Wheel-Lift Tow Truck',
     'Integrated Carrier',
     'Underlift / Sling Tow',
