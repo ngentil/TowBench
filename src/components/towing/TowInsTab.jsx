@@ -29,16 +29,25 @@ function daysIn(dateIn, dateOut) {
   return Math.max(0, Math.ceil((end - start) / 86400000));
 }
 
-function calcStorageCost(record, cfg) {
-  if (!cfg) return null;
+function calcStorageCost(record, storageTypes, cfg) {
   const days = daysIn(record.date_in, record.date_out);
-  const isCar = record.vehicle_type === 'motor_car';
+  // New path: dynamic storage type
+  if (record.storage_type_id && storageTypes?.length) {
+    const st = storageTypes.find(s => s.id === record.storage_type_id);
+    if (st) {
+      const rate = parseFloat(st.daily_rate) || 0;
+      return rate ? { days, rate, total: days * rate, name: st.name } : null;
+    }
+  }
+  // Legacy path: old company_config fields
+  if (!cfg) return null;
+  const isCar   = record.vehicle_type === 'motor_car';
   const isCover = record.storage_type === 'undercover';
   const rate = isCar
     ? (isCover ? parseFloat(cfg.storage_car_undercover) || 0 : parseFloat(cfg.storage_car_yard) || 0)
     : (isCover ? parseFloat(cfg.storage_bike_undercover) || 0 : parseFloat(cfg.storage_bike_yard) || 0);
   if (!rate) return null;
-  return { days, rate, total: days * rate };
+  return { days, rate, total: days * rate, name: isCover ? 'Undercover' : 'Locked Yard' };
 }
 
 function fmtDate(iso) {
@@ -334,15 +343,16 @@ function TransferForm({ towIn, allDepots, fromDepotId, userEmail, onSave, onCanc
 }
 
 // ─── Tow-in log form ───────────────────────────────────────────────────────────
-function TowInForm({ record, formDepots, allDepots, userEmail, companyId, onSave, onCancel }) {
+function TowInForm({ record, formDepots, allDepots, userEmail, companyId, storageTypes, onSave, onCancel }) {
   const isEdit = !!record?.id;
   const depots = isEdit ? allDepots : formDepots;
 
-  const [plate,       setPlate]       = useState(record?.plate        || '');
-  const [vtype,       setVtype]       = useState(record?.vehicle_type || 'motor_car');
-  const [makeModel,   setMakeModel]   = useState(record?.make_model   || '');
-  const [storageType, setStorageType] = useState(record?.storage_type || 'locked_yard');
-  const [depotId,     setDepotId]     = useState(record?.depot_id     || (depots.length === 1 ? depots[0].id : ''));
+  const [plate,         setPlate]         = useState(record?.plate        || '');
+  const [vtype,         setVtype]         = useState(record?.vehicle_type || 'motor_car');
+  const [makeModel,     setMakeModel]     = useState(record?.make_model   || '');
+  const [storageType,   setStorageType]   = useState(record?.storage_type || 'locked_yard');
+  const [storageTypeId, setStorageTypeId] = useState(record?.storage_type_id || (storageTypes?.[0]?.id || ''));
+  const [depotId,       setDepotId]       = useState(record?.depot_id     || (depots.length === 1 ? depots[0].id : ''));
   const [dateIn,      setDateIn]      = useState(record?.date_in ? toLocal(record.date_in) : toLocal(new Date().toISOString()));
   const [dateOut,     setDateOut]     = useState(record?.date_out ? toLocal(record.date_out) : '');
   const [notes,       setNotes]       = useState(record?.notes        || '');
@@ -361,16 +371,17 @@ function TowInForm({ record, formDepots, allDepots, userEmail, companyId, onSave
     if (!depotId)      { setErr('Select a yard.'); return; }
     setSaving(true); setErr('');
     const payload = {
-      plate:        plate.trim().toUpperCase(),
-      vehicle_type: vtype,
-      make_model:   makeModel.trim() || null,
-      storage_type: storageType,
-      depot_id:     depotId,
-      date_in:      dateIn ? new Date(dateIn).toISOString() : new Date().toISOString(),
-      date_out:     dateOut ? new Date(dateOut).toISOString() : null,
-      notes:        notes.trim() || null,
-      company_id:   companyId,
-      created_by:   userEmail,
+      plate:           plate.trim().toUpperCase(),
+      vehicle_type:    vtype,
+      make_model:      makeModel.trim() || null,
+      storage_type:    storageType,
+      storage_type_id: (storageTypes?.length && storageTypeId) ? storageTypeId : null,
+      depot_id:        depotId,
+      date_in:         dateIn ? new Date(dateIn).toISOString() : new Date().toISOString(),
+      date_out:        dateOut ? new Date(dateOut).toISOString() : null,
+      notes:           notes.trim() || null,
+      company_id:      companyId,
+      created_by:      userEmail,
       ...flags,
     };
     try {
@@ -424,9 +435,17 @@ function TowInForm({ record, formDepots, allDepots, userEmail, companyId, onSave
             </div>
             <div>
               <FL t="Storage Type" />
-              <select style={inp} value={storageType} onChange={e => setStorageType(e.target.value)}>
-                {STORAGE_TYPES.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
-              </select>
+              {storageTypes?.length > 0 ? (
+                <select style={inp} value={storageTypeId} onChange={e => setStorageTypeId(e.target.value)}>
+                  {storageTypes.map(s => (
+                    <option key={s.id} value={s.id}>{s.name} · ${parseFloat(s.daily_rate).toFixed(2)}/day</option>
+                  ))}
+                </select>
+              ) : (
+                <select style={inp} value={storageType} onChange={e => setStorageType(e.target.value)}>
+                  {STORAGE_TYPES.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
+                </select>
+              )}
             </div>
           </div>
           <div>
@@ -492,7 +511,7 @@ function TowInForm({ record, formDepots, allDepots, userEmail, companyId, onSave
 }
 
 // ─── Card ──────────────────────────────────────────────────────────────────────
-function TowInCard({ record, allDepots, transfers, photos, isDispatch, onEdit, onRelease, onTransfer, onPhotos, searchTerm, companyConfig }) {
+function TowInCard({ record, allDepots, transfers, photos, storageTypes, isDispatch, onEdit, onRelease, onTransfer, onPhotos, searchTerm, companyConfig }) {
   const [open, setOpen] = useState(false);
 
   const xfers      = transfers[record.id] || [];
@@ -500,7 +519,7 @@ function TowInCard({ record, allDepots, transfers, photos, isDispatch, onEdit, o
   const days       = daysIn(record.date_in, record.date_out);
   const released   = !!record.date_out;
   const activeFlags = FLAG_FIELDS.filter(({ key }) => record[key]);
-  const cost       = calcStorageCost(record, companyConfig);
+  const cost       = calcStorageCost(record, storageTypes, companyConfig);
   const photoCount = photos?.length || 0;
 
   return (
@@ -627,6 +646,40 @@ function TowInCard({ record, allDepots, transfers, photos, isDispatch, onEdit, o
             ))}
           </div>
 
+          {/* Total owing */}
+          {(record.tow_fee != null || cost) && (
+            <div style={{ marginTop: 12, background: '#0a0a0a', border: '1px solid #1e1e1e', borderRadius: 2, padding: '10px 12px' }}>
+              <div style={{ fontSize: 7, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 8 }}>What This Car Owes</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                {record.tow_fee != null && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9 }}>
+                    <span style={{ color: MUT }}>
+                      Tow fee
+                      {record.distance_km ? <span style={{ color: '#333', marginLeft: 4 }}>· {parseFloat(record.distance_km).toFixed(1)} km</span> : ''}
+                      {record.tow_type ? <span style={{ color: '#333', marginLeft: 4 }}>· {record.tow_type}</span> : ''}
+                    </span>
+                    <span style={{ color: TXT, fontWeight: 700 }}>${parseFloat(record.tow_fee).toFixed(2)}</span>
+                  </div>
+                )}
+                {cost && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9 }}>
+                    <span style={{ color: MUT }}>
+                      Storage{cost.name ? <span style={{ color: '#333', marginLeft: 4 }}>· {cost.name}</span> : ''}
+                      <span style={{ color: '#333', marginLeft: 4 }}>· {cost.days} day{cost.days !== 1 ? 's' : ''} @ ${cost.rate.toFixed(2)}</span>
+                    </span>
+                    <span style={{ color: TXT, fontWeight: 700 }}>${cost.total.toFixed(2)}</span>
+                  </div>
+                )}
+                <div style={{ borderTop: '1px solid #1e1e1e', paddingTop: 6, marginTop: 2, display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 9, color: MUT, fontWeight: 700 }}>Total Owing</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: released ? MUT : GRN, fontFamily: "'IBM Plex Mono',monospace" }}>
+                    ${((record.tow_fee ? parseFloat(record.tow_fee) : 0) + (cost?.total || 0)).toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Transfer history */}
           {xfers.length > 0 && (
             <div style={{ marginTop: 12 }}>
@@ -678,6 +731,7 @@ export default function TowInsTab({ companyId, userEmail, isDispatch, companyCon
   const [formDepots,    setFormDepots]    = useState([]);
   const [transfers,     setTransfers]     = useState({});
   const [photosMap,     setPhotosMap]     = useState({}); // tow_in_id -> photo[]
+  const [storageTypes,  setStorageTypes]  = useState([]);
   const [loading,       setLoading]       = useState(true);
   const [showForm,      setShowForm]      = useState(false);
   const [editRecord,    setEditRecord]    = useState(null);
@@ -690,12 +744,13 @@ export default function TowInsTab({ companyId, userEmail, isDispatch, companyCon
   const load = useCallback(async () => {
     if (!companyId) return;
 
-    const [{ data: recs }, { data: deps }, { data: xfers }, { data: trucks }, { data: pics }] = await Promise.all([
+    const [{ data: recs }, { data: deps }, { data: xfers }, { data: trucks }, { data: pics }, { data: stData }] = await Promise.all([
       supabase.from('tow_ins').select('*').eq('company_id', companyId).order('date_in', { ascending: false }),
       supabase.from('depots').select('*').eq('company_id', companyId).order('name'),
       supabase.from('tow_in_transfers').select('*').order('transferred_at'),
       supabase.from('tow_trucks').select('depot_id').eq('auth_email', userEmail).eq('company_id', companyId),
       supabase.from('tow_in_photos').select('id, tow_in_id, path, file_name, created_at').eq('company_id', companyId).order('created_at'),
+      supabase.from('storage_types').select('*').eq('company_id', companyId).order('daily_rate', { ascending: false }),
     ]);
 
     const recList  = recs  || [];
@@ -726,6 +781,7 @@ export default function TowInsTab({ companyId, userEmail, isDispatch, companyCon
     setFormDepots(fDepots.length > 0 ? fDepots : depList);
     setTransfers(xferMap);
     setPhotosMap(picsMap);
+    setStorageTypes(stData || []);
     setLoading(false);
   }, [companyId, userEmail, isDispatch]);
 
@@ -779,6 +835,7 @@ export default function TowInsTab({ companyId, userEmail, isDispatch, companyCon
   const cardProps = r => ({
     key: r.id, record: r, allDepots, transfers, isDispatch,
     photos: photosMap[r.id] || [],
+    storageTypes,
     onEdit: setEditRecord,
     onRelease: handleRelease,
     onTransfer: (rec, fromDepotId) => setXferTarget({ record: rec, fromDepotId }),
@@ -796,6 +853,7 @@ export default function TowInsTab({ companyId, userEmail, isDispatch, companyCon
           allDepots={allDepots}
           userEmail={userEmail}
           companyId={companyId}
+          storageTypes={storageTypes}
           onSave={handleSave}
           onCancel={() => { setShowForm(false); setEditRecord(null); }}
         />

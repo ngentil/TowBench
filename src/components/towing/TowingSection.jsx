@@ -8,6 +8,7 @@ import AdminSettings from '../admin/AdminSettings';
 import OpsTab from './OpsTab';
 import TowAnalyticsTab from './TowAnalyticsTab';
 import TowInsTab from './TowInsTab';
+import DispatchTab from './DispatchTab';
 import DriversTab from './DriversTab';
 import { VICROADS_URL, VICROADS_KEY } from '../../lib/constants';
 
@@ -22,6 +23,7 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, co
   const TABS = [
     { id: 'allocations', label: '🚦 Tow Allocations', roles: ['driver','dispatch','admin','super_admin'] },
     { id: 'towins',      label: '🏭 Tow Ins',         roles: ['driver','dispatch','admin','super_admin'] },
+    { id: 'dispatch',    label: '🚨 Dispatch',        roles: ['dispatch','admin','super_admin'] },
     { id: 'drivers',     label: '👤 Drivers',         roles: ['driver','dispatch','admin','super_admin'] },
     { id: 'ops',         label: '🗺 Map',             roles: ['dispatch','admin','super_admin'] },
     { id: 'analytics',   label: '📊 Analytics',       roles: ['dispatch','admin','super_admin'] },
@@ -186,6 +188,13 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, co
         )}
         {tab === 'towins' && (
           <TowInsTab companyId={companyId} userEmail={userEmail} isDispatch={isDispatch} companyConfig={companyConfig} />
+        )}
+        {tab === 'dispatch' && (
+          <DispatchTab
+            allFeatures={allFeatures} liveIds={liveIds}
+            acceptedJobs={acceptedJobs} companyId={companyId}
+            userEmail={userEmail} companyConfig={companyConfig}
+          />
         )}
         {tab === 'analytics' && (
           <TowAnalyticsTab allFeatures={allFeatures} liveIds={liveIds} loading={loading} userEmail={userEmail} />
