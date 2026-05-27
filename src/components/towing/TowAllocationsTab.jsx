@@ -463,7 +463,7 @@ export default function TowAllocationsTab({ allFeatures, liveIds, loading, err, 
 
   useEffect(() => {
     if (!companyId) return;
-    supabase.from('tow_trucks').select('id,plate,first_name,last_name,depot_id').eq('company_id', companyId).eq('approved', true)
+    supabase.from('tow_trucks').select('id,plate,truck_type,first_name,last_name,depot_id').eq('company_id', companyId)
       .then(({ data }) => setTrucks(data || []));
     supabase.from('depots').select('id,name,suburb,lat,lng').eq('company_id', companyId)
       .then(({ data }) => setDepots(data || []));

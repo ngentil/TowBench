@@ -266,7 +266,7 @@ export function DispatchModal({ feature, trucks, depots, companyConfig, companyI
                 const dep = depots.find(d => d.id === t.depot_id);
                 return (
                   <option key={t.id} value={t.id}>
-                    {t.plate}{t.first_name ? ` · ${t.first_name}` : ''}{dep ? ` · ${dep.name}` : ''}
+                    {t.plate}{t.truck_type ? ` · ${t.truck_type}` : ''}{dep ? ` · ${dep.name}` : ''}
                   </option>
                 );
               })}
