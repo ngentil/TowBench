@@ -3,6 +3,16 @@ import { ACC, MUT, BRD, TXT, GRN, RED, SURF, inp, sel, btnA, btnG, btnD, sm, ovl
 import { FL } from '../ui/shared';
 import { supabase } from '../../lib/supabase';
 import { getDepots, upsertDepot, deleteDepot, getTrucks, upsertTruck } from '../../lib/db/towing';
+import { TRUCK_TYPES } from './FleetTab';
+
+const ORANGE = '#e8870a';
+
+function statusColor(s) {
+  if (s === 'available')   return GRN;
+  if (s === 'on job')      return ORANGE;
+  if (s === 'unavailable') return RED;
+  return MUT;
+}
 
 function DepotForm({ depot, onSave, onCancel }) {
   const [name,           setName]           = useState(depot?.name    || '');
@@ -134,7 +144,7 @@ function AssignTruckModal({ depot, unassigned, onAssign, onCancel }) {
                 <option value="">— choose a truck —</option>
                 {unassigned.map(t => (
                   <option key={t.id} value={t.id}>
-                    {t.plate}{t.driver_name ? ` · ${t.driver_name}` : ''}{t.da_number ? ` (DA ${t.da_number})` : ''}
+                    {t.plate}{t.truck_type ? ` · ${t.truck_type}` : ''}
                   </option>
                 ))}
               </select>
@@ -155,12 +165,19 @@ function AssignTruckModal({ depot, unassigned, onAssign, onCancel }) {
 }
 
 export default function DepotsTab({ isAdmin, companyId }) {
-  const [depots,  setDepots]  = useState([]);
-  const [trucks,  setTrucks]  = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [err,     setErr]     = useState('');
+  const [depots,   setDepots]   = useState([]);
+  const [trucks,   setTrucks]   = useState([]);
+  const [loading,  setLoading]  = useState(true);
+  const [err,      setErr]      = useState('');
+  const [expanded, setExpanded] = useState(new Set());
   const [depotForm,   setDepotForm]   = useState(null);
-  const [assignModal, setAssignModal] = useState(null); // depot object
+  const [assignModal, setAssignModal] = useState(null);
+
+  const toggleExpanded = (id) => setExpanded(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
 
   const load = useCallback(async () => {
     try {
@@ -197,6 +214,14 @@ export default function DepotsTab({ isAdmin, companyId }) {
     } catch (e) { alert(`Assign failed: ${e.message}`); }
   };
 
+  const handleUnassignTruck = async (truck) => {
+    if (!confirm(`Remove ${truck.plate} from depot?`)) return;
+    try {
+      const saved = await upsertTruck({ ...truck, depot_id: null });
+      setTrucks(prev => prev.map(t => t.id === saved.id ? saved : t));
+    } catch (e) { alert(`Remove failed: ${e.message}`); }
+  };
+
   return (
     <div style={{ padding: 16, flex: 1, overflowY: 'auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, gap: 8, flexWrap: 'wrap' }}>
@@ -219,37 +244,76 @@ export default function DepotsTab({ isAdmin, companyId }) {
         </div>
       )}
       {depots.map(depot => {
-        const truckCount = trucks.filter(t => t.depot_id === depot.id).length;
+        const depotTrucks = trucks.filter(t => t.depot_id === depot.id);
+        const isOpen = expanded.has(depot.id);
         return (
-          <div key={depot.id} style={{ background: '#0d0d0d', border: '1px solid #252525', borderLeft: `3px solid ${ACC}`, borderRadius: 2, padding: '10px 12px', marginBottom: 8 }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+          <div key={depot.id} style={{ background: '#0d0d0d', border: '1px solid #252525', borderLeft: `3px solid ${ACC}`, borderRadius: 2, marginBottom: 8, overflow: 'hidden' }}>
+            {/* Header row — click to expand */}
+            <div onClick={() => toggleExpanded(depot.id)}
+              style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, padding: '10px 12px', cursor: 'pointer' }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   <span style={{ fontSize: 11, fontWeight: 700, color: TXT, fontFamily: "'IBM Plex Mono',monospace" }}>{depot.name}</span>
                   {depot.suburb && <span style={{ fontSize: 8, color: MUT }}>{depot.suburb}</span>}
                   <span style={{ fontSize: 7, fontWeight: 700, letterSpacing: '0.1em', padding: '1px 5px', border: `1px solid ${ACC}55`, borderRadius: 2, color: ACC, background: ACC + '15' }}>
-                    {truckCount} truck{truckCount !== 1 ? 's' : ''}
+                    {depotTrucks.length} truck{depotTrucks.length !== 1 ? 's' : ''}
                   </span>
-                  {depot.lat != null && (
-                    <span style={{ fontSize: 7, color: GRN }}>📍</span>
-                  )}
+                  {depot.lat != null && <span style={{ fontSize: 7, color: GRN }}>📍</span>}
                 </div>
                 {depot.address && <div style={{ fontSize: 8, color: MUT, marginTop: 3 }}>{depot.address}</div>}
                 {depot.lat != null && (
                   <div style={{ fontSize: 7, color: '#3a3a3a', marginTop: 2 }}>{depot.lat.toFixed(5)}, {depot.lng.toFixed(5)}</div>
                 )}
               </div>
-              <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+              <div style={{ display: 'flex', gap: 4, flexShrink: 0, alignItems: 'center' }}>
                 {isAdmin && (
                   <>
-                    <button onClick={() => setDepotForm(depot)} style={{ ...btnG, ...sm, fontSize: 8 }}>Edit</button>
-                    <button onClick={() => handleDeleteDepot(depot)} style={{ ...btnD, ...sm, fontSize: 8 }}>Delete</button>
+                    <button onClick={e => { e.stopPropagation(); setDepotForm(depot); }} style={{ ...btnG, ...sm, fontSize: 8 }}>Edit</button>
+                    <button onClick={e => { e.stopPropagation(); handleDeleteDepot(depot); }} style={{ ...btnD, ...sm, fontSize: 8 }}>Delete</button>
                   </>
                 )}
+                <span style={{ fontSize: 9, color: MUT, marginLeft: 4 }}>{isOpen ? '▲' : '▼'}</span>
               </div>
             </div>
-            {isAdmin && (
-              <button onClick={() => setAssignModal(depot)} style={{ fontSize: 8, color: MUT, border: '1px dashed #2a2a2a', borderRadius: 2, background: 'transparent', padding: '4px 10px', cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", marginTop: 8 }}>+ Add truck to {depot.name}</button>
+
+            {/* Expanded truck list */}
+            {isOpen && (
+              <div style={{ borderTop: '1px solid #1a1a1a', padding: '8px 12px 10px' }}>
+                {depotTrucks.length === 0 ? (
+                  <div style={{ fontSize: 9, color: MUT, padding: '4px 0' }}>No trucks assigned to this depot.</div>
+                ) : (
+                  depotTrucks.map(truck => {
+                    const sc = statusColor(truck.status);
+                    return (
+                      <div key={truck.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', background: '#080808', border: '1px solid #1e1e1e', borderLeft: `3px solid ${sc}`, borderRadius: 2, marginBottom: 4 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: TXT, fontFamily: "'IBM Plex Mono',monospace", letterSpacing: '0.08em' }}>{truck.plate}</span>
+                            <span style={{ fontSize: 7, fontWeight: 700, letterSpacing: '0.1em', padding: '1px 5px', border: `1px solid ${sc}55`, borderRadius: 2, color: sc, background: sc + '15', textTransform: 'uppercase' }}>
+                              {truck.status || 'available'}
+                            </span>
+                          </div>
+                          {truck.truck_type && (
+                            <div style={{ fontSize: 8, color: MUT, marginTop: 2, fontFamily: "'IBM Plex Mono',monospace" }}>{truck.truck_type}</div>
+                          )}
+                        </div>
+                        {isAdmin && (
+                          <button onClick={() => handleUnassignTruck(truck)}
+                            style={{ fontSize: 8, color: '#884040', border: '1px solid #3a1a1a', background: 'none', borderRadius: 2, padding: '3px 7px', cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", whiteSpace: 'nowrap', flexShrink: 0 }}>
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+                {isAdmin && (
+                  <button onClick={() => setAssignModal(depot)}
+                    style={{ fontSize: 8, color: MUT, border: '1px dashed #2a2a2a', borderRadius: 2, background: 'transparent', padding: '4px 10px', cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", marginTop: 4 }}>
+                    + Assign truck to {depot.name}
+                  </button>
+                )}
+              </div>
             )}
           </div>
         );
