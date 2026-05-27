@@ -662,7 +662,7 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
             <div style={{ padding: '7px 10px', borderBottom: '1px solid #1a1a1a' }}>
               <div style={{ fontSize: 7, color: '#444', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 5 }}>Type</div>
               <div style={{ display: 'flex', gap: 4 }}>
-                {['accident', 'trade', 'both', 'custom'].map(tp => (
+                {['accident', 'trade', 'custom'].map(tp => (
                   <button key={tp} onClick={() => setTowType(tp)} style={{
                     flex: 1, fontSize: 8, padding: '3px 0', borderRadius: 2, cursor: 'pointer',
                     fontFamily: "'IBM Plex Mono',monospace",
