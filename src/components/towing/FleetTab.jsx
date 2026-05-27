@@ -89,10 +89,9 @@ function StatusBadge({ status }) {
   );
 }
 
-function TruckForm({ truck, depots, onSave, onCancel }) {
+function TruckForm({ truck, onSave, onCancel }) {
   const [plate,     setPlate]     = useState(truck?.plate      || '');
   const [truckType, setTruckType] = useState(truck?.truck_type || '');
-  const [depotId,   setDepotId]   = useState(truck?.depot_id   || (depots[0]?.id || ''));
   const [status,    setStatus]    = useState(truck?.status     || 'available');
   const [notes,     setNotes]     = useState(truck?.notes      || '');
   const [saving,    setSaving]    = useState(false);
@@ -103,14 +102,12 @@ function TruckForm({ truck, depots, onSave, onCancel }) {
   const save = async () => {
     if (!plate.trim()) { setErr('Plate required'); return; }
     if (!truckType)    { setErr('Select a vehicle type'); return; }
-    if (!depotId)      { setErr('Select a depot'); return; }
     setSaving(true); setErr('');
     try {
       await onSave({
         ...truck,
         plate:      plate.trim().toUpperCase(),
         truck_type: truckType,
-        depot_id:   depotId,
         status,
         notes:      notes.trim() || null,
       });
@@ -120,7 +117,7 @@ function TruckForm({ truck, depots, onSave, onCancel }) {
 
   return (
     <div style={ovly} onClick={e => e.target === e.currentTarget && onCancel()}>
-      <div style={{ ...mdl, maxWidth: 460, maxHeight: '90vh', overflowY: 'auto' }}>
+      <div style={{ ...mdl, maxWidth: 420, maxHeight: '90vh', overflowY: 'auto' }}>
         <div style={mdlH}>
           <b style={{ fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.1em' }}>{truck?.id ? 'Edit Truck' : 'Add Truck'}</b>
           <button style={{ ...btnG, ...sm }} onClick={onCancel}>✕</button>
@@ -155,21 +152,12 @@ function TruckForm({ truck, depots, onSave, onCancel }) {
             )}
           </div>
 
-          {/* Depot + Status */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            <div>
-              <FL t="Depot *" />
-              <select style={{ ...sel, width: '100%' }} value={depotId} onChange={e => setDepotId(e.target.value)}>
-                <option value="">— select depot —</option>
-                {depots.map(d => <option key={d.id} value={d.id}>{d.name}{d.suburb ? ` — ${d.suburb}` : ''}</option>)}
-              </select>
-            </div>
-            <div>
-              <FL t="Status" />
-              <select style={{ ...sel, width: '100%' }} value={status} onChange={e => setStatus(e.target.value)}>
-                {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
+          {/* Status */}
+          <div>
+            <FL t="Status" />
+            <select style={{ ...sel, width: '100%' }} value={status} onChange={e => setStatus(e.target.value)}>
+              {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
           </div>
 
           {/* Notes */}
@@ -182,8 +170,8 @@ function TruckForm({ truck, depots, onSave, onCancel }) {
         </div>
         <div style={mdlF}>
           <button style={btnG} onClick={onCancel}>Cancel</button>
-          <button style={{ ...btnA, opacity: saving || !plate.trim() || !truckType || !depotId ? 0.4 : 1 }}
-            disabled={saving || !plate.trim() || !truckType || !depotId} onClick={save}>
+          <button style={{ ...btnA, opacity: saving || !plate.trim() || !truckType ? 0.4 : 1 }}
+            disabled={saving || !plate.trim() || !truckType} onClick={save}>
             {saving ? 'Saving…' : truck?.id ? 'Save Changes' : 'Add Truck'}
           </button>
         </div>
@@ -338,14 +326,14 @@ export default function FleetTab({ isAdmin, companyId }) {
           </div>
         </div>
         {isAdmin && (
-          <button onClick={() => setTruckForm({})} style={{ ...btnA, ...sm, fontSize: 8 }} disabled={depots.length === 0} title={depots.length === 0 ? 'Add a depot first' : ''}>+ Add Truck</button>
+          <button onClick={() => setTruckForm({})} style={{ ...btnA, ...sm, fontSize: 8 }}>+ Add Truck</button>
         )}
       </div>
       {err && <div style={{ fontSize: 9, color: RED, marginBottom: 12 }}>{err}</div>}
       {loading && <div style={{ fontSize: 10, color: MUT, textAlign: 'center', padding: '32px 0' }}>Loading fleet…</div>}
-      {!loading && depots.length === 0 && (
+      {!loading && trucks.length === 0 && (
         <div style={{ fontSize: 10, color: MUT, textAlign: 'center', padding: '32px 0', lineHeight: 1.8 }}>
-          No depots yet. Add a depot in the Depots tab first.
+          No trucks yet. Click + Add Truck to get started.
         </div>
       )}
       {trucksByDepot.map(({ depot, trucks: dTrucks }) => (
@@ -373,7 +361,7 @@ export default function FleetTab({ isAdmin, companyId }) {
       )}
       {isAdmin && <AccessRequestsPanel />}
       {isAdmin && <AccessCodesPanel />}
-      {truckForm  !== null && <TruckForm truck={truckForm?.id ? truckForm : truckForm} depots={depots} onSave={handleSaveTruck} onCancel={() => setTruckForm(null)} />}
+      {truckForm  !== null && <TruckForm truck={truckForm?.id ? truckForm : truckForm} onSave={handleSaveTruck} onCancel={() => setTruckForm(null)} />}
       {availModal !== null && <AvailabilityModal truck={availModal} onSave={async (updated) => { await handleSaveTruck(updated); setAvailModal(null); }} onCancel={() => setAvailModal(null)} />}
     </div>
   );
