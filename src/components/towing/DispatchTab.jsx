@@ -218,12 +218,14 @@ export function DispatchModal({ feature, trucks, depots, companyConfig, companyI
     if (!truckId)  { setErr('Select a truck.'); return; }
     if (!pointA)   { setErr('Set a pickup location.'); return; }
     setSaving(true); setErr('');
-    const fromDep = depots.find(d => d.id === selectedDepotId);
-    const toDep   = depots.find(d => d.id === selectedReturnId) || fromDep;
+    const fromDep   = depots.find(d => d.id === selectedDepotId);
+    const toDep     = depots.find(d => d.id === selectedReturnId) || fromDep;
+    const truckRow  = trucks.find(t => t.id === truckId);
     const { data, error } = await supabase.from('dispatched_jobs').insert({
       company_id:    companyId,
       event_id:      eventId,
       truck_id:      truckId,
+      assigned_to:   truckRow?.auth_email || null,
       from_depot_id: fromDepot ? (fromDep?.id || null) : null,
       to_depot_id:   returnDepot ? (toDep?.id || null) : null,
       pickup_lat:    pointA.lat,
@@ -658,7 +660,7 @@ export default function DispatchTab({ allFeatures, liveIds, acceptedJobs, compan
   const loadData = useCallback(async () => {
     if (!companyId) return;
     const [{ data: td }, { data: dd }, { data: sd }, { data: jd }] = await Promise.all([
-      supabase.from('tow_trucks').select('id, plate, first_name, last_name, depot_id').eq('company_id', companyId).order('plate'),
+      supabase.from('tow_trucks').select('id, plate, first_name, last_name, depot_id, auth_email').eq('company_id', companyId).order('plate'),
       supabase.from('depots').select('id, name, suburb, lat, lng').eq('company_id', companyId).order('name'),
       supabase.from('storage_types').select('*').eq('company_id', companyId).order('daily_rate', { ascending: false }),
       supabase.from('dispatched_jobs').select('*').eq('company_id', companyId).eq('status', 'in_progress').order('dispatched_at', { ascending: false }),

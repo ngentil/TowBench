@@ -110,7 +110,7 @@ export default function ManualDispatchTab({ companyId, companyConfig, userEmail 
 
   useEffect(() => {
     if (!companyId) return;
-    supabase.from('tow_trucks').select('id,plate,truck_type,depot_id').eq('company_id', companyId)
+    supabase.from('tow_trucks').select('id,plate,truck_type,depot_id,auth_email').eq('company_id', companyId)
       .then(({ data }) => setTrucks(data || []));
     supabase.from('depots').select('id,name,suburb,lat,lng').eq('company_id', companyId)
       .then(({ data }) => setDepots(data || []));
@@ -196,12 +196,14 @@ export default function ManualDispatchTab({ companyId, companyConfig, userEmail 
     if (!truckId) { setErr('Select a truck.'); return; }
     if (!pointA)  { setErr('Enter a pickup address.'); return; }
     setSaving(true); setErr('');
-    const fromDep = depots.find(d => d.id === fromDepotId);
-    const toDep   = depots.find(d => d.id === returnDepotId) || fromDep;
+    const fromDep  = depots.find(d => d.id === fromDepotId);
+    const toDep    = depots.find(d => d.id === returnDepotId) || fromDep;
+    const truckRow = trucks.find(t => t.id === truckId);
     const { error } = await supabase.from('dispatched_jobs').insert({
       company_id:    companyId,
       event_id:      null,
       truck_id:      truckId,
+      assigned_to:   truckRow?.auth_email || null,
       from_depot_id: fromDepot ? (fromDep?.id || null) : null,
       to_depot_id:   returnDepot ? (toDep?.id || null) : null,
       pickup_lat:    pointA.lat,
