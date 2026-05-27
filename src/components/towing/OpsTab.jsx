@@ -161,6 +161,41 @@ function calcTracePrice(totalKm, cfg, towType, twoUpTrade, twoUpAccident, allowA
   return Object.keys(result).length ? result : null;
 }
 
+function calcCustomPrice(legs, legTypes, legPcts, totalAdjPct, cfg, twoUpTrade, twoUpAccident, allowAccidentTwoUp) {
+  if (!cfg || !legs?.length) return null;
+  const now   = new Date();
+  const isWE  = now.getDay() === 0 || now.getDay() === 6;
+  const t     = now.toTimeString().slice(0, 5);
+  const start = isWE ? (cfg.after_hours_start_weekend ?? '18:00') : (cfg.after_hours_start_weekday ?? '18:00');
+  const end   = isWE ? (cfg.after_hours_end_weekend   ?? '06:00') : (cfg.after_hours_end_weekday   ?? '06:00');
+  const ah    = t >= start || t < end;
+  const ahFee = parseFloat(isWE ? cfg.after_hours_fee_weekend : cfg.after_hours_fee_weekday) || 0;
+  const ahSurcharge = ah ? ahFee : 0;
+
+  let subtotal = 0;
+  const legResults = legs.map((leg, i) => {
+    const type = legTypes[i] || 'accident';
+    let price;
+    if (type === 'accident') {
+      const base = parseFloat(cfg.accident_base_fee) || 0;
+      const km   = Math.max(0, leg.km - 8) * (parseFloat(cfg.accident_per_km_fee) || 0);
+      const mul  = (twoUpAccident && allowAccidentTwoUp) ? 2 : 1;
+      price = (base + km + ahSurcharge) * mul;
+    } else {
+      const base = parseFloat(cfg.trade_base_fee) || 0;
+      const km   = Math.max(0, leg.km - 10) * (parseFloat(cfg.trade_per_km_fee) || 0);
+      const mul  = twoUpTrade ? 2 : 1;
+      price = (base + km + ahSurcharge) * mul;
+    }
+    const pct = legPcts[i] || 0;
+    const adjusted = price * (1 + pct / 100);
+    subtotal += adjusted;
+    return { label: leg.label, km: leg.km, type, price, pct, adjusted };
+  });
+  const total = subtotal * (1 + (totalAdjPct || 0) / 100);
+  return { legResults, subtotal, total, totalAdjPct: totalAdjPct || 0 };
+}
+
 export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, countdown, isStale, acceptedJobs, userEmail, onAcceptJob, onReleaseJob, companyConfig, companyId }) {
   useDriverLocation(userEmail);
   const { rainSoon, maxProb, hoursUntil } = useWeather();
@@ -196,6 +231,12 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
   const [traceRoute,         setTraceRoute]         = useState(null);
   const [depotPoint,         setDepotPoint]         = useState(null);
   const [routeTrigger,       setRouteTrigger]       = useState(0);
+  // Custom tab state
+  const [customLegTypes,     setCustomLegTypes]     = useState([]);   // 'accident'|'trade' per leg
+  const [customLegPcts,      setCustomLegPcts]      = useState([]);   // number per leg (0 = no adj)
+  const [customLegPctInputs, setCustomLegPctInputs] = useState([]);   // custom input strings per leg
+  const [totalAdjPct,        setTotalAdjPct]        = useState(0);    // grand total %
+  const [totalAdjInput,      setTotalAdjInput]      = useState('');   // custom total % input
 
   // Refs
   const containerRef      = useRef(null);
@@ -314,7 +355,22 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
           const lcoords = route.geometry.coordinates.map(([ln, la]) => [la, ln]);
           L.polyline(lcoords, { color: '#cc2222', weight: 4, opacity: 0.85, className: 'route-anim' }).addTo(layer);
         }
-        if (!cancelled) setTraceRoute({ totalKm: route.distance / 1000, durationMin: Math.round(route.duration / 60) });
+        if (!cancelled) {
+          // Build leg labels from waypoints
+          const wpLabels = [];
+          if (fromDepot && depotPoint?.lat != null) wpLabels.push(depotPoint.name || 'Depot');
+          if (pointA) wpLabels.push(pointA.label?.split(',')[0] || 'Pickup');
+          if (destinationEnabled && pointB) wpLabels.push(pointB.label?.split(',')[0] || 'Dest');
+          if (returnDepot && depotPoint?.lat != null) wpLabels.push(depotPoint.name || 'Depot');
+          const legs = route.legs.map((l, i) => ({
+            km:    l.distance / 1000,
+            label: `${wpLabels[i] || `Pt ${i+1}`} → ${wpLabels[i+1] || `Pt ${i+2}`}`,
+          }));
+          setTraceRoute({ totalKm: route.distance / 1000, durationMin: Math.round(route.duration / 60), legs });
+          setCustomLegTypes(legs.map(() => 'accident'));
+          setCustomLegPcts(legs.map(() => 0));
+          setCustomLegPctInputs(legs.map(() => ''));
+        }
       } catch { if (!cancelled) setTraceRoute(null); }
     })();
     return () => { cancelled = true; };
@@ -531,8 +587,11 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
   }).length;
 
   const allowAccidentTwoUp = companyConfig?.allow_accident_twoup ?? false;
-  const tracePrice = traceRoute
+  const tracePrice = (traceRoute && towType !== 'custom')
     ? calcTracePrice(traceRoute.totalKm, companyConfig, towType, twoUpTrade, twoUpAccident, allowAccidentTwoUp)
+    : null;
+  const customPrice = (traceRoute && towType === 'custom' && traceRoute.legs)
+    ? calcCustomPrice(traceRoute.legs, customLegTypes, customLegPcts, totalAdjPct, companyConfig, twoUpTrade, twoUpAccident, allowAccidentTwoUp)
     : null;
 
   const closeTrace = () => {
@@ -544,6 +603,8 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
     setSearchA(''); setSearchB('');
     setSearchAResults([]); setSearchBResults([]);
     setRouteTrigger(0);
+    setCustomLegTypes([]); setCustomLegPcts([]); setCustomLegPctInputs([]);
+    setTotalAdjPct(0); setTotalAdjInput('');
   };
 
   return (
@@ -601,7 +662,7 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
             <div style={{ padding: '7px 10px', borderBottom: '1px solid #1a1a1a' }}>
               <div style={{ fontSize: 7, color: '#444', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 5 }}>Type</div>
               <div style={{ display: 'flex', gap: 4 }}>
-                {['accident', 'trade', 'both'].map(tp => (
+                {['accident', 'trade', 'custom'].map(tp => (
                   <button key={tp} onClick={() => setTowType(tp)} style={{
                     flex: 1, fontSize: 8, padding: '3px 0', borderRadius: 2, cursor: 'pointer',
                     fontFamily: "'IBM Plex Mono',monospace",
@@ -745,7 +806,7 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
               </div>
             )}
 
-            {/* Two-up — Accident (only if enabled in company config) */}
+            {/* Two-up — Accident */}
             {(towType === 'accident' || towType === 'both') && allowAccidentTwoUp && (
               <div style={{ padding: '6px 10px', borderBottom: '1px solid #1a1a1a' }}>
                 <div style={{ fontSize: 7, color: '#444', marginBottom: 4, letterSpacing: '0.08em' }}>Accident</div>
@@ -755,6 +816,89 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
                 </label>
               </div>
             )}
+
+            {/* Custom pricing panel */}
+            {towType === 'custom' && traceRoute?.legs && (() => {
+              const PCT_BADGES = [10, 30, 50];
+              return (
+                <div style={{ padding: '7px 10px', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ fontSize: 7, color: '#444', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Custom Pricing</div>
+
+                  {/* Per-leg rows */}
+                  {traceRoute.legs.map((leg, i) => (
+                    <div key={i} style={{ background: '#0a0a0a', border: '1px solid #1e1e1e', borderRadius: 2, padding: '6px 8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
+                        <span style={{ fontSize: 7, color: '#555' }}>{leg.label}</span>
+                        <span style={{ fontSize: 7, color: '#3a3a3a' }}>{leg.km.toFixed(1)} km</span>
+                      </div>
+                      {/* Type toggle */}
+                      <div style={{ display: 'flex', gap: 3, marginBottom: 5 }}>
+                        {['accident', 'trade'].map(tp => (
+                          <button key={tp} onClick={() => setCustomLegTypes(prev => prev.map((v, j) => j === i ? tp : v))}
+                            style={{ flex: 1, fontSize: 7, padding: '2px 0', borderRadius: 2, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace",
+                              border: `1px solid ${customLegTypes[i] === tp ? '#cc444466' : '#1e1e1e'}`,
+                              color: customLegTypes[i] === tp ? '#cc4444' : '#444',
+                              background: customLegTypes[i] === tp ? '#cc444411' : 'transparent' }}>
+                            {tp.charAt(0).toUpperCase() + tp.slice(1)}
+                          </button>
+                        ))}
+                      </div>
+                      {/* Per-leg % badges */}
+                      <div style={{ fontSize: 7, color: '#333', marginBottom: 3 }}>Leg adjustment</div>
+                      <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                        {[0, ...PCT_BADGES].map(p => (
+                          <button key={p} onClick={() => { setCustomLegPcts(prev => prev.map((v, j) => j === i ? p : v)); setCustomLegPctInputs(prev => prev.map((v, j) => j === i ? '' : v)); }}
+                            style={{ fontSize: 7, padding: '2px 5px', borderRadius: 2, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace",
+                              border: `1px solid ${customLegPcts[i] === p && customLegPctInputs[i] === '' ? '#cc444466' : '#1e1e1e'}`,
+                              color: customLegPcts[i] === p && customLegPctInputs[i] === '' ? '#cc4444' : '#444',
+                              background: customLegPcts[i] === p && customLegPctInputs[i] === '' ? '#cc444411' : 'transparent' }}>
+                            {p === 0 ? '—' : `+${p}%`}
+                          </button>
+                        ))}
+                        {/* Custom % input */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                          <input
+                            type="number" min="0" max="999" placeholder="%" value={customLegPctInputs[i] || ''}
+                            onChange={e => {
+                              const v = e.target.value;
+                              setCustomLegPctInputs(prev => prev.map((x, j) => j === i ? v : x));
+                              const n = parseFloat(v);
+                              if (!isNaN(n)) setCustomLegPcts(prev => prev.map((x, j) => j === i ? n : x));
+                            }}
+                            style={{ width: 36, fontSize: 7, padding: '2px 4px', background: '#0a0a0a', border: `1px solid ${customLegPctInputs[i] ? '#cc444466' : '#1e1e1e'}`, color: customLegPctInputs[i] ? '#cc4444' : '#444', borderRadius: 2, fontFamily: "'IBM Plex Mono',monospace", outline: 'none' }}
+                          />
+                          <span style={{ fontSize: 7, color: '#333' }}>%</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Grand total adjustment */}
+                  <div>
+                    <div style={{ fontSize: 7, color: '#444', marginBottom: 4 }}>Grand total adjustment</div>
+                    <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', alignItems: 'center' }}>
+                      {[0, ...PCT_BADGES].map(p => (
+                        <button key={p} onClick={() => { setTotalAdjPct(p); setTotalAdjInput(''); }}
+                          style={{ fontSize: 7, padding: '2px 6px', borderRadius: 2, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace",
+                            border: `1px solid ${totalAdjPct === p && totalAdjInput === '' ? '#cc444466' : '#1e1e1e'}`,
+                            color: totalAdjPct === p && totalAdjInput === '' ? '#cc4444' : '#444',
+                            background: totalAdjPct === p && totalAdjInput === '' ? '#cc444411' : 'transparent' }}>
+                          {p === 0 ? '—' : `+${p}%`}
+                        </button>
+                      ))}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <input
+                          type="number" min="0" max="999" placeholder="%" value={totalAdjInput}
+                          onChange={e => { setTotalAdjInput(e.target.value); const n = parseFloat(e.target.value); if (!isNaN(n)) setTotalAdjPct(n); }}
+                          style={{ width: 36, fontSize: 7, padding: '2px 4px', background: '#0a0a0a', border: `1px solid ${totalAdjInput ? '#cc444466' : '#1e1e1e'}`, color: totalAdjInput ? '#cc4444' : '#444', borderRadius: 2, fontFamily: "'IBM Plex Mono',monospace", outline: 'none' }}
+                        />
+                        <span style={{ fontSize: 7, color: '#333' }}>%</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Result */}
             <div style={{ padding: '8px 10px' }}>
@@ -779,7 +923,33 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
                         color: '#cc4444', background: '#cc444411',
                       }}>Go!</button>
                   </div>
-                  {tracePrice ? (
+                  {towType === 'custom' ? (
+                    customPrice ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                        {customPrice.legResults.map((lr, i) => (
+                          <div key={i} style={{ fontSize: 7, color: MUT }}>
+                            <span style={{ color: '#444' }}>{lr.label}</span>
+                            {' · '}
+                            <span style={{ color: lr.pct ? '#aaa' : '#888' }}>{lr.type === 'accident' ? 'Acc' : 'Trd'}</span>
+                            {' '}
+                            {lr.pct > 0
+                              ? <><span style={{ color: '#555', textDecoration: 'line-through', fontSize: 6 }}>${lr.price.toFixed(2)}</span>{' '}<span style={{ color: '#ccc', fontWeight: 700 }}>${lr.adjusted.toFixed(2)}</span><span style={{ color: '#555', fontSize: 6, marginLeft: 2 }}>+{lr.pct}%</span></>
+                              : <span style={{ color: '#ccc', fontWeight: 700 }}>${lr.adjusted.toFixed(2)}</span>
+                            }
+                          </div>
+                        ))}
+                        <div style={{ borderTop: '1px solid #1e1e1e', paddingTop: 4, marginTop: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                          <span style={{ fontSize: 7, color: '#555' }}>
+                            {customPrice.totalAdjPct > 0 && <span style={{ color: '#444', marginRight: 4 }}>+{customPrice.totalAdjPct}%</span>}
+                            Total
+                          </span>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: '#cc4444' }}>${customPrice.total.toFixed(2)}</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: 7, color: '#333' }}>Set pricing in Settings to estimate cost</div>
+                    )
+                  ) : tracePrice ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                       {tracePrice.accident != null && (
                         <div style={{ fontSize: 8, color: MUT }}>
