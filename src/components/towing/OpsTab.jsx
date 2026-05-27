@@ -231,9 +231,11 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
   const [twoUpAccident,      setTwoUpAccident]      = useState(false);
   const [traceRoute,         setTraceRoute]         = useState(null);
   const [companyDepots,      setCompanyDepots]      = useState([]);
-  const [selectedDepotId,    setSelectedDepotId]    = useState('');
-  const [depotPoint,         setDepotPoint]         = useState(null);
-  const [routeTrigger,       setRouteTrigger]       = useState(0);
+  const [selectedDepotId,       setSelectedDepotId]       = useState('');
+  const [depotPoint,            setDepotPoint]            = useState(null);
+  const [selectedReturnDepotId, setSelectedReturnDepotId] = useState('');
+  const [returnDepotPoint,      setReturnDepotPoint]      = useState(null);
+  const [routeTrigger,          setRouteTrigger]          = useState(0);
   // Custom tab state
   const [customLegTypes,     setCustomLegTypes]     = useState([]);
   const [customLegPcts,      setCustomLegPcts]      = useState([]);
@@ -313,6 +315,8 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
       }
       setSelectedDepotId(preferred.id);
       setDepotPoint(preferred);
+      setSelectedReturnDepotId(preferred.id);
+      setReturnDepotPoint(preferred);
     })();
   }, [traceOpen, companyId, userEmail]);
 
@@ -345,7 +349,7 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
     if (pointA) { wps.push(pointA); wpLabels.push(pointA.label?.split(',')[0] || 'Pickup'); }
     if (destinationEnabled && pointB) { wps.push(pointB); wpLabels.push(pointB.label?.split(',')[0] || 'Dest'); }
     extraLegs.forEach((el, i) => { if (el.point) { wps.push(el.point); wpLabels.push(el.point.label?.split(',')[0] || `Stop ${i + 1}`); } });
-    if (returnDepot && depotPoint?.lat != null) { wps.push(depotPoint); wpLabels.push(depotName); }
+    if (returnDepot && returnDepotPoint?.lat != null) { wps.push(returnDepotPoint); wpLabels.push(returnDepotPoint.name || 'Return Depot'); }
     if (wps.length < 2) { routeLayerRef.current?.clearLayers(); setTraceRoute(null); return; }
     let cancelled = false;
     (async () => {
@@ -375,7 +379,7 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
       } catch { if (!cancelled) setTraceRoute(null); }
     })();
     return () => { cancelled = true; };
-  }, [traceOpen, fromDepot, returnDepot, destinationEnabled, depotPoint, pointA, pointB, extraLegs, routeTrigger]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [traceOpen, fromDepot, returnDepot, destinationEnabled, depotPoint, returnDepotPoint, pointA, pointB, extraLegs, routeTrigger]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Trace pin markers (depot=🔶, A=🟢, B=🔴)
   useEffect(() => {
@@ -383,11 +387,17 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
     if (!L || !layer) return;
     layer.clearLayers();
     if (!traceOpen) return;
-    if ((fromDepot || returnDepot) && depotPoint?.lat != null) {
+    if (fromDepot && depotPoint?.lat != null) {
       L.marker([depotPoint.lat, depotPoint.lng], {
         icon: L.divIcon({ className: '', html: '<div style="font-size:16px;line-height:1">🔶</div>', iconSize: [16, 16], iconAnchor: [8, 14] }),
         zIndexOffset: 200,
-      }).bindTooltip(depotPoint.name || 'Depot', { permanent: false, direction: 'top', className: 'towbench-tooltip' }).addTo(layer);
+      }).bindTooltip(`From: ${depotPoint.name || 'Depot'}`, { permanent: false, direction: 'top', className: 'towbench-tooltip' }).addTo(layer);
+    }
+    if (returnDepot && returnDepotPoint?.lat != null && (!fromDepot || returnDepotPoint.id !== depotPoint?.id)) {
+      L.marker([returnDepotPoint.lat, returnDepotPoint.lng], {
+        icon: L.divIcon({ className: '', html: '<div style="font-size:16px;line-height:1">🔷</div>', iconSize: [16, 16], iconAnchor: [8, 14] }),
+        zIndexOffset: 200,
+      }).bindTooltip(`Return: ${returnDepotPoint.name || 'Depot'}`, { permanent: false, direction: 'top', className: 'towbench-tooltip' }).addTo(layer);
     }
     if (pointA) {
       L.marker([pointA.lat, pointA.lng], {
@@ -408,7 +418,7 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
         zIndexOffset: 203 + i,
       }).bindTooltip(`Stop ${i + 1}`, { permanent: false, direction: 'top', className: 'towbench-tooltip' }).addTo(layer);
     });
-  }, [mapReady, traceOpen, fromDepot, returnDepot, destinationEnabled, depotPoint, pointA, pointB, extraLegs]);
+  }, [mapReady, traceOpen, fromDepot, returnDepot, destinationEnabled, depotPoint, returnDepotPoint, pointA, pointB, extraLegs]);
 
   // Map cursor crosshair when placing A/B
   useEffect(() => {
@@ -614,7 +624,7 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
     setSearchA(''); setSearchB('');
     setSearchAResults([]); setSearchBResults([]);
     setExtraLegs([]);
-    setCompanyDepots([]); setSelectedDepotId('');
+    setCompanyDepots([]); setSelectedDepotId(''); setSelectedReturnDepotId(''); setReturnDepotPoint(null);
     setRouteTrigger(0);
     setCustomLegTypes([]); setCustomLegPcts([]); setCustomLegPctInputs([]);
     setTotalAdjPct(0); setTotalAdjInput('');
@@ -691,27 +701,24 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
 
             {/* Waypoints */}
             <div style={{ padding: '7px 10px', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {/* Depot picker — shown when either depot checkbox is ticked */}
-              {(fromDepot || returnDepot) && companyDepots.length > 0 && (
-                <div>
-                  <div style={{ fontSize: 7, color: '#444', letterSpacing: '0.08em', marginBottom: 3 }}>Depot</div>
-                  <select
-                    value={selectedDepotId}
-                    onChange={e => {
-                      setSelectedDepotId(e.target.value);
-                      const d = companyDepots.find(d => d.id === e.target.value);
-                      setDepotPoint(d ?? null);
-                    }}
-                    style={{ width: '100%', background: '#0a0a0a', border: '1px solid #252525', color: ORANGE, fontFamily: "'IBM Plex Mono',monospace", fontSize: 9, padding: '4px 6px', borderRadius: 2, outline: 'none' }}>
-                    {companyDepots.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                  </select>
-                </div>
-              )}
               {/* From depot */}
               <label style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer' }}>
                 <input type="checkbox" checked={fromDepot} onChange={e => setFromDepot(e.target.checked)} style={{ accentColor: ORANGE, flexShrink: 0 }} />
                 <span style={{ fontSize: 8, color: fromDepot ? ORANGE : '#444' }}>From depot</span>
               </label>
+              {/* Departure depot picker */}
+              {fromDepot && companyDepots.length > 0 && (
+                <select
+                  value={selectedDepotId}
+                  onChange={e => {
+                    setSelectedDepotId(e.target.value);
+                    const d = companyDepots.find(d => d.id === e.target.value);
+                    setDepotPoint(d ?? null);
+                  }}
+                  style={{ width: '100%', background: '#0a0a0a', border: '1px solid #252525', color: ORANGE, fontFamily: "'IBM Plex Mono',monospace", fontSize: 9, padding: '4px 6px', borderRadius: 2, outline: 'none' }}>
+                  {companyDepots.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                </select>
+              )}
 
               {/* Point A */}
               <div style={{ position: 'relative' }}>
@@ -885,6 +892,19 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
                 <input type="checkbox" checked={returnDepot} onChange={e => setReturnDepot(e.target.checked)} style={{ accentColor: ORANGE, flexShrink: 0 }} />
                 <span style={{ fontSize: 8, color: returnDepot ? ORANGE : '#444' }}>Return to depot</span>
               </label>
+              {/* Return depot picker */}
+              {returnDepot && companyDepots.length > 0 && (
+                <select
+                  value={selectedReturnDepotId}
+                  onChange={e => {
+                    setSelectedReturnDepotId(e.target.value);
+                    const d = companyDepots.find(d => d.id === e.target.value);
+                    setReturnDepotPoint(d ?? null);
+                  }}
+                  style={{ width: '100%', background: '#0a0a0a', border: '1px solid #252525', color: ORANGE, fontFamily: "'IBM Plex Mono',monospace", fontSize: 9, padding: '4px 6px', borderRadius: 2, outline: 'none' }}>
+                  {companyDepots.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                </select>
+              )}
             </div>
 
             {/* Two-up — Trade */}
