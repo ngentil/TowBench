@@ -2,14 +2,18 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ACC, MUT, BRD, SURF } from '../../lib/styles';
 import TowAllocationsTab from './TowAllocationsTab';
 import FleetTab from './FleetTab';
+import DepotsTab from './DepotsTab';
 import { logAllocations, markAllocationsCleared, getRecentAllocations } from '../../lib/db/towing';
 import { supabase } from '../../lib/supabase';
-import AdminSettings from '../admin/AdminSettings';
 import OpsTab from './OpsTab';
 import TowAnalyticsTab from './TowAnalyticsTab';
 import TowInsTab from './TowInsTab';
 import DispatchTab from './DispatchTab';
 import DriversTab from './DriversTab';
+import BrandingTab from '../admin/BrandingTab';
+import PricingTab from '../admin/PricingTab';
+import StorageTab from '../admin/StorageTab';
+import DriverApprovalsTab from '../admin/DriverApprovalsTab';
 import { VICROADS_URL, VICROADS_KEY } from '../../lib/constants';
 
 const POLL_MS = 60_000;
@@ -21,14 +25,18 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, co
   //   admin:     All above + Settings
   //   super_admin: All tabs
   const TABS = [
-    { id: 'allocations', label: '🚦 Tow Allocations', roles: ['driver','dispatch','admin','super_admin'] },
-    { id: 'towins',      label: '🏭 Tow Ins',         roles: ['driver','dispatch','admin','super_admin'] },
-    { id: 'dispatch',    label: '🚨 Dispatch',        roles: ['dispatch','admin','super_admin'] },
-    { id: 'drivers',     label: '👤 Drivers',         roles: ['driver','dispatch','admin','super_admin'] },
-    { id: 'ops',         label: '🗺 Map',             roles: ['dispatch','admin','super_admin'] },
-    { id: 'analytics',   label: '📊 Analytics',       roles: ['dispatch','admin','super_admin'] },
-    { id: 'fleet',       label: '🚛 Fleet',            roles: ['dispatch','admin','super_admin'] },
-    { id: 'settings',    label: '⚙ Settings',         roles: ['admin','super_admin'] },
+    { id: 'allocations',  label: '🚦 Tow Allocations', roles: ['driver','dispatch','admin','super_admin'] },
+    { id: 'towins',       label: '🏭 Tow Ins',          roles: ['driver','dispatch','admin','super_admin'] },
+    { id: 'dispatch',     label: '🚨 Dispatch',         roles: ['dispatch','admin','super_admin'] },
+    { id: 'drivers',      label: '👤 Drivers',          roles: ['dispatch','admin','super_admin'] },
+    { id: 'depots',       label: '🏢 Depots',           roles: ['dispatch','admin','super_admin'] },
+    { id: 'fleet',        label: '🚛 Fleet',             roles: ['dispatch','admin','super_admin'] },
+    { id: 'ops',          label: '🗺 Map',              roles: ['dispatch','admin','super_admin'] },
+    { id: 'analytics',    label: '📊 Analytics',        roles: ['dispatch','admin','super_admin'] },
+    { id: 'pricing',      label: '💰 Pricing',          roles: ['admin','super_admin'] },
+    { id: 'storage',      label: '📦 Storage',          roles: ['admin','super_admin'] },
+    { id: 'branding',     label: '🎨 Branding',         roles: ['admin','super_admin'] },
+    { id: 'approvals',    label: '✅ Approvals',         roles: ['admin','super_admin'] },
   ].filter(t => !role || t.roles.includes(role));
 
   const [tab, setTab] = useState('allocations');
@@ -199,9 +207,13 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, co
         {tab === 'analytics' && (
           <TowAnalyticsTab allFeatures={allFeatures} liveIds={liveIds} loading={loading} userEmail={userEmail} />
         )}
-        {tab === 'drivers'  && <DriversTab companyId={companyId} isDispatch={isDispatch} role={role} />}
-        {tab === 'fleet'    && <FleetTab isAdmin={isAdmin} companyId={companyId} />}
-        {tab === 'settings' && isAdmin && <AdminSettings companyConfig={companyConfig} setCompanyConfig={setCompanyConfig} companyId={companyId} />}
+        {tab === 'drivers'   && <DriversTab companyId={companyId} isDispatch={isDispatch} role={role} />}
+        {tab === 'depots'    && <DepotsTab isAdmin={isAdmin} companyId={companyId} />}
+        {tab === 'fleet'     && <FleetTab isAdmin={isAdmin} companyId={companyId} />}
+        {tab === 'pricing'   && <PricingTab companyConfig={companyConfig} setCompanyConfig={setCompanyConfig} companyId={companyId} />}
+        {tab === 'storage'   && <StorageTab companyId={companyId} />}
+        {tab === 'branding'  && <BrandingTab companyConfig={companyConfig} setCompanyConfig={setCompanyConfig} companyId={companyId} />}
+        {tab === 'approvals' && <DriverApprovalsTab companyId={companyId} />}
       </div>
     </div>
   );
