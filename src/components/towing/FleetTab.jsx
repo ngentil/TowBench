@@ -111,6 +111,7 @@ function TruckForm({ truck, onSave, onCancel }) {
         truck_type: truckType,
         status,
         notes:      notes.trim() || null,
+        approved:   true,
       });
     } catch (e) { setErr(e.message); }
     setSaving(false);
