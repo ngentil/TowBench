@@ -225,18 +225,23 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
   const [searchB,            setSearchB]            = useState('');
   const [searchAResults,     setSearchAResults]     = useState([]);
   const [searchBResults,     setSearchBResults]     = useState([]);
-  const [clickTarget,        setClickTarget]        = useState(null);
+  const [extraLegs,          setExtraLegs]          = useState([]); // [{point,search,results}]
+  const [clickTarget,        setClickTarget]        = useState(null); // 'A'|'B'|number|null
   const [twoUpTrade,         setTwoUpTrade]         = useState(false);
   const [twoUpAccident,      setTwoUpAccident]      = useState(false);
   const [traceRoute,         setTraceRoute]         = useState(null);
-  const [depotPoint,         setDepotPoint]         = useState(null);
-  const [routeTrigger,       setRouteTrigger]       = useState(0);
+  const [companyDepots,      setCompanyDepots]      = useState([]);
+  const [selectedDepotId,       setSelectedDepotId]       = useState('');
+  const [depotPoint,            setDepotPoint]            = useState(null);
+  const [selectedReturnDepotId, setSelectedReturnDepotId] = useState('');
+  const [returnDepotPoint,      setReturnDepotPoint]      = useState(null);
+  const [routeTrigger,          setRouteTrigger]          = useState(0);
   // Custom tab state
-  const [customLegTypes,     setCustomLegTypes]     = useState([]);   // 'accident'|'trade' per leg
-  const [customLegPcts,      setCustomLegPcts]      = useState([]);   // number per leg (0 = no adj)
-  const [customLegPctInputs, setCustomLegPctInputs] = useState([]);   // custom input strings per leg
-  const [totalAdjPct,        setTotalAdjPct]        = useState(0);    // grand total %
-  const [totalAdjInput,      setTotalAdjInput]      = useState('');   // custom total % input
+  const [customLegTypes,     setCustomLegTypes]     = useState([]);
+  const [customLegPcts,      setCustomLegPcts]      = useState([]);
+  const [customLegPctInputs, setCustomLegPctInputs] = useState([]);
+  const [totalAdjPct,        setTotalAdjPct]        = useState(0);
+  const [totalAdjInput,      setTotalAdjInput]      = useState('');
 
   // Refs
   const containerRef      = useRef(null);
@@ -285,31 +290,35 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
     return () => supabase.removeChannel(channel);
   }, []);
 
-  // Fetch depot when trace panel opens — try user's truck first, fall back to first company depot
+  // Fetch all company depots with coords when trace panel opens
   useEffect(() => {
-    if (!traceOpen) return;
+    if (!traceOpen || !companyId) return;
     (async () => {
-      // Try the user's own truck depot
+      const { data: depots } = await supabase.from('depots')
+        .select('id, name, lat, lng')
+        .eq('company_id', companyId)
+        .not('lat', 'is', null)
+        .order('name');
+      if (!depots?.length) { setCompanyDepots([]); setDepotPoint(null); return; }
+      setCompanyDepots(depots);
+      // Auto-select: prefer user's own truck's depot, else first
+      let preferred = depots[0];
       if (userEmail) {
         const { data: truck } = await supabase.from('tow_trucks')
-          .select('depot:depots(name, lat, lng)')
+          .select('depot_id')
           .eq('auth_email', userEmail)
           .maybeSingle();
-        if (truck?.depot?.lat != null) { setDepotPoint(truck.depot); return; }
+        if (truck?.depot_id) {
+          const match = depots.find(d => d.id === truck.depot_id);
+          if (match) preferred = match;
+        }
       }
-      // Fall back to first depot in the company (for admins/dispatchers without a truck)
-      if (companyId) {
-        const { data: depot } = await supabase.from('depots')
-          .select('name, lat, lng')
-          .eq('company_id', companyId)
-          .not('lat', 'is', null)
-          .order('name')
-          .limit(1)
-          .maybeSingle();
-        setDepotPoint(depot ?? null);
-      }
+      setSelectedDepotId(preferred.id);
+      setDepotPoint(preferred);
+      setSelectedReturnDepotId(preferred.id);
+      setReturnDepotPoint(preferred);
     })();
-  }, [traceOpen, userEmail, companyId]);
+  }, [traceOpen, companyId, userEmail]);
 
   // Nominatim address search (debounced 300ms)
   const geocodeSearch = useCallback(async (query, setResults) => {
@@ -334,11 +343,13 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
   // OSRM multi-leg routing (auto-calculates whenever inputs change)
   useEffect(() => {
     if (!traceOpen) { routeLayerRef.current?.clearLayers(); setTraceRoute(null); return; }
-    const wps = [];
-    if (fromDepot && depotPoint?.lat != null) wps.push(depotPoint);
-    if (pointA) wps.push(pointA);
-    if (destinationEnabled && pointB) wps.push(pointB);
-    if (returnDepot && depotPoint?.lat != null) wps.push(depotPoint);
+    const wps = [], wpLabels = [];
+    const depotName = depotPoint?.name || 'Depot';
+    if (fromDepot && depotPoint?.lat != null) { wps.push(depotPoint); wpLabels.push(depotName); }
+    if (pointA) { wps.push(pointA); wpLabels.push(pointA.label?.split(',')[0] || 'Pickup'); }
+    if (destinationEnabled && pointB) { wps.push(pointB); wpLabels.push(pointB.label?.split(',')[0] || 'Dest'); }
+    extraLegs.forEach((el, i) => { if (el.point) { wps.push(el.point); wpLabels.push(el.point.label?.split(',')[0] || `Stop ${i + 1}`); } });
+    if (returnDepot && returnDepotPoint?.lat != null) { wps.push(returnDepotPoint); wpLabels.push(returnDepotPoint.name || 'Return Depot'); }
     if (wps.length < 2) { routeLayerRef.current?.clearLayers(); setTraceRoute(null); return; }
     let cancelled = false;
     (async () => {
@@ -356,12 +367,6 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
           L.polyline(lcoords, { color: '#cc2222', weight: 4, opacity: 0.85, className: 'route-anim' }).addTo(layer);
         }
         if (!cancelled) {
-          // Build leg labels from waypoints
-          const wpLabels = [];
-          if (fromDepot && depotPoint?.lat != null) wpLabels.push(depotPoint.name || 'Depot');
-          if (pointA) wpLabels.push(pointA.label?.split(',')[0] || 'Pickup');
-          if (destinationEnabled && pointB) wpLabels.push(pointB.label?.split(',')[0] || 'Dest');
-          if (returnDepot && depotPoint?.lat != null) wpLabels.push(depotPoint.name || 'Depot');
           const legs = route.legs.map((l, i) => ({
             km:    l.distance / 1000,
             label: `${wpLabels[i] || `Pt ${i+1}`} → ${wpLabels[i+1] || `Pt ${i+2}`}`,
@@ -374,7 +379,7 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
       } catch { if (!cancelled) setTraceRoute(null); }
     })();
     return () => { cancelled = true; };
-  }, [traceOpen, fromDepot, returnDepot, destinationEnabled, depotPoint, pointA, pointB, routeTrigger]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [traceOpen, fromDepot, returnDepot, destinationEnabled, depotPoint, returnDepotPoint, pointA, pointB, extraLegs, routeTrigger]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Trace pin markers (depot=🔶, A=🟢, B=🔴)
   useEffect(() => {
@@ -382,11 +387,17 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
     if (!L || !layer) return;
     layer.clearLayers();
     if (!traceOpen) return;
-    if ((fromDepot || returnDepot) && depotPoint?.lat != null) {
+    if (fromDepot && depotPoint?.lat != null) {
       L.marker([depotPoint.lat, depotPoint.lng], {
         icon: L.divIcon({ className: '', html: '<div style="font-size:16px;line-height:1">🔶</div>', iconSize: [16, 16], iconAnchor: [8, 14] }),
         zIndexOffset: 200,
-      }).bindTooltip(depotPoint.name || 'Depot', { permanent: false, direction: 'top', className: 'towbench-tooltip' }).addTo(layer);
+      }).bindTooltip(`From: ${depotPoint.name || 'Depot'}`, { permanent: false, direction: 'top', className: 'towbench-tooltip' }).addTo(layer);
+    }
+    if (returnDepot && returnDepotPoint?.lat != null && (!fromDepot || returnDepotPoint.id !== depotPoint?.id)) {
+      L.marker([returnDepotPoint.lat, returnDepotPoint.lng], {
+        icon: L.divIcon({ className: '', html: '<div style="font-size:16px;line-height:1">🔷</div>', iconSize: [16, 16], iconAnchor: [8, 14] }),
+        zIndexOffset: 200,
+      }).bindTooltip(`Return: ${returnDepotPoint.name || 'Depot'}`, { permanent: false, direction: 'top', className: 'towbench-tooltip' }).addTo(layer);
     }
     if (pointA) {
       L.marker([pointA.lat, pointA.lng], {
@@ -400,7 +411,14 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
         zIndexOffset: 202,
       }).bindTooltip('B — Destination', { permanent: false, direction: 'top', className: 'towbench-tooltip' }).addTo(layer);
     }
-  }, [mapReady, traceOpen, fromDepot, returnDepot, destinationEnabled, depotPoint, pointA, pointB]);
+    extraLegs.forEach((el, i) => {
+      if (!el.point) return;
+      L.marker([el.point.lat, el.point.lng], {
+        icon: L.divIcon({ className: '', html: '<div style="font-size:16px;line-height:1">🟡</div>', iconSize: [16, 16], iconAnchor: [8, 14] }),
+        zIndexOffset: 203 + i,
+      }).bindTooltip(`Stop ${i + 1}`, { permanent: false, direction: 'top', className: 'towbench-tooltip' }).addTo(layer);
+    });
+  }, [mapReady, traceOpen, fromDepot, returnDepot, destinationEnabled, depotPoint, returnDepotPoint, pointA, pointB, extraLegs]);
 
   // Map cursor crosshair when placing A/B
   useEffect(() => {
@@ -456,17 +474,20 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
       map.on('move zoom moveend zoomend', updateCardPos);
 
       map.on('click', e => {
-        if (clickTargetRef.current) {
+        if (clickTargetRef.current != null) {
           const { lat, lng } = e.latlng;
           const label = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
           if (clickTargetRef.current === 'A') {
             setPointA({ lat, lng, label });
             setSearchA(label);
             setSearchAResults([]);
-          } else {
+          } else if (clickTargetRef.current === 'B') {
             setPointB({ lat, lng, label });
             setSearchB(label);
             setSearchBResults([]);
+          } else if (typeof clickTargetRef.current === 'number') {
+            const idx = clickTargetRef.current;
+            setExtraLegs(prev => prev.map((el, i) => i === idx ? { ...el, point: { lat, lng, label }, search: label, results: [] } : el));
           }
           setClickTarget(null);
           return;
@@ -602,6 +623,8 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
     setPointA(null); setPointB(null);
     setSearchA(''); setSearchB('');
     setSearchAResults([]); setSearchBResults([]);
+    setExtraLegs([]);
+    setCompanyDepots([]); setSelectedDepotId(''); setSelectedReturnDepotId(''); setReturnDepotPoint(null);
     setRouteTrigger(0);
     setCustomLegTypes([]); setCustomLegPcts([]); setCustomLegPctInputs([]);
     setTotalAdjPct(0); setTotalAdjInput('');
@@ -681,10 +704,21 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
               {/* From depot */}
               <label style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer' }}>
                 <input type="checkbox" checked={fromDepot} onChange={e => setFromDepot(e.target.checked)} style={{ accentColor: ORANGE, flexShrink: 0 }} />
-                <span style={{ fontSize: 8, color: depotPoint?.name ? ORANGE : (fromDepot ? '#888' : '#444') }}>
-                  From depot{depotPoint?.name ? ` · ${depotPoint.name}` : ''}
-                </span>
+                <span style={{ fontSize: 8, color: fromDepot ? ORANGE : '#444' }}>From depot</span>
               </label>
+              {/* Departure depot picker */}
+              {fromDepot && companyDepots.length > 0 && (
+                <select
+                  value={selectedDepotId}
+                  onChange={e => {
+                    setSelectedDepotId(e.target.value);
+                    const d = companyDepots.find(d => d.id === e.target.value);
+                    setDepotPoint(d ?? null);
+                  }}
+                  style={{ width: '100%', background: '#0a0a0a', border: '1px solid #252525', color: ORANGE, fontFamily: "'IBM Plex Mono',monospace", fontSize: 9, padding: '4px 6px', borderRadius: 2, outline: 'none' }}>
+                  {companyDepots.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                </select>
+              )}
 
               {/* Point A */}
               <div style={{ position: 'relative' }}>
@@ -788,11 +822,89 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
                 </div>
               )}
 
+              {/* Extra legs (dynamic stops) */}
+              {extraLegs.map((el, i) => (
+                <div key={i} style={{ position: 'relative' }}>
+                  <div style={{ fontSize: 7, color: '#444', letterSpacing: '0.08em', marginBottom: 3, display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Stop {i + 1}</span>
+                    <button onClick={() => setExtraLegs(prev => prev.filter((_, j) => j !== i))}
+                      style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: 10, padding: 0, lineHeight: 1 }}>×</button>
+                  </div>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <input
+                      value={el.search}
+                      onChange={e => {
+                        const v = e.target.value;
+                        setExtraLegs(prev => prev.map((x, j) => j === i ? { ...x, search: v, point: v ? x.point : null } : x));
+                        if (v.length >= 3) {
+                          setTimeout(() => geocodeSearch(v, results =>
+                            setExtraLegs(prev => prev.map((x, j) => j === i ? { ...x, results } : x))
+                          ), 300);
+                        } else {
+                          setExtraLegs(prev => prev.map((x, j) => j === i ? { ...x, results: [] } : x));
+                        }
+                      }}
+                      onBlur={() => setTimeout(() => setExtraLegs(prev => prev.map((x, j) => j === i ? { ...x, results: [] } : x)), 150)}
+                      placeholder="Search address…"
+                      style={{ ...traceInp, flex: 1 }}
+                    />
+                    <button
+                      onClick={() => setClickTarget(ct => ct === i ? null : i)}
+                      title="Click map to place stop"
+                      style={{
+                        fontSize: 10, width: 26, borderRadius: 2, cursor: 'pointer', flexShrink: 0,
+                        border: `1px solid ${clickTarget === i ? '#ccaa0088' : '#2a2a2a'}`,
+                        color: clickTarget === i ? '#ccaa00' : '#555',
+                        background: clickTarget === i ? '#ccaa0011' : 'transparent',
+                        fontFamily: "'IBM Plex Mono',monospace",
+                      }}>✛</button>
+                  </div>
+                  {el.point && (
+                    <div style={{ fontSize: 7, color: '#ccaa00', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      🟡 {el.point.label}
+                    </div>
+                  )}
+                  {el.results?.length > 0 && !el.point && (
+                    <div style={{ position: 'absolute', left: 0, right: 0, top: '100%', zIndex: 300, background: '#0d0d0d', border: '1px solid #2a2a2a', borderRadius: 2, maxHeight: 130, overflowY: 'auto', marginTop: 2 }}>
+                      {el.results.map((r, ri) => (
+                        <div key={ri}
+                          onMouseDown={e => { e.preventDefault(); setExtraLegs(prev => prev.map((x, j) => j === i ? { ...x, point: r, search: r.label.split(',')[0].trim(), results: [] } : x)); }}
+                          style={{ padding: '5px 8px', fontSize: 7, color: '#bbb', cursor: 'pointer', borderBottom: '1px solid #1a1a1a', lineHeight: 1.5 }}
+                          onMouseEnter={e => e.currentTarget.style.background = '#1a1a1a'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                          {r.label}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {/* Add Leg button */}
+              <button
+                onClick={() => setExtraLegs(prev => [...prev, { point: null, search: '', results: [] }])}
+                style={{ fontSize: 7, color: '#444', border: '1px dashed #2a2a2a', borderRadius: 2, background: 'transparent', padding: '3px 8px', cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", textAlign: 'left' }}>
+                + Add Stop
+              </button>
+
               {/* Return to depot */}
               <label style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer' }}>
                 <input type="checkbox" checked={returnDepot} onChange={e => setReturnDepot(e.target.checked)} style={{ accentColor: ORANGE, flexShrink: 0 }} />
-                <span style={{ fontSize: 8, color: returnDepot && depotPoint?.name ? ORANGE : '#444' }}>Return to depot</span>
+                <span style={{ fontSize: 8, color: returnDepot ? ORANGE : '#444' }}>Return to depot</span>
               </label>
+              {/* Return depot picker */}
+              {returnDepot && companyDepots.length > 0 && (
+                <select
+                  value={selectedReturnDepotId}
+                  onChange={e => {
+                    setSelectedReturnDepotId(e.target.value);
+                    const d = companyDepots.find(d => d.id === e.target.value);
+                    setReturnDepotPoint(d ?? null);
+                  }}
+                  style={{ width: '100%', background: '#0a0a0a', border: '1px solid #252525', color: ORANGE, fontFamily: "'IBM Plex Mono',monospace", fontSize: 9, padding: '4px 6px', borderRadius: 2, outline: 'none' }}>
+                  {companyDepots.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                </select>
+              )}
             </div>
 
             {/* Two-up — Trade */}
