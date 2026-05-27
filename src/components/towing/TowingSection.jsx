@@ -9,6 +9,7 @@ import OpsTab from './OpsTab';
 import TowAnalyticsTab from './TowAnalyticsTab';
 import TowInsTab from './TowInsTab';
 import DriversTab from './DriversTab';
+import ActiveTowsTab from './ActiveTowsTab';
 import BrandingTab from '../admin/BrandingTab';
 import PricingTab from '../admin/PricingTab';
 import DriverApprovalsTab from '../admin/DriverApprovalsTab';
@@ -25,6 +26,7 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, co
   const allocLabel = (role === 'driver') ? '🚦 Tow Allocations' : '🚨 Dispatch';
   const TABS = [
     { id: 'allocations',  label: allocLabel,             roles: ['driver','dispatch','admin','super_admin'] },
+    { id: 'activetows',   label: '🚛 Active Tows',      roles: ['dispatch','admin','super_admin'] },
     { id: 'towins',       label: '🏭 Tow Ins',          roles: ['driver','dispatch','admin','super_admin'] },
     { id: 'drivers',      label: '👤 Drivers',          roles: ['dispatch','admin','super_admin'] },
     { id: 'depots',       label: '🏢 Depots',           roles: ['dispatch','admin','super_admin'] },
@@ -191,6 +193,9 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, co
             onAcceptJob={onAcceptJob} onReleaseJob={onUnassignJob}
             companyConfig={companyConfig} companyId={companyId}
           />
+        )}
+        {tab === 'activetows' && (
+          <ActiveTowsTab companyId={companyId} companyConfig={companyConfig} userEmail={userEmail} />
         )}
         {tab === 'towins' && (
           <TowInsTab companyId={companyId} userEmail={userEmail} isDispatch={isDispatch} companyConfig={companyConfig} />
