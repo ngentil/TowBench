@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import { ACC, MUT, BRD, TXT, GRN, RED, SURF, inp, txa, btnA, btnG, sm, ovly, mdl, mdlH, mdlB, mdlF } from '../../lib/styles';
 import { Highlight } from '../ui/shared';
@@ -74,6 +74,192 @@ function FlagBadge({ label, flagKey }) {
       textTransform: 'uppercase' }}>
       {label}
     </span>
+  );
+}
+
+// ─── Photo thumbnail (lazy signed-URL fetch) ───────────────────────────────────
+function PhotoThumbnail({ path, onClick }) {
+  const [url, setUrl] = useState(null);
+
+  useEffect(() => {
+    if (!path) return;
+    supabase.storage.from('tow-in-photos').createSignedUrl(path, 3600)
+      .then(({ data }) => { if (data?.signedUrl) setUrl(data.signedUrl); });
+  }, [path]);
+
+  return (
+    <div onClick={onClick}
+      style={{ width: 56, height: 56, borderRadius: 2, overflow: 'hidden',
+        background: '#1a1a1a', cursor: 'pointer', flexShrink: 0,
+        border: '1px solid #2a2a2a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      {url
+        ? <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+        : <span style={{ fontSize: 18, opacity: 0.3 }}>📷</span>
+      }
+    </div>
+  );
+}
+
+// ─── Photo modal ───────────────────────────────────────────────────────────────
+function PhotoModal({ towIn, companyId, userEmail, isDispatch, onClose, onUpdate }) {
+  const [photos,     setPhotos]     = useState([]);
+  const [signedUrls, setSignedUrls] = useState({});
+  const [loading,    setLoading]    = useState(true);
+  const [uploading,  setUploading]  = useState(false);
+  const [err,        setErr]        = useState('');
+  const [fullView,   setFullView]   = useState(null);
+  const cameraRef  = useRef(null);
+  const galleryRef = useRef(null);
+
+  const loadPhotos = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase.from('tow_in_photos')
+      .select('*').eq('tow_in_id', towIn.id).order('created_at');
+    const list = data || [];
+    setPhotos(list);
+    onUpdate?.(towIn.id, list);
+    if (list.length > 0) {
+      const { data: signed } = await supabase.storage
+        .from('tow-in-photos')
+        .createSignedUrls(list.map(p => p.path), 3600);
+      const urls = {};
+      (signed || []).forEach(s => { if (s.signedUrl) urls[s.path] = s.signedUrl; });
+      setSignedUrls(urls);
+    }
+    setLoading(false);
+  }, [towIn.id, onUpdate]);
+
+  useEffect(() => { loadPhotos(); }, [loadPhotos]);
+
+  const uploadFiles = async files => {
+    if (!files?.length) return;
+    setUploading(true); setErr('');
+    for (const file of Array.from(files)) {
+      const raw = file.name.split('.').pop() || 'jpg';
+      const ext = raw.toLowerCase();
+      const path = `${companyId}/${towIn.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from('tow-in-photos')
+        .upload(path, file, { contentType: file.type });
+      if (upErr) { setErr(upErr.message); continue; }
+      await supabase.from('tow_in_photos').insert({
+        tow_in_id:  towIn.id,
+        company_id: companyId,
+        path,
+        file_name:  file.name,
+        created_by: userEmail,
+      });
+    }
+    setUploading(false);
+    loadPhotos();
+  };
+
+  const deletePhoto = async photo => {
+    await supabase.storage.from('tow-in-photos').remove([photo.path]);
+    await supabase.from('tow_in_photos').delete().eq('id', photo.id);
+    const updated = photos.filter(p => p.id !== photo.id);
+    setPhotos(updated);
+    onUpdate?.(towIn.id, updated);
+  };
+
+  const triggerCamera  = () => { cameraRef.current.value  = ''; cameraRef.current.click();  };
+  const triggerGallery = () => { galleryRef.current.value = ''; galleryRef.current.click(); };
+
+  return (
+    <div style={ovly} onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={{ ...mdl, maxWidth: 540 }}>
+        {/* Header */}
+        <div style={mdlH}>
+          <b style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+            Photos — {towIn.plate}
+          </b>
+          <button style={{ ...btnG, ...sm }} onClick={onClose}>✕</button>
+        </div>
+
+        {/* Upload controls */}
+        <div style={{ padding: '10px 16px', borderBottom: '1px solid #1e1e1e', display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <input ref={cameraRef} type="file" accept="image/*" capture="environment"
+            style={{ display: 'none' }} onChange={e => uploadFiles(e.target.files)} />
+          <input ref={galleryRef} type="file" accept="image/*" multiple
+            style={{ display: 'none' }} onChange={e => uploadFiles(e.target.files)} />
+          <button style={{ ...btnG, ...sm }} onClick={triggerCamera} disabled={uploading}>
+            📷 Camera
+          </button>
+          <button style={{ ...btnG, ...sm }} onClick={triggerGallery} disabled={uploading}>
+            🖼 Add Photos
+          </button>
+          {uploading && <span style={{ fontSize: 8, color: MUT }}>Uploading…</span>}
+          {err && <span style={{ fontSize: 8, color: RED }}>{err}</span>}
+        </div>
+
+        {/* Photo grid */}
+        <div style={{ ...mdlB, minHeight: 100 }}>
+          {loading ? (
+            <div style={{ fontSize: 9, color: MUT, textAlign: 'center', padding: '24px 0' }}>Loading…</div>
+          ) : photos.length === 0 ? (
+            <div style={{ fontSize: 9, color: '#333', textAlign: 'center', padding: '32px 0', lineHeight: 1.9 }}>
+              No photos yet.<br />Use Camera or Add Photos above.
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+              {photos.map(p => (
+                <div key={p.id}
+                  style={{ position: 'relative', aspectRatio: '1', background: '#1a1a1a', borderRadius: 2,
+                    overflow: 'hidden', border: '1px solid #252525', cursor: 'pointer' }}
+                  onClick={() => signedUrls[p.path] && setFullView(signedUrls[p.path])}>
+                  {signedUrls[p.path] ? (
+                    <img src={signedUrls[p.path]} alt={p.file_name || ''}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                  ) : (
+                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center',
+                      justifyContent: 'center', fontSize: 24, color: '#333' }}>📷</div>
+                  )}
+                  {isDispatch && (
+                    <button
+                      onClick={e => { e.stopPropagation(); deletePhoto(p); }}
+                      style={{ position: 'absolute', top: 4, right: 4, background: '#000000bb',
+                        border: 'none', color: '#cc4444', cursor: 'pointer', fontSize: 14,
+                        width: 22, height: 22, borderRadius: 2, display: 'flex',
+                        alignItems: 'center', justifyContent: 'center', padding: 0, lineHeight: 1 }}>
+                      ×
+                    </button>
+                  )}
+                  {p.file_name && (
+                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0,
+                      background: '#000000aa', padding: '2px 5px', fontSize: 6, color: '#aaa',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {p.file_name}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div style={mdlF}>
+          <span style={{ fontSize: 8, color: MUT, flex: 1, alignSelf: 'center' }}>
+            {photos.length > 0 && `${photos.length} photo${photos.length !== 1 ? 's' : ''}`}
+          </span>
+          <button style={btnG} onClick={onClose}>Close</button>
+        </div>
+      </div>
+
+      {/* Full-screen view */}
+      {fullView && (
+        <div
+          style={{ position: 'absolute', inset: 0, zIndex: 50, background: '#000000f0',
+            display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => setFullView(null)}>
+          <img src={fullView} alt=""
+            style={{ maxWidth: '95%', maxHeight: '90%', objectFit: 'contain', borderRadius: 2 }} />
+          <button
+            onClick={() => setFullView(null)}
+            style={{ position: 'absolute', top: 12, right: 12, background: 'none', border: 'none',
+              color: '#888', fontSize: 28, cursor: 'pointer', lineHeight: 1 }}>×</button>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -306,7 +492,7 @@ function TowInForm({ record, formDepots, allDepots, userEmail, companyId, onSave
 }
 
 // ─── Card ──────────────────────────────────────────────────────────────────────
-function TowInCard({ record, allDepots, transfers, isDispatch, onEdit, onRelease, onTransfer, searchTerm, companyConfig }) {
+function TowInCard({ record, allDepots, transfers, photos, isDispatch, onEdit, onRelease, onTransfer, onPhotos, searchTerm, companyConfig }) {
   const [open, setOpen] = useState(false);
 
   const xfers      = transfers[record.id] || [];
@@ -315,6 +501,7 @@ function TowInCard({ record, allDepots, transfers, isDispatch, onEdit, onRelease
   const released   = !!record.date_out;
   const activeFlags = FLAG_FIELDS.filter(({ key }) => record[key]);
   const cost       = calcStorageCost(record, companyConfig);
+  const photoCount = photos?.length || 0;
 
   return (
     <div style={{ background: '#0d0d0d', border: '1px solid #252525',
@@ -322,6 +509,7 @@ function TowInCard({ record, allDepots, transfers, isDispatch, onEdit, onRelease
       {/* Row */}
       <div onClick={() => setOpen(o => !o)}
         style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', cursor: 'pointer' }}>
+        {/* Main content */}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 12, fontWeight: 700, color: TXT, letterSpacing: '0.1em' }}>
@@ -374,6 +562,21 @@ function TowInCard({ record, allDepots, transfers, isDispatch, onEdit, onRelease
             </div>
           )}
         </div>
+
+        {/* Photo thumbnail */}
+        {photoCount > 0 && (
+          <div style={{ flexShrink: 0 }}
+            onClick={e => { e.stopPropagation(); onPhotos(record); }}>
+            <PhotoThumbnail path={photos[0].path} />
+            {photoCount > 1 && (
+              <div style={{ fontSize: 6, color: MUT, textAlign: 'center', marginTop: 2 }}>
+                +{photoCount - 1}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Actions */}
         <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
           {!released && (
             <button onClick={e => { e.stopPropagation(); onTransfer(record, curDepotId); }}
@@ -391,6 +594,12 @@ function TowInCard({ record, allDepots, transfers, isDispatch, onEdit, onRelease
             <button onClick={e => { e.stopPropagation(); onEdit(record); }}
               style={{ ...btnG, ...sm, fontSize: 7 }}>Edit</button>
           )}
+          <button onClick={e => { e.stopPropagation(); onPhotos(record); }}
+            style={{ ...btnG, ...sm, fontSize: 7,
+              color: photoCount > 0 ? ACC : MUT,
+              borderColor: photoCount > 0 ? ACC + '55' : undefined }}>
+            📷{photoCount > 0 ? ` ${photoCount}` : ''}
+          </button>
           <span style={{ fontSize: 8, color: MUT }}>{open ? '▲' : '▼'}</span>
         </div>
       </div>
@@ -467,11 +676,13 @@ export default function TowInsTab({ companyId, userEmail, isDispatch, companyCon
   const [records,       setRecords]       = useState([]);
   const [allDepots,     setAllDepots]     = useState([]);
   const [formDepots,    setFormDepots]    = useState([]);
-  const [transfers,     setTransfers]     = useState({}); // { tow_in_id: [transfer, ...] }
+  const [transfers,     setTransfers]     = useState({});
+  const [photosMap,     setPhotosMap]     = useState({}); // tow_in_id -> photo[]
   const [loading,       setLoading]       = useState(true);
   const [showForm,      setShowForm]      = useState(false);
   const [editRecord,    setEditRecord]    = useState(null);
-  const [xferTarget,    setXferTarget]    = useState(null); // { record, fromDepotId }
+  const [xferTarget,    setXferTarget]    = useState(null);
+  const [photoTarget,   setPhotoTarget]   = useState(null); // tow_in record
   const [filter,        setFilter]        = useState('active');
   const [yardFilter,    setYardFilter]    = useState('all');
   const [search,        setSearch]        = useState('');
@@ -479,26 +690,31 @@ export default function TowInsTab({ companyId, userEmail, isDispatch, companyCon
   const load = useCallback(async () => {
     if (!companyId) return;
 
-    const [{ data: recs }, { data: deps }, { data: xfers }, { data: trucks }] = await Promise.all([
+    const [{ data: recs }, { data: deps }, { data: xfers }, { data: trucks }, { data: pics }] = await Promise.all([
       supabase.from('tow_ins').select('*').eq('company_id', companyId).order('date_in', { ascending: false }),
       supabase.from('depots').select('*').eq('company_id', companyId).order('name'),
       supabase.from('tow_in_transfers').select('*').order('transferred_at'),
-      // driver's assigned trucks — tells us which depots a driver can log into
       supabase.from('tow_trucks').select('depot_id').eq('auth_email', userEmail).eq('company_id', companyId),
+      supabase.from('tow_in_photos').select('id, tow_in_id, path, file_name, created_at').eq('company_id', companyId).order('created_at'),
     ]);
 
     const recList  = recs  || [];
     const depList  = deps  || [];
     const xferList = xfers || [];
+    const picList  = pics  || [];
 
-    // Build transfers map: tow_in_id → sorted array
     const xferMap = {};
     xferList.forEach(x => {
       if (!xferMap[x.tow_in_id]) xferMap[x.tow_in_id] = [];
       xferMap[x.tow_in_id].push(x);
     });
 
-    // Depot picker for the log form: drivers see only their truck's depot(s); dispatch sees all
+    const picsMap = {};
+    picList.forEach(p => {
+      if (!picsMap[p.tow_in_id]) picsMap[p.tow_in_id] = [];
+      picsMap[p.tow_in_id].push(p);
+    });
+
     let fDepots = depList;
     if (!isDispatch && trucks && trucks.length > 0) {
       const ids = new Set(trucks.map(t => t.depot_id).filter(Boolean));
@@ -509,6 +725,7 @@ export default function TowInsTab({ companyId, userEmail, isDispatch, companyCon
     setAllDepots(depList);
     setFormDepots(fDepots.length > 0 ? fDepots : depList);
     setTransfers(xferMap);
+    setPhotosMap(picsMap);
     setLoading(false);
   }, [companyId, userEmail, isDispatch]);
 
@@ -538,7 +755,10 @@ export default function TowInsTab({ companyId, userEmail, isDispatch, companyCon
     setXferTarget(null);
   };
 
-  // Resolve current depot per record for filtering/grouping
+  const handlePhotoUpdate = (towInId, updatedPhotos) => {
+    setPhotosMap(prev => ({ ...prev, [towInId]: updatedPhotos }));
+  };
+
   const curDepot = r => currentDepotId(r, transfers);
 
   const filtered = records.filter(r => {
@@ -558,9 +778,11 @@ export default function TowInsTab({ companyId, userEmail, isDispatch, companyCon
 
   const cardProps = r => ({
     key: r.id, record: r, allDepots, transfers, isDispatch,
+    photos: photosMap[r.id] || [],
     onEdit: setEditRecord,
     onRelease: handleRelease,
     onTransfer: (rec, fromDepotId) => setXferTarget({ record: rec, fromDepotId }),
+    onPhotos: rec => setPhotoTarget(rec),
     searchTerm: search.trim(),
     companyConfig,
   });
@@ -586,6 +808,16 @@ export default function TowInsTab({ companyId, userEmail, isDispatch, companyCon
           userEmail={userEmail}
           onSave={handleTransferSave}
           onCancel={() => setXferTarget(null)}
+        />
+      )}
+      {photoTarget && (
+        <PhotoModal
+          towIn={photoTarget}
+          companyId={companyId}
+          userEmail={userEmail}
+          isDispatch={isDispatch}
+          onClose={() => setPhotoTarget(null)}
+          onUpdate={handlePhotoUpdate}
         />
       )}
 
@@ -639,7 +871,7 @@ export default function TowInsTab({ companyId, userEmail, isDispatch, companyCon
         </div>
       )}
 
-      {/* List — grouped by current yard when viewing all */}
+      {/* List */}
       {!loading && filtered.length > 0 && (
         yardFilter === 'all' && allDepots.length > 1
           ? allDepots.map(d => {
