@@ -7,6 +7,7 @@ import { supabase } from '../../lib/supabase';
 import { timeIn, fmtTimer, fmtShort, haversineKm } from '../../lib/utils';
 import { Highlight } from '../ui/shared';
 import { DispatchModal, CompleteModal } from './DispatchTab';
+import DriverJobCard from './DriverJobCard';
 
 const ORANGE = '#e8870a';
 
@@ -477,6 +478,19 @@ export default function TowAllocationsTab({ allFeatures, liveIds, loading, err, 
       });
   }, [companyId]);
 
+  // Driver: dispatched trade tow jobs assigned to this user
+  const [myJobs, setMyJobs] = useState([]);
+  useEffect(() => {
+    if (role !== 'driver' || !userEmail) return;
+    supabase.from('dispatched_jobs')
+      .select('*')
+      .eq('assigned_to', userEmail)
+      .eq('status', 'in_progress')
+      .in('tow_type', ['trade', 'both'])
+      .order('dispatched_at', { ascending: false })
+      .then(({ data }) => setMyJobs(data || []));
+  }, [role, userEmail]);
+
   const onDispatchSave = (savedJob) => {
     setDispatchedMap(prev => new Map(prev).set(String(savedJob.event_id), savedJob));
     setDispatchTarget(null);
@@ -680,6 +694,32 @@ export default function TowAllocationsTab({ allFeatures, liveIds, loading, err, 
       />
     )}
     <div style={{ padding: 16, flex: 1, overflowY: 'auto' }}>
+
+      {/* Driver: My Dispatched Trade Tows */}
+      {role === 'driver' && myJobs.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 8, color: '#e8870a', letterSpacing: '0.12em', textTransform: 'uppercase',
+            fontWeight: 700, marginBottom: 10, borderLeft: '2px solid #e8870a', paddingLeft: 6 }}>
+            My Jobs ({myJobs.length})
+          </div>
+          {myJobs.map(job => (
+            <DriverJobCard
+              key={job.id}
+              job={job}
+              companyId={companyId}
+              onUpdate={updated => {
+                if (updated.status === 'completed') {
+                  setMyJobs(prev => prev.filter(j => j.id !== updated.id));
+                } else {
+                  setMyJobs(prev => prev.map(j => j.id === updated.id ? updated : j));
+                }
+              }}
+            />
+          ))}
+          <div style={{ height: 1, background: '#1a1a1a', marginBottom: 20 }} />
+        </div>
+      )}
+
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
         <div>
           <div style={{ fontSize: 13, fontWeight: 700, color: TXT, letterSpacing: '0.06em' }}>{isDispatch ? '🚨 Dispatch' : '🚛 Tow Allocations'}</div>

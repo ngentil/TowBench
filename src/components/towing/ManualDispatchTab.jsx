@@ -96,6 +96,9 @@ export default function ManualDispatchTab({ companyId, companyConfig, userEmail 
   const [returnDepotId,    setReturnDepotId]    = useState('');
   const [returnDepotPoint, setReturnDepotPoint] = useState(null);
 
+  // Docket
+  const [docketRequired, setDocketRequired] = useState(false);
+
   // Extra stops
   const [extraStops, setExtraStops] = useState([]);
 
@@ -185,6 +188,7 @@ export default function ManualDispatchTab({ companyId, companyConfig, userEmail 
 
   const reset = () => {
     setTruckId(''); setTowType('accident'); setTwoUpTrade(false); setTwoUpAccident(false);
+    setDocketRequired(false);
     setFromDepot(true); setFromDepotId(''); setFromDepotPoint(null);
     setSearchA(''); setResultsA([]); setPointA(null);
     setDestEnabled(false); setSearchB(''); setResultsB([]); setPointB(null);
@@ -199,22 +203,32 @@ export default function ManualDispatchTab({ companyId, companyConfig, userEmail 
     const fromDep  = depots.find(d => d.id === fromDepotId);
     const toDep    = depots.find(d => d.id === returnDepotId) || fromDep;
     const truckRow = trucks.find(t => t.id === truckId);
+    // Resolve dropoff: explicit destination > return depot > null
+    const dropoff  = (destEnabled && pointB)
+      ? { label: pointB.label, lat: pointB.lat, lng: pointB.lng }
+      : (returnDepot && returnDepotPoint?.lat != null)
+      ? { label: returnDepotPoint.name || 'Depot', lat: returnDepotPoint.lat, lng: returnDepotPoint.lng }
+      : null;
     const { error } = await supabase.from('dispatched_jobs').insert({
-      company_id:    companyId,
-      event_id:      null,
-      truck_id:      truckId,
-      assigned_to:   truckRow?.auth_email || null,
-      from_depot_id: fromDepot ? (fromDep?.id || null) : null,
-      to_depot_id:   returnDepot ? (toDep?.id || null) : null,
-      pickup_lat:    pointA.lat,
-      pickup_lng:    pointA.lng,
-      pickup_label:  pointA.label,
-      tow_type:      towType,
-      distance_km:   route?.km   || null,
-      duration_min:  route?.min  || null,
-      tow_fee:       totalFee    || null,
-      dispatched_by: userEmail,
-      status:        'in_progress',
+      company_id:      companyId,
+      event_id:        null,
+      truck_id:        truckId,
+      assigned_to:     truckRow?.auth_email || null,
+      from_depot_id:   fromDepot ? (fromDep?.id || null) : null,
+      to_depot_id:     returnDepot ? (toDep?.id || null) : null,
+      pickup_lat:      pointA.lat,
+      pickup_lng:      pointA.lng,
+      pickup_label:    pointA.label,
+      dropoff_label:   dropoff?.label || null,
+      dropoff_lat:     dropoff?.lat   || null,
+      dropoff_lng:     dropoff?.lng   || null,
+      tow_type:        towType,
+      docket_required: (towType !== 'accident') ? docketRequired : false,
+      distance_km:     route?.km   || null,
+      duration_min:    route?.min  || null,
+      tow_fee:         totalFee    || null,
+      dispatched_by:   userEmail,
+      status:          'in_progress',
     });
     setSaving(false);
     if (error) { setErr(error.message); return; }
@@ -293,6 +307,17 @@ export default function ManualDispatchTab({ companyId, companyConfig, userEmail 
         {(towType === 'accident' || towType === 'both') && allowAccidentTwoUp && (
           <div style={{ marginBottom: 10 }}>
             <Toggle on={twoUpAccident} onToggle={() => setTwoUpAccident(v => !v)} label="×2 Two-up / Swinger (Accident)" />
+          </div>
+        )}
+
+        {/* Docket required (trade/both only) */}
+        {towType !== 'accident' && (
+          <div style={{ marginBottom: 10 }}>
+            <Toggle
+              on={docketRequired}
+              onToggle={() => setDocketRequired(v => !v)}
+              label="Require docket number from driver"
+            />
           </div>
         )}
 
