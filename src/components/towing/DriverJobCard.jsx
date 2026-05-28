@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
-import { ACC, MUT, TXT, GRN, RED, inp, btnA, btnG } from '../../lib/styles';
+import { ACC, MUT, TXT, GRN, RED, BRD, inp, btnA, btnG, sm } from '../../lib/styles';
 import { fmtShort } from '../../lib/utils';
+import DocketForm from './DocketForm';
 
 const ORANGE = '#e8870a';
 const MIN_PRE_VEHICLE = 4;
@@ -9,26 +10,28 @@ const MIN_POST_VEHICLE = 4;
 
 // ── Step from job timestamps ────────────────────────────────────────────────
 function getStep(job) {
-  if (!job.accepted_at)          return 'pending';
-  if (!job.en_route_pickup_at)   return 'accepted';
-  if (!job.arrived_pickup_at)    return 'en_route_pickup';
-  if (!job.pre_photos_at)        return 'at_pickup';
-  if (!job.en_route_dropoff_at)  return 'pre_done';
-  if (!job.arrived_dropoff_at)   return 'en_route_dropoff';
-  if (!job.post_photos_at)       return 'at_dropoff';
-  if (job.docket_required && !job.docket_number) return 'docket';
+  if (!job.accepted_at)                           return 'pending';
+  if (!job.route_confirmed_at)                    return 'confirm_route';
+  if (!job.en_route_pickup_at)                    return 'accepted';
+  if (!job.arrived_pickup_at)                     return 'en_route_pickup';
+  if (!job.pre_photos_at)                         return 'at_pickup';
+  if (job.docket_required && !job.docket_form_at) return 'docket_form';
+  if (!job.en_route_dropoff_at)                   return 'pre_done';
+  if (!job.arrived_dropoff_at)                    return 'en_route_dropoff';
+  if (!job.post_photos_at)                        return 'at_dropoff';
   return 'done';
 }
 
 const STEP_META = {
   pending:          { label: 'Assigned',           color: '#6688cc' },
+  confirm_route:    { label: 'Confirm Route',       color: ACC       },
   accepted:         { label: 'Accepted',            color: GRN       },
   en_route_pickup:  { label: 'En Route',            color: ORANGE    },
   at_pickup:        { label: 'At Pickup',           color: ORANGE    },
+  docket_form:      { label: 'Docket Form',         color: '#cc8844' },
   pre_done:         { label: 'Loaded',              color: ORANGE    },
   en_route_dropoff: { label: 'En Route — Dropoff',  color: ORANGE    },
   at_dropoff:       { label: 'At Dropoff',          color: ORANGE    },
-  docket:           { label: 'Docket Required',     color: '#cc8844' },
   done:             { label: 'Complete',            color: GRN       },
 };
 
@@ -61,31 +64,93 @@ function PhotoGrid({ photos, onAdd, uploading }) {
   );
 }
 
-// ── Docket entry — isolated for future OCR replacement ─────────────────────
-function DocketEntry({ value, onChange, onSubmit, busy, err }) {
+// ── Route confirmation — lets driver review / change dropoff before heading out ──
+function ConfirmRoute({ job, onConfirm, busy }) {
+  const [editMode,   setEditMode]   = useState(false);
+  const [search,     setSearch]     = useState('');
+  const [results,    setResults]    = useState([]);
+  const [newDropoff, setNewDropoff] = useState(null);
+  const debounce = useRef();
+
+  function handleSearch(q) {
+    setSearch(q);
+    clearTimeout(debounce.current);
+    if (q.length < 3) { setResults([]); return; }
+    debounce.current = setTimeout(async () => {
+      try {
+        const r = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=5&countrycodes=au`
+        );
+        const d = await r.json();
+        setResults(d.map(x => ({ label: x.display_name, lat: parseFloat(x.lat), lng: parseFloat(x.lon) })));
+      } catch { /* network error — silently skip */ }
+    }, 300);
+  }
+
+  const displayDropoff = newDropoff
+    ? newDropoff.label.split(',').slice(0, 2).join(',')
+    : (job.dropoff_label?.split(',').slice(0, 2).join(',') || 'Return to Depot');
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div style={{ fontSize: 8, color: MUT, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-        Docket Number
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ fontSize: 9, fontWeight: 700, color: ACC, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+        Confirm Route
       </div>
-      <input
-        style={{
-          ...inp, width: '100%', boxSizing: 'border-box',
-          fontSize: 15, textTransform: 'uppercase', letterSpacing: '0.12em',
-          fontFamily: "'IBM Plex Mono',monospace",
-        }}
-        value={value}
-        onChange={e => onChange(e.target.value.toUpperCase())}
-        placeholder="e.g. T151969"
-        autoFocus
-      />
-      {err && <div style={{ fontSize: 9, color: RED }}>{err}</div>}
+
+      <div style={{ fontSize: 9, color: MUT }}>
+        Pickup: <span style={{ color: TXT }}>{job.pickup_label?.split(',').slice(0, 2).join(',')}</span>
+      </div>
+
+      <div>
+        <div style={{ fontSize: 9, color: MUT, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          Dropoff: <span style={{ color: newDropoff ? ACC : TXT }}>{displayDropoff}</span>
+          {!editMode && (
+            <button style={{ ...btnG, ...sm, padding: '2px 7px', fontSize: 8 }}
+              onClick={() => setEditMode(true)}>
+              Change
+            </button>
+          )}
+        </div>
+
+        {editMode && (
+          <div style={{ position: 'relative' }}>
+            <div style={{ display: 'flex', gap: 6, marginBottom: 4 }}>
+              <input
+                style={{ ...inp, fontSize: 11, flex: 1 }}
+                value={search}
+                onChange={e => handleSearch(e.target.value)}
+                placeholder="Search new dropoff address…"
+                autoFocus
+              />
+              <button style={{ ...btnG, ...sm, padding: '4px 8px', flexShrink: 0 }}
+                onClick={() => { setEditMode(false); setResults([]); }}>
+                ✕
+              </button>
+            </div>
+            {results.length > 0 && (
+              <div style={{ background: '#111', border: `1px solid #2a2a2a`, borderRadius: 2,
+                maxHeight: 160, overflowY: 'auto', zIndex: 5 }}>
+                {results.map((r, i) => (
+                  <div key={i}
+                    onClick={() => { setNewDropoff(r); setEditMode(false); setResults([]); setSearch(''); }}
+                    style={{ padding: '8px 10px', fontSize: 10, color: TXT, cursor: 'pointer',
+                      borderBottom: i < results.length - 1 ? '1px solid #1a1a1a' : 'none' }}>
+                    {r.label.split(',').slice(0, 3).join(',')}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       <button
-        style={{ ...btnA, width: '100%', fontSize: 11, padding: '10px 0', opacity: (!value.trim() || busy) ? 0.4 : 1 }}
-        disabled={!value.trim() || busy}
-        onClick={onSubmit}
+        style={{ ...btnA, width: '100%', fontSize: 11, padding: '11px 0',
+          opacity: (busy || editMode) ? 0.4 : 1 }}
+        disabled={busy || editMode}
+        onClick={() => onConfirm(newDropoff)}
       >
-        {busy ? 'Completing…' : '✓ Complete Job'}
+        {busy ? '…' : '✓  Route Confirmed'}
       </button>
     </div>
   );
@@ -96,7 +161,6 @@ export default function DriverJobCard({ job: initJob, companyId, onUpdate }) {
   const [job,       setJob]       = useState(initJob);
   const [photos,    setPhotos]    = useState([]);
   const [uploading, setUploading] = useState(false);
-  const [docketNum, setDocketNum] = useState('');
   const [busy,      setBusy]      = useState(false);
   const [err,       setErr]       = useState('');
 
@@ -207,6 +271,24 @@ export default function DriverJobCard({ job: initJob, companyId, onUpdate }) {
           </button>
         )}
 
+        {/* ── CONFIRM ROUTE ── */}
+        {step === 'confirm_route' && (
+          <ConfirmRoute
+            job={job}
+            busy={busy}
+            onConfirm={(newDropoff) => {
+              const now = new Date().toISOString();
+              const fields = { route_confirmed_at: now };
+              if (newDropoff) {
+                fields.dropoff_label = newDropoff.label;
+                fields.dropoff_lat   = newDropoff.lat;
+                fields.dropoff_lng   = newDropoff.lng;
+              }
+              advance(fields);
+            }}
+          />
+        )}
+
         {/* ── ACCEPTED ── */}
         {step === 'accepted' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -283,8 +365,26 @@ export default function DriverJobCard({ job: initJob, companyId, onUpdate }) {
               disabled={!preReady || busy || uploading}
               onClick={() => advance({ pre_photos_at: new Date().toISOString() })}
             >
-              {uploading ? 'Uploading…' : busy ? '…' : '→  Continue to Dropoff'}
+              {uploading ? 'Uploading…' : busy ? '…' : job.docket_required ? '→  Fill Docket Form' : '→  Continue to Dropoff'}
             </button>
+          </div>
+        )}
+
+        {/* ── DOCKET FORM — digital paper form (trade + accident) ── */}
+        {step === 'docket_form' && (
+          <div>
+            <div style={{ fontSize: 9, fontWeight: 700, color: '#cc8844', letterSpacing: '0.08em',
+              textTransform: 'uppercase', marginBottom: 14 }}>
+              Docket Form
+            </div>
+            <DocketForm
+              job={job}
+              companyId={companyId}
+              onComplete={() => {
+                supabase.from('dispatched_jobs').select('*').eq('id', job.id).single()
+                  .then(({ data }) => { if (data) { setJob(data); onUpdate?.(data); } });
+              }}
+            />
           </div>
         )}
 
@@ -351,28 +451,12 @@ export default function DriverJobCard({ job: initJob, companyId, onUpdate }) {
               disabled={!postReady || busy || uploading}
               onClick={() => {
                 const now = new Date().toISOString();
-                advance(job.docket_required
-                  ? { post_photos_at: now }
-                  : { post_photos_at: now, status: 'completed', completed_at: now });
+                advance({ post_photos_at: now, status: 'completed', completed_at: now });
               }}
             >
-              {uploading ? 'Uploading…' : busy ? '…' : '✓  Done'}
+              {uploading ? 'Uploading…' : busy ? '…' : '✓  Complete Job'}
             </button>
           </div>
-        )}
-
-        {/* ── DOCKET ENTRY — swap this component out for OCR later ── */}
-        {step === 'docket' && (
-          <DocketEntry
-            value={docketNum}
-            onChange={setDocketNum}
-            onSubmit={() => {
-              const now = new Date().toISOString();
-              advance({ docket_number: docketNum.trim(), status: 'completed', completed_at: now });
-            }}
-            busy={busy}
-            err=""
-          />
         )}
 
         {step === 'done' && (
