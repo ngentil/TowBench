@@ -109,6 +109,8 @@ export function DispatchModal({ feature, trucks, depots, companyConfig, companyI
   const [searchBResults,     setSearchBResults]     = useState([]);
   const [extraLegs,          setExtraLegs]          = useState([]);
 
+  const [docketRequired, setDocketRequired] = useState(false);
+
   // Pricing
   const [towType,        setTowType]        = useState('accident');
   const [twoUpTrade,     setTwoUpTrade]     = useState(false);
@@ -218,25 +220,35 @@ export function DispatchModal({ feature, trucks, depots, companyConfig, companyI
     if (!truckId)  { setErr('Select a truck.'); return; }
     if (!pointA)   { setErr('Set a pickup location.'); return; }
     setSaving(true); setErr('');
-    const fromDep   = depots.find(d => d.id === selectedDepotId);
-    const toDep     = depots.find(d => d.id === selectedReturnId) || fromDep;
-    const truckRow  = trucks.find(t => t.id === truckId);
+    const fromDep  = depots.find(d => d.id === selectedDepotId);
+    const toDep    = depots.find(d => d.id === selectedReturnId) || fromDep;
+    const truckRow = trucks.find(t => t.id === truckId);
+    // Resolve dropoff: explicit destination > return depot > null
+    const dropoff  = (destinationEnabled && pointB)
+      ? { label: pointB.label, lat: pointB.lat, lng: pointB.lng }
+      : (returnDepot && returnDepotPoint?.lat != null)
+      ? { label: returnDepotPoint.name || 'Depot', lat: returnDepotPoint.lat, lng: returnDepotPoint.lng }
+      : null;
     const { data, error } = await supabase.from('dispatched_jobs').insert({
-      company_id:    companyId,
-      event_id:      eventId,
-      truck_id:      truckId,
-      assigned_to:   truckRow?.auth_email || null,
-      from_depot_id: fromDepot ? (fromDep?.id || null) : null,
-      to_depot_id:   returnDepot ? (toDep?.id || null) : null,
-      pickup_lat:    pointA.lat,
-      pickup_lng:    pointA.lng,
-      pickup_label:  pointA.label,
-      tow_type:      towType,
-      distance_km:   route?.km   || null,
-      duration_min:  route?.min  || null,
-      tow_fee:       totalFee    || null,
-      dispatched_by: userEmail,
-      status:        'in_progress',
+      company_id:     companyId,
+      event_id:       eventId,
+      truck_id:       truckId,
+      assigned_to:    truckRow?.auth_email || null,
+      from_depot_id:  fromDepot ? (fromDep?.id || null) : null,
+      to_depot_id:    returnDepot ? (toDep?.id || null) : null,
+      pickup_lat:     pointA.lat,
+      pickup_lng:     pointA.lng,
+      pickup_label:   pointA.label,
+      dropoff_label:  dropoff?.label || null,
+      dropoff_lat:    dropoff?.lat   || null,
+      dropoff_lng:    dropoff?.lng   || null,
+      tow_type:       towType,
+      docket_required: (towType !== 'accident') ? docketRequired : false,
+      distance_km:    route?.km   || null,
+      duration_min:   route?.min  || null,
+      tow_fee:        totalFee    || null,
+      dispatched_by:  userEmail,
+      status:         'in_progress',
     }).select().single();
     if (error) { setErr(error.message); setSaving(false); return; }
     await supabase.from('job_accepted').insert({
@@ -386,6 +398,17 @@ export function DispatchModal({ feature, trucks, depots, companyConfig, companyI
           </div>
 
           <div style={{ height: 1, background: '#1e1e1e' }} />
+
+          {/* Docket required (trade/both/custom only) */}
+          {towType !== 'accident' && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer' }}>
+              <input type="checkbox" checked={docketRequired} onChange={e => setDocketRequired(e.target.checked)}
+                style={{ accentColor: '#cc8844' }} />
+              <span style={{ fontSize: 9, color: docketRequired ? '#cc8844' : MUT }}>
+                Require docket number from driver
+              </span>
+            </label>
+          )}
 
           {/* Two-up — Trade */}
           {(towType === 'trade' || towType === 'both' || towType === 'custom') && (
