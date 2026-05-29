@@ -1,7 +1,7 @@
-import { useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 
-const MIN_MOVE_M   = 30;     // only upsert if moved more than this
+const MIN_MOVE_M   = 30;     // only write to DB if moved more than this
 const MIN_INTERVAL = 15_000; // or at least this often regardless
 
 function metersBetween(lat1, lon1, lat2, lon2) {
@@ -13,7 +13,10 @@ function metersBetween(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-export default function useDriverLocation(email) {
+// Returns { lat, lng } | null — updates on every GPS event.
+// DB write is throttled: only when moved > MIN_MOVE_M OR > MIN_INTERVAL has passed.
+export default function useDriverLocation(email, companyId) {
+  const [position,  setPosition]  = useState(null);
   const lastRef    = useRef(null);
   const watchIdRef = useRef(null);
 
@@ -22,7 +25,6 @@ export default function useDriverLocation(email) {
     let cancelled = false;
 
     (async () => {
-      // Fetch plate + name once before starting the GPS watch
       const [truckRes, driverRes] = await Promise.all([
         supabase.from('tow_trucks').select('plate').eq('auth_email', email).maybeSingle(),
         supabase.from('drivers').select('name').eq('auth_email', email).maybeSingle(),
@@ -36,15 +38,27 @@ export default function useDriverLocation(email) {
         const { latitude: lat, longitude: lng, heading, accuracy } = pos.coords;
         const now  = Date.now();
         const last = lastRef.current;
+
+        // Always update UI position immediately
+        if (!cancelled) setPosition({ lat, lng });
+
+        // Throttle DB writes
         if (last) {
           const moved = metersBetween(last.lat, last.lng, lat, lng);
           if (moved < MIN_MOVE_M && now - last.ts < MIN_INTERVAL) return;
         }
         lastRef.current = { lat, lng, ts: now };
+
         await supabase
           .from('driver_locations')
           .upsert(
-            { driver_email: email, lat, lng, heading, accuracy, plate, name, updated_at: new Date().toISOString() },
+            {
+              driver_email: email,
+              lat, lng, heading, accuracy,
+              plate, name,
+              company_id:  companyId || null,
+              updated_at:  new Date().toISOString(),
+            },
             { onConflict: 'driver_email' }
           );
       };
@@ -63,5 +77,7 @@ export default function useDriverLocation(email) {
       lastRef.current    = null;
       supabase.from('driver_locations').delete().eq('driver_email', email).then(() => {});
     };
-  }, [email]);
+  }, [email, companyId]);
+
+  return position;
 }

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { ACC, MUT, TXT, GRN, RED, BRD, BRD2, inp, txa, btnA, btnG, sm } from '../../lib/styles';
 import SignatureCanvas from './SignatureCanvas';
@@ -61,18 +61,26 @@ function YesNo({ value, onChange }) {
 }
 
 function SigSlot({ label, blob, onSave, onClear }) {
-  const objUrl = blob ? URL.createObjectURL(blob) : null;
+  const [objUrl, setObjUrl] = useState(null);
+
+  // Create object URL when blob arrives, revoke on blob change or unmount
+  useEffect(() => {
+    if (!blob) { setObjUrl(null); return; }
+    const url = URL.createObjectURL(blob);
+    setObjUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [blob]);
+
   return (
     <div style={{ marginBottom: 14 }}>
-      {blob ? (
+      {blob && objUrl ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <div style={{ fontSize: 7, color: MUT, textTransform: 'uppercase', letterSpacing: '0.1em' }}>{label}</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <img src={objUrl} alt="sig" style={{ height: 36, width: 'auto', maxWidth: 180,
               border: `1px solid ${BRD}`, borderRadius: 2 }} />
             <span style={{ fontSize: 8, color: GRN }}>✓ Signed</span>
-            <button style={{ ...btnG, ...sm, padding: '2px 6px', fontSize: 8 }}
-              onClick={() => { URL.revokeObjectURL(objUrl); onClear(); }}>
+            <button style={{ ...btnG, ...sm, padding: '2px 6px', fontSize: 8 }} onClick={onClear}>
               Redo
             </button>
           </div>

@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import 'leaflet/dist/leaflet.css';
 import { ACC, MUT, BRD, TXT, GRN } from '../../lib/styles';
 import useWeather from '../../hooks/useWeather';
-import useDriverLocation from '../../hooks/useDriverLocation';
 import { timeIn, fmtTimer, haversineKm } from '../../lib/utils';
 import { supabase } from '../../lib/supabase';
 
@@ -196,8 +195,7 @@ function calcCustomPrice(legs, legTypes, legPcts, totalAdjPct, cfg, twoUpTrade, 
   return { legResults, subtotal, total, totalAdjPct: totalAdjPct || 0 };
 }
 
-export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, countdown, isStale, acceptedJobs, userEmail, onAcceptJob, onReleaseJob, companyConfig, companyId }) {
-  useDriverLocation(userEmail);
+export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, countdown, isStale, acceptedJobs, userEmail, onAcceptJob, onReleaseJob, companyConfig, companyId, userPos }) {
   const { rainSoon, maxProb, hoursUntil } = useWeather();
 
   // Layer toggles
@@ -207,7 +205,6 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
   const [showTruck,       setShowTruck]       = useState(true);
 
   // Map state
-  const [userPos,         setUserPos]         = useState(null);
   const [driverLocations, setDriverLocations] = useState([]);
   const [selectedEventId, setSelectedEventId] = useState(null);
   const [cardPos,         setCardPos]         = useState({ x: 0, y: 0 });
@@ -264,31 +261,35 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
   const selectedAcceptedJob = selectedEventId ? (acceptedJobs?.get(selectedEventId) || null) : null;
   const selectedIsLive      = selectedEventId ? liveIds.has(selectedEventId) : false;
 
-  // GPS watch
+  // Driver locations — scoped to this company, debounced to avoid a full fetch per GPS ping
   useEffect(() => {
-    if (!navigator.geolocation) return;
-    const id = navigator.geolocation.watchPosition(
-      p => setUserPos({ lat: p.coords.latitude, lng: p.coords.longitude }),
-      () => {},
-      { enableHighAccuracy: true }
-    );
-    return () => navigator.geolocation.clearWatch(id);
-  }, []);
+    if (!companyId) return;
+    let debounceTimer;
 
-  // Driver locations realtime
-  useEffect(() => {
     const fetchDrivers = async () => {
       try {
-        const { data } = await supabase.from('driver_locations').select('driver_email, lat, lng, updated_at');
+        const { data } = await supabase.from('driver_locations')
+          .select('driver_email, lat, lng, updated_at')
+          .eq('company_id', companyId);
         if (data) setDriverLocations(data);
       } catch { /* ignore */ }
     };
+
+    const debouncedFetch = () => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(fetchDrivers, 300);
+    };
+
     fetchDrivers();
-    const channel = supabase.channel('driver-locations-ops')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'driver_locations' }, fetchDrivers)
+    const channel = supabase.channel(`driver-locations-${companyId}`)
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'driver_locations',
+        filter: `company_id=eq.${companyId}`,
+      }, debouncedFetch)
       .subscribe();
-    return () => supabase.removeChannel(channel);
-  }, []);
+
+    return () => { clearTimeout(debounceTimer); supabase.removeChannel(channel); };
+  }, [companyId]);
 
   // Fetch all company depots with coords when trace panel opens
   useEffect(() => {
