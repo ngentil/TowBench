@@ -450,7 +450,7 @@ function AllocationCard({ feature, fromLog, userPos, nearbyKm, acceptedJob, user
   );
 }
 
-export default function TowAllocationsTab({ allFeatures, liveIds, loading, err, lastFetch, countdown, fetchAllocations, isStale, acceptedJobs, userEmail, role, isDispatch, companyId, onAcceptJob, onUnassignJob, onAllocateToPlate, companyConfig }) {
+export default function TowAllocationsTab({ allFeatures, liveIds, loading, err, lastFetch, countdown, fetchAllocations, isStale, acceptedJobs, userEmail, role, isDispatch, companyId, onAcceptJob, onUnassignJob, onAllocateToPlate, companyConfig, userPos }) {
   const { rainSoon, maxProb, hoursUntil } = useWeather();
   const [handoverNotes, setHandoverNotes] = useState(new Map());
 
@@ -547,17 +547,7 @@ export default function TowAllocationsTab({ allFeatures, liveIds, loading, err, 
     });
   }, []);
 
-  const [userPos, setUserPos] = useState(null);
-
-  useEffect(() => {
-    if (!navigator.geolocation) return;
-    const id = navigator.geolocation.watchPosition(
-      p => setUserPos({ lat: p.coords.latitude, lng: p.coords.longitude }),
-      () => {},
-      { enableHighAccuracy: true }
-    );
-    return () => navigator.geolocation.clearWatch(id);
-  }, []);
+  // userPos comes from TowingSection via prop (single GPS watch for the whole session)
 
   const [nearbyKm,     setNearbyKm]     = useState(() => Number(localStorage.getItem('towbench_nearby_km') ?? 10));
   const [timeRange,    setTimeRange]    = useState('31d');

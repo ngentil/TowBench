@@ -15,6 +15,7 @@ import BrandingTab from '../admin/BrandingTab';
 import PricingTab from '../admin/PricingTab';
 import DriverApprovalsTab from '../admin/DriverApprovalsTab';
 import { VICROADS_URL, VICROADS_KEY } from '../../lib/constants';
+import useDriverLocation from '../../hooks/useDriverLocation';
 
 const POLL_MS = 60_000;
 
@@ -40,6 +41,10 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, co
   ].filter(t => !role || t.roles.includes(role));
 
   const [tab, setTab] = useState('allocations');
+
+  // Single GPS watch for the whole session — persists across tab switches.
+  // Returns { lat, lng } | null; also writes to driver_locations with company_id.
+  const userPos = useDriverLocation(userEmail, companyId);
 
   useEffect(() => {
     const ids = TABS.map(t => t.id);
@@ -184,6 +189,7 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, co
             onUnassignJob={onUnassignJob}
             onAllocateToPlate={onAllocateToPlate}
             companyConfig={companyConfig}
+            userPos={userPos}
           />
         )}
         {tab === 'ops' && (
@@ -193,6 +199,7 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, co
             acceptedJobs={acceptedJobs} userEmail={userEmail}
             onAcceptJob={onAcceptJob} onReleaseJob={onUnassignJob}
             companyConfig={companyConfig} companyId={companyId}
+            userPos={userPos}
           />
         )}
         {tab === 'dispatch'   && <ManualDispatchTab companyId={companyId} companyConfig={companyConfig} userEmail={userEmail} />}
