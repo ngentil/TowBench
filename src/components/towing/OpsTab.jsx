@@ -4,6 +4,7 @@ import { ACC, MUT, BRD, TXT, GRN } from '../../lib/styles';
 import useWeather from '../../hooks/useWeather';
 import { timeIn, fmtTimer, haversineKm } from '../../lib/utils';
 import { supabase } from '../../lib/supabase';
+import { BRIDGE_URL } from '../../lib/constants';
 
 const ORANGE = '#e8670a';
 
@@ -203,6 +204,7 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
   const [showCleared,     setShowCleared]     = useState(true);
   const [showHotspots,    setShowHotspots]    = useState(true);
   const [showTruck,       setShowTruck]       = useState(true);
+  const [showBridges,     setShowBridges]     = useState(false);
 
   // Map state
   const [driverLocations, setDriverLocations] = useState([]);
@@ -250,6 +252,7 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
   const truckLayerRef     = useRef(null);
   const routeLayerRef     = useRef(null);
   const tracePinLayerRef  = useRef(null);
+  const bridgeLayerRef    = useRef(null);
   const userPosRef        = useRef(null);
   const selectedLatLngRef = useRef(null);
   const clickTargetRef    = useRef(null);
@@ -446,6 +449,7 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
       const truckLayer    = L.layerGroup().addTo(map);
       const routeLayer    = L.layerGroup().addTo(map);
       const tracePinLayer = L.layerGroup().addTo(map);
+      const bridgeLayer   = L.layerGroup(); // not added by default — toggled on demand
 
       activeLayerRef.current   = activeLayer;
       clearedLayerRef.current  = clearedLayer;
@@ -453,6 +457,7 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
       truckLayerRef.current    = truckLayer;
       routeLayerRef.current    = routeLayer;
       tracePinLayerRef.current = tracePinLayer;
+      bridgeLayerRef.current   = bridgeLayer;
       mapRef.current           = map;
 
       if (!document.getElementById('ops-full-style')) {
@@ -599,6 +604,43 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
     if (showTruck)    map.addLayer(tl);  else map.removeLayer(tl);
   }, [showActive, showCleared, showHotspots, showTruck]);
 
+  // Bridge heights layer — fetch GeoJSON from VicRoads when toggled on
+  useEffect(() => {
+    const map = mapRef.current, layer = bridgeLayerRef.current;
+    if (!map || !layer) return;
+    if (!showBridges) { map.removeLayer(layer); return; }
+    if (!BRIDGE_URL)  { map.removeLayer(layer); return; }
+
+    layer.clearLayers();
+    map.addLayer(layer);
+
+    fetch(BRIDGE_URL)
+      .then(r => r.json())
+      .then(geojson => {
+        const L = leafletRef.current;
+        if (!L || !mapRef.current) return;
+        layer.clearLayers();
+        const features = geojson.features || geojson;
+        features.forEach(f => {
+          const coords = f.geometry?.coordinates;
+          if (!coords) return;
+          const [lng, lat] = Array.isArray(coords[0]) ? coords[0] : coords;
+          const props = f.properties || {};
+          const height = props.height_limit ?? props.height ?? props.clearance ?? props.max_height ?? null;
+          const label  = height != null ? `${parseFloat(height).toFixed(1)}m` : '?m';
+          const color  = height == null ? '#888' : parseFloat(height) < 4.0 ? '#cc3333' : parseFloat(height) < 4.5 ? '#cc8822' : '#5a9aee';
+          L.marker([lat, lng], {
+            icon: L.divIcon({
+              className: '',
+              html: `<div style="background:${color}22;border:1px solid ${color}88;color:${color};font-size:8px;font-weight:700;padding:1px 4px;border-radius:2px;white-space:nowrap;font-family:'IBM Plex Mono',monospace;pointer-events:none">${label}</div>`,
+              iconAnchor: [16, 10],
+            }),
+          }).bindTooltip(props.road_name || props.name || label, { direction: 'top', className: 'towbench-tooltip' }).addTo(layer);
+        });
+      })
+      .catch(e => console.warn('Bridge heights fetch failed:', e.message));
+  }, [showBridges, mapReady]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const liveCount    = liveIds.size;
   const cutoff24h    = Date.now() - 24 * 60 * 60 * 1000;
   const clearedCount = allFeatures.filter(f => {
@@ -643,6 +685,9 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
           active={traceOpen}
           onClick={() => traceOpen ? closeTrace() : setTraceOpen(true)}
           color="#cc2222" label="🔴 Trace" />
+        {BRIDGE_URL && (
+          <LayerBadge active={showBridges} onClick={() => setShowBridges(v => !v)} color="#5a9aee" label="🌉 Bridges" />
+        )}
 
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
           {rainSoon && (
