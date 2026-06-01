@@ -15,6 +15,7 @@ import BrandingTab from '../admin/BrandingTab';
 import PricingTab from '../admin/PricingTab';
 import DriverApprovalsTab from '../admin/DriverApprovalsTab';
 import MyTowsTab from './MyTowsTab';
+import BridgesTab from './BridgesTab';
 import { VICROADS_URL, VICROADS_KEY } from '../../lib/constants';
 import useDriverLocation from '../../hooks/useDriverLocation';
 
@@ -58,6 +59,7 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, co
     { id: 'depots',       label: '🏢 Depots',            roles: ['dispatch','admin','super_admin'] },
     { id: 'fleet',        label: '🚛 Fleet',              roles: ['dispatch','admin','super_admin'] },
     { id: 'ops',          label: '🗺 Map',               roles: ['driver','dispatch','admin','super_admin'] },
+    { id: 'bridges',      label: '🌉 Bridges',           roles: ['driver','dispatch','admin','super_admin'] },
     { id: 'mytows',       label: '📋 My Tows',           roles: ['driver'], standaloneOnly: true },
     { id: 'analytics',    label: '📊 Analytics',         roles: ['dispatch','admin','super_admin'] },
     { id: 'pricing',      label: '💰 Pricing',           roles: ['admin','super_admin'] },
@@ -280,6 +282,7 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, co
             userPos={userPos}
           />
         )}
+        {tab === 'bridges'    && <BridgesTab userPos={userPos} />}
         {tab === 'mytows'     && <MyTowsTab userEmail={userEmail} />}
         {tab === 'dispatch'   && <ManualDispatchTab companyId={companyId} companyConfig={companyConfig} userEmail={userEmail} />}
         {tab === 'activetows' && <ActiveTowsTab companyId={companyId} companyConfig={companyConfig} userEmail={userEmail} />}
