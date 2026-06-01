@@ -17,6 +17,8 @@ const CLR_FILTERS = [
   { key: 'clear',    label: '≥ 4.6m',   color: '#5a9aee', test: h => h >= 4.6 },
 ];
 
+const NEARBY_OPTS = [0, 5, 10, 15, 20, 30];
+
 function hColor(h) {
   return h < 4.0 ? '#cc3333' : h < 4.6 ? '#cc8822' : '#5a9aee';
 }
@@ -25,12 +27,12 @@ function hLabel(h) {
   return h < 4.0 ? 'Critical' : h < 4.6 ? 'Tight' : 'Clear';
 }
 
-function BridgeCard({ rec, dist }) {
+function BridgeCard({ rec, dist, nearbyKm }) {
   const [open, setOpen] = useState(false);
   const [lat, lng, height, label, btype] = Array.isArray(rec) ? rec : [];
   const h          = parseFloat(height);
   const color      = hColor(h);
-  const isCrit     = h < 4.0;
+  const isCrit     = h < 4.0 && dist != null && nearbyKm > 0 && dist <= nearbyKm;
   const border     = isCrit ? '1px solid #cc222255' : '1px solid #252525';
   const borderLeft = isCrit ? '3px solid #cc2222'   : `3px solid ${color}`;
   const btypeClean = (btype && btype !== 'NULL') ? btype : null;
@@ -134,7 +136,10 @@ export default function BridgesTab({ userPos }) {
   const [sortBy,     setSortBy]     = useState('distance');
   const [clrFilter,  setClrFilter]  = useState('all');
   const [showSort,   setShowSort]   = useState(false);
+  const [nearbyKm,   setNearbyKm]   = useState(() => Number(localStorage.getItem('towbench_bridge_nearby_km') ?? 10));
   const sortRef = useRef(null);
+
+  const setRadius = km => { setNearbyKm(km); localStorage.setItem('towbench_bridge_nearby_km', km); };
 
   useEffect(() => {
     if (!BRIDGE_URL) { setLoading(false); return; }
@@ -186,7 +191,8 @@ export default function BridgesTab({ userPos }) {
 
   const critCount  = filtered.filter(({ rec }) => parseFloat(rec[2]) < 4.0).length;
   const tightCount = filtered.filter(({ rec }) => { const h = parseFloat(rec[2]); return h >= 4.0 && h < 4.6; }).length;
-  const nearCount  = filtered.filter(({ dist }) => dist != null && dist <= 2).length;
+  const nearCount  = nearbyKm > 0 ? filtered.filter(({ dist }) => dist != null && dist <= nearbyKm && parseFloat(dist) !== undefined).length : 0;
+  const critNearCount = nearbyKm > 0 ? filtered.filter(({ rec, dist }) => dist != null && dist <= nearbyKm && parseFloat(rec[2]) < 4.0).length : 0;
   const currentSort = SORT_OPTIONS.find(o => o.key === sortBy);
 
   return (
@@ -200,7 +206,7 @@ export default function BridgesTab({ userPos }) {
             VicRoads bridge register · {filtered.length} structure{filtered.length !== 1 ? 's' : ''}
             {critCount  > 0 && <span style={{ color: '#cc3333', marginLeft: 8 }}>· {critCount} critical</span>}
             {tightCount > 0 && <span style={{ color: '#cc8822', marginLeft: 8 }}>· {tightCount} tight</span>}
-            {nearCount  > 0 && <span style={{ color: '#cc2222', marginLeft: 8 }}>· {nearCount} within 2km</span>}
+            {critNearCount > 0 && <span style={{ color: '#cc2222', marginLeft: 8 }}>· {critNearCount} critical within {nearbyKm}km</span>}
           </div>
         </div>
 
@@ -243,8 +249,8 @@ export default function BridgesTab({ userPos }) {
           borderRadius: 2, outline: 'none', boxSizing: 'border-box', marginBottom: 10 }}
       />
 
-      {/* Clearance filter pills — identical pattern to status badges in TowAllocationsTab */}
-      <div style={{ display: 'flex', gap: 5, marginBottom: 14, flexWrap: 'wrap' }}>
+      {/* Clearance filter pills */}
+      <div style={{ display: 'flex', gap: 5, marginBottom: 10, flexWrap: 'wrap' }}>
         {CLR_FILTERS.map(f => {
           const fColor = f.color || ACC;
           const active = clrFilter === f.key;
@@ -262,6 +268,31 @@ export default function BridgesTab({ userPos }) {
         })}
       </div>
 
+      {/* Nearby pulse radius — identical to TowAllocationsTab */}
+      {userPos && (
+        <div style={{ marginBottom: 14, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 8, color: MUT, letterSpacing: '0.08em', textTransform: 'uppercase', flexShrink: 0 }}>📍 Nearby pulse</span>
+          {NEARBY_OPTS.map(km => (
+            <button key={km} onClick={() => setRadius(km)}
+              style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', padding: '4px 7px', borderRadius: 2, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace",
+                background: nearbyKm === km ? '#cc222222' : '#0d0d0d',
+                border: `1px solid ${nearbyKm === km ? '#cc2222' : '#2a2a2a'}`,
+                color: nearbyKm === km ? '#cc2222' : MUT }}>
+              {km === 0 ? 'Off' : `${km}km`}
+            </button>
+          ))}
+          <input
+            type="number" min="1" max="999" placeholder="km"
+            value={nearbyKm > 0 && !NEARBY_OPTS.includes(nearbyKm) ? nearbyKm : ''}
+            onChange={e => { const v = Number(e.target.value); if (v > 0) setRadius(v); }}
+            style={{ width: 44, background: '#0a0a0a',
+              border: `1px solid ${nearbyKm > 0 && !NEARBY_OPTS.includes(nearbyKm) ? '#cc2222' : '#2a2a2a'}`,
+              color: TXT, fontFamily: "'IBM Plex Mono',monospace", fontSize: 8, padding: '3px 5px',
+              borderRadius: 2, outline: 'none', textAlign: 'center' }}
+          />
+        </div>
+      )}
+
       {/* List */}
       {loading && (
         <div style={{ textAlign: 'center', padding: 48, fontSize: 9, color: MUT }}>Loading bridge data…</div>
@@ -272,7 +303,7 @@ export default function BridgesTab({ userPos }) {
         </div>
       )}
       {sorted.map(({ rec, dist }, i) => (
-        <BridgeCard key={i} rec={rec} dist={dist} />
+        <BridgeCard key={i} rec={rec} dist={dist} nearbyKm={nearbyKm} />
       ))}
     </div>
   );
