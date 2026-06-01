@@ -285,6 +285,59 @@ function BridgeCard({ rec, dist }) {
   );
 }
 
+function BridgeInfoCard({ rec, dist, onClose, pos }) {
+  const [lat, lng, height, label, btype] = Array.isArray(rec) ? rec : [];
+  const h          = parseFloat(height);
+  const hColor     = h < 4.0 ? '#cc3333' : h < 4.6 ? '#cc8822' : '#5a9aee';
+  const hLabel     = h < 4.0 ? 'Critical' : h < 4.6 ? 'Tight' : 'Clear';
+  const btypeClean = (btype && btype !== 'NULL') ? btype : null;
+  const mapsUrl    = `https://www.google.com/maps?q=${lat},${lng}`;
+  const svUrl      = `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lng}`;
+  const linkStyle  = {
+    display: 'inline-flex', alignItems: 'center', gap: 4,
+    fontSize: 8, padding: '3px 8px', borderRadius: 2, textDecoration: 'none',
+    fontFamily: "'IBM Plex Mono',monospace", fontWeight: 700,
+    color: '#5a8ab0', border: '1px solid #1e3a5a', background: '#0a1520',
+  };
+  return (
+    <div onClick={e => e.stopPropagation()} style={{
+      position: 'absolute', left: pos.x + 14, top: pos.y - 8,
+      zIndex: 1500, width: 220, pointerEvents: 'all',
+      background: '#111', border: `1px solid ${hColor}44`,
+      borderLeft: `3px solid ${hColor}`,
+      borderRadius: 2, boxShadow: '0 4px 24px #000a',
+      fontFamily: "'IBM Plex Mono',monospace",
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '7px 8px 5px' }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: TXT, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {label || 'Bridge'}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 7, fontWeight: 700, color: hColor, border: `1px solid ${hColor}55`, borderRadius: 2, padding: '1px 5px', background: hColor + '15', textTransform: 'uppercase' }}>
+              {h.toFixed(1)}m · {hLabel}
+            </span>
+            {dist != null && (
+              <span style={{ fontSize: 8, fontWeight: 700, color: ORANGE }}>📍 {dist.toFixed(1)}km</span>
+            )}
+          </div>
+        </div>
+        <button onClick={onClose}
+          style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: 13, padding: '0 0 0 6px', lineHeight: 1, flexShrink: 0 }}>×</button>
+      </div>
+      <div style={{ padding: '5px 8px 6px', borderTop: '1px solid #1e1e1e', display: 'flex', flexDirection: 'column', gap: 3 }}>
+        {btypeClean && <InfoRow label="Type"   value={btypeClean} />}
+        <InfoRow label="Clear"  value={`${h.toFixed(1)} m`} />
+        <InfoRow label="Coords" value={`${parseFloat(lat).toFixed(5)}, ${parseFloat(lng).toFixed(5)}`} />
+      </div>
+      <div style={{ padding: '5px 8px 7px', borderTop: '1px solid #1e1e1e', display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+        <a href={mapsUrl} target="_blank" rel="noopener noreferrer" style={linkStyle}>📍 Maps</a>
+        <a href={svUrl}   target="_blank" rel="noopener noreferrer" style={linkStyle}>🔭 Street View</a>
+      </div>
+    </div>
+  );
+}
+
 export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, countdown, isStale, acceptedJobs, userEmail, onAcceptJob, onReleaseJob, companyConfig, companyId, userPos }) {
   const { rainSoon, maxProb, hoursUntil } = useWeather();
 
@@ -332,20 +385,24 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
   const [totalAdjPct,        setTotalAdjPct]        = useState(0);
   const [totalAdjInput,      setTotalAdjInput]      = useState('');
 
+  const [selectedBridge,        setSelectedBridge]        = useState(null); // [lat,lng,h,label,btype]
+  const [bridgeCardPos,         setBridgeCardPos]         = useState({ x: 0, y: 0 });
+
   // Refs
-  const containerRef      = useRef(null);
-  const mapRef            = useRef(null);
-  const leafletRef        = useRef(null);
-  const activeLayerRef    = useRef(null);
-  const clearedLayerRef   = useRef(null);
-  const hotspotLayerRef   = useRef(null);
-  const truckLayerRef     = useRef(null);
-  const routeLayerRef     = useRef(null);
-  const tracePinLayerRef  = useRef(null);
-  const bridgeLayerRef    = useRef(null);
-  const userPosRef        = useRef(null);
-  const selectedLatLngRef = useRef(null);
-  const clickTargetRef    = useRef(null);
+  const containerRef            = useRef(null);
+  const mapRef                  = useRef(null);
+  const leafletRef              = useRef(null);
+  const activeLayerRef          = useRef(null);
+  const clearedLayerRef         = useRef(null);
+  const hotspotLayerRef         = useRef(null);
+  const truckLayerRef           = useRef(null);
+  const routeLayerRef           = useRef(null);
+  const tracePinLayerRef        = useRef(null);
+  const bridgeLayerRef          = useRef(null);
+  const userPosRef              = useRef(null);
+  const selectedLatLngRef       = useRef(null);
+  const selectedBridgeLatLngRef = useRef(null);
+  const clickTargetRef          = useRef(null);
 
   userPosRef.current     = userPos;
   clickTargetRef.current = clickTarget;
@@ -563,9 +620,15 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
 
       const updateCardPos = () => {
         const ll = selectedLatLngRef.current;
-        if (!ll) return;
-        const pt = map.latLngToContainerPoint([ll.lat, ll.lng]);
-        setCardPos({ x: pt.x, y: pt.y });
+        if (ll) {
+          const pt = map.latLngToContainerPoint([ll.lat, ll.lng]);
+          setCardPos({ x: pt.x, y: pt.y });
+        }
+        const bll = selectedBridgeLatLngRef.current;
+        if (bll) {
+          const bpt = map.latLngToContainerPoint([bll.lat, bll.lng]);
+          setBridgeCardPos({ x: bpt.x, y: bpt.y });
+        }
       };
       map.on('move zoom moveend zoomend', updateCardPos);
 
@@ -590,6 +653,8 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
         }
         setSelectedEventId(null);
         selectedLatLngRef.current = null;
+        setSelectedBridge(null);
+        selectedBridgeLatLngRef.current = null;
       });
 
       setMapReady(true);
@@ -728,17 +793,32 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
         label  = p.road_name || p.name || '';
       }
       if (lat == null || lng == null || height == null) return;
-      const h     = parseFloat(height);
-      const htxt  = h.toFixed(1) + 'm';
-      const color = h < 4.0 ? '#cc3333' : h < 4.6 ? '#cc8822' : '#5a9aee';
-      const tip   = [label, btype].filter(v => v && v !== 'NULL').join(' · ') || htxt;
-      L.marker([lat, lng], {
-        icon: L.divIcon({
-          className: '',
-          html: `<div style="background:${color}22;border:1px solid ${color}88;color:${color};font-size:8px;font-weight:700;padding:1px 4px;border-radius:2px;white-space:nowrap;font-family:'IBM Plex Mono',monospace;pointer-events:none">${htxt}</div>`,
-          iconSize: [36, 16], iconAnchor: [18, 8],
-        }),
-      }).bindTooltip(tip, { direction: 'top', className: 'towbench-tooltip' }).addTo(layer);
+      const h    = parseFloat(height);
+      const sz   = h < 4.0 ? 10 : 7;
+      const tip  = [label, btype].filter(v => v && v !== 'NULL').join(' · ') || `${h.toFixed(1)}m`;
+      // Critical bridges pulse like active allocations; others are solid red dots
+      const dotHtml = h < 4.0
+        ? `<div style="position:relative;width:${sz}px;height:${sz}px">` +
+          `<div style="position:absolute;top:50%;left:50%;width:${sz}px;height:${sz}px;border-radius:50%;background:#cc2222;animation:ops-pulse 2s ease-out infinite"></div>` +
+          `<div style="position:absolute;top:50%;left:50%;width:${sz}px;height:${sz}px;border-radius:50%;background:#cc2222;transform:translate(-50%,-50%);opacity:0.95"></div>` +
+          `</div>`
+        : `<div style="width:${sz}px;height:${sz}px;border-radius:50%;background:#cc2222;opacity:0.65"></div>`;
+      const marker = L.marker([lat, lng], {
+        icon: L.divIcon({ className: '', html: dotHtml, iconSize: [sz, sz], iconAnchor: [sz / 2, sz / 2] }),
+        bubblingMouseEvents: false,
+        zIndexOffset: h < 4.0 ? 90 : 80,
+      });
+      marker.addTo(layer);
+      marker.bindTooltip(tip, { direction: 'top', className: 'towbench-tooltip' });
+      marker.on('click', e => {
+        L.DomEvent.stopPropagation(e);
+        const m = mapRef.current;
+        if (!m) return;
+        const pt = m.latLngToContainerPoint([lat, lng]);
+        setBridgeCardPos({ x: pt.x, y: pt.y });
+        setSelectedBridge(rec);
+        selectedBridgeLatLngRef.current = { lat, lng };
+      });
     });
   }, [showBridges, bridgeData, mapReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1280,6 +1360,14 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
             onReleaseJob={onReleaseJob}
             onClose={() => { setSelectedEventId(null); selectedLatLngRef.current = null; }}
             pos={cardPos}
+          />
+        )}
+        {selectedBridge && (
+          <BridgeInfoCard
+            rec={selectedBridge}
+            dist={userPos ? haversineKm(userPos.lat, userPos.lng, selectedBridge[0], selectedBridge[1]) : null}
+            onClose={() => { setSelectedBridge(null); selectedBridgeLatLngRef.current = null; }}
+            pos={bridgeCardPos}
           />
         )}
       </div>
