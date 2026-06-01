@@ -30,7 +30,7 @@ function BridgeCard({ rec, dist }) {
   const [lat, lng, height, label, btype] = Array.isArray(rec) ? rec : [];
   const h          = parseFloat(height);
   const color      = hColor(h);
-  const isCrit     = dist != null && dist <= 0.5;
+  const isCrit     = h < 4.0;
   const border     = isCrit ? '1px solid #cc222255' : '1px solid #252525';
   const borderLeft = isCrit ? '3px solid #cc2222'   : `3px solid ${color}`;
   const btypeClean = (btype && btype !== 'NULL') ? btype : null;
