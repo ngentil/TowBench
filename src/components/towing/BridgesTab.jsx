@@ -21,8 +21,9 @@ const TYPE_LABELS = {
 
 function BridgeCard({ rec, dist, nearbyKm }) {
   const [open, setOpen] = useState(false);
-  const [lat, lng, height, label, btype] = Array.isArray(rec) ? rec : [];
+  const [lat, lng, height, label, btype, maxweight] = Array.isArray(rec) ? rec : [];
   const h          = parseFloat(height);
+  const wt         = maxweight != null ? parseFloat(maxweight) : null;
   const isTight    = h < 4.6;
   const isCrit     = isTight && dist != null && nearbyKm > 0 && dist <= nearbyKm;
   const border     = isCrit ? '1px solid #cc222255' : '1px solid #252525';
@@ -54,6 +55,14 @@ function BridgeCard({ rec, dist, nearbyKm }) {
               textTransform: 'uppercase', flexShrink: 0 }}>
               {h.toFixed(1)}m
             </span>
+            {wt != null && (
+              <span style={{ fontSize: 7, fontWeight: 700, letterSpacing: '0.1em', padding: '1px 5px',
+                border: '1px solid #4a6a2255', borderRadius: 2,
+                color: '#7aaa33', background: '#4a6a2215',
+                textTransform: 'uppercase', flexShrink: 0 }}>
+                ⚖ {wt % 1 === 0 ? wt : wt.toFixed(1)}t
+              </span>
+            )}
           </div>
           {!open && (
             <div style={{ marginTop: 3, display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -91,6 +100,7 @@ function BridgeCard({ rec, dist, nearbyKm }) {
           <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             {[
               ['Clearance',    `${h.toFixed(1)} m`],
+              ...(wt != null ? [['Weight limit', `${wt % 1 === 0 ? wt : wt.toFixed(1)} t`]] : []),
               ...(dist != null ? [['Distance', `${dist.toFixed(2)} km`]] : []),
               ['Type',         typeLabel || '—'],
               ['Coordinates',  `${parseFloat(lat).toFixed(5)}, ${parseFloat(lng).toFixed(5)}`],
