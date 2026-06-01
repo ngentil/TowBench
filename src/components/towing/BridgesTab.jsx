@@ -13,18 +13,20 @@ const SORT_OPTIONS = [
 const NEARBY_OPTS = [0, 5, 10, 15, 20, 30];
 
 const TYPE_LABELS = {
-  'ROAD OVER ROAD(GRADE SEPARATION)': 'Road Overpass',
-  'RAIL OVER ROAD(RAIL OVERPASS)':    'Rail Overpass',
-  'PEDESTRIAN OVERPASS':              'Ped Overpass',
+  'ROAD BRIDGE':    'Road Bridge',
+  'RAIL OVER ROAD': 'Rail Bridge',
+  'TUNNEL':         'Tunnel',
+  'LOW CLEARANCE':  'Low Clearance',
 };
 
 function BridgeCard({ rec, dist, nearbyKm }) {
   const [open, setOpen] = useState(false);
   const [lat, lng, height, label, btype] = Array.isArray(rec) ? rec : [];
   const h          = parseFloat(height);
-  const isCrit     = dist != null && nearbyKm > 0 && dist <= nearbyKm;
+  const isTight    = h < 4.6;
+  const isCrit     = isTight && dist != null && nearbyKm > 0 && dist <= nearbyKm;
   const border     = isCrit ? '1px solid #cc222255' : '1px solid #252525';
-  const borderLeft = isCrit ? '3px solid #cc2222'   : '3px solid #cc3333';
+  const borderLeft = isCrit ? '3px solid #cc2222' : isTight ? '3px solid #cc3333' : '3px solid #444';
   const typeLabel  = TYPE_LABELS[btype] || btype || null;
   const mapsUrl    = `https://www.google.com/maps?q=${lat},${lng}`;
   const svUrl      = `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lng}`;
@@ -45,7 +47,10 @@ function BridgeCard({ rec, dist, nearbyKm }) {
               {label || 'Bridge'}
             </span>
             <span style={{ fontSize: 7, fontWeight: 700, letterSpacing: '0.1em', padding: '1px 5px',
-              border: '1px solid #cc333355', borderRadius: 2, color: '#cc3333', background: '#cc333315',
+              border: `1px solid ${h < 4.0 ? '#cc333355' : h < 4.6 ? '#cc882255' : '#33333355'}`,
+              borderRadius: 2,
+              color:      h < 4.0 ? '#cc3333' : h < 4.6 ? '#cc8822' : '#666',
+              background: h < 4.0 ? '#cc333315' : h < 4.6 ? '#cc882215' : '#33333315',
               textTransform: 'uppercase', flexShrink: 0 }}>
               {h.toFixed(1)}m
             </span>
@@ -72,7 +77,8 @@ function BridgeCard({ rec, dist, nearbyKm }) {
         </div>
 
         <div style={{ flexShrink: 0, textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-          <span style={{ fontSize: 11, fontWeight: 700, color: '#cc3333', fontFamily: "'IBM Plex Mono',monospace" }}>
+          <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "'IBM Plex Mono',monospace",
+            color: h < 4.0 ? '#cc3333' : h < 4.6 ? '#cc8822' : '#666' }}>
             {h.toFixed(1)}m
           </span>
           <span style={{ fontSize: 8, color: MUT }}>{open ? '▲' : '▼'}</span>
@@ -173,7 +179,9 @@ export default function BridgesTab({ userPos }) {
     }
   }), [filtered, sortBy]);
 
-  const critNearCount = nearbyKm > 0 ? filtered.filter(({ dist }) => dist != null && dist <= nearbyKm).length : 0;
+  const critCount     = filtered.filter(({ rec }) => parseFloat(rec[2]) < 4.0).length;
+  const tightCount    = filtered.filter(({ rec }) => { const h = parseFloat(rec[2]); return h >= 4.0 && h < 4.6; }).length;
+  const critNearCount = nearbyKm > 0 ? filtered.filter(({ rec, dist }) => dist != null && dist <= nearbyKm && parseFloat(rec[2]) < 4.6).length : 0;
   const currentSort = SORT_OPTIONS.find(o => o.key === sortBy);
 
   return (
@@ -184,8 +192,10 @@ export default function BridgesTab({ userPos }) {
         <div>
           <div style={{ fontSize: 13, fontWeight: 700, color: TXT, letterSpacing: '0.06em' }}>🌉 Bridge Heights</div>
           <div style={{ fontSize: 9, color: MUT, marginTop: 2 }}>
-            VicRoads · {filtered.length} low-clearance structure{filtered.length !== 1 ? 's' : ''} (&lt;4 m)
-            {critNearCount > 0 && <span style={{ color: '#cc2222', marginLeft: 8 }}>· {critNearCount} within {nearbyKm}km</span>}
+            OpenStreetMap · {filtered.length} posted clearance restriction{filtered.length !== 1 ? 's' : ''}
+            {critCount  > 0 && <span style={{ color: '#cc3333', marginLeft: 8 }}>· {critCount} &lt;4m</span>}
+            {tightCount > 0 && <span style={{ color: '#cc8822', marginLeft: 8 }}>· {tightCount} tight</span>}
+            {critNearCount > 0 && <span style={{ color: '#cc2222', marginLeft: 8 }}>· {critNearCount} nearby</span>}
           </div>
         </div>
 
