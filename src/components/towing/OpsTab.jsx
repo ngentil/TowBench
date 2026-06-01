@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import 'leaflet/dist/leaflet.css';
-import { ACC, MUT, BRD, TXT, GRN } from '../../lib/styles';
+import { ACC, MUT, BRD, TXT, GRN, SURF } from '../../lib/styles';
 import useWeather from '../../hooks/useWeather';
 import { timeIn, fmtTimer, haversineKm } from '../../lib/utils';
 import { supabase } from '../../lib/supabase';
@@ -196,6 +196,95 @@ function calcCustomPrice(legs, legTypes, legPcts, totalAdjPct, cfg, twoUpTrade, 
   return { legResults, subtotal, total, totalAdjPct: totalAdjPct || 0 };
 }
 
+function BridgeCard({ rec, dist }) {
+  const [open, setOpen] = useState(false);
+  const [lat, lng, height, label, btype] = Array.isArray(rec) ? rec : [
+    rec.geometry?.coordinates[1], rec.geometry?.coordinates[0],
+    rec.properties?.height ?? null, rec.properties?.road_name || '', '',
+  ];
+  const h         = parseFloat(height);
+  const hColor    = h < 4.0 ? '#cc3333' : h < 4.6 ? '#cc8822' : '#5a9aee';
+  const isCrit    = dist <= 0.5;
+  const borderLeft = isCrit ? '3px solid #cc2222' : `3px solid ${hColor}`;
+  const border     = isCrit ? '1px solid #cc222255' : '1px solid #252525';
+  const mapsUrl   = `https://www.google.com/maps?q=${lat},${lng}`;
+  const svUrl     = `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lng}`;
+  const btypeClean = (btype && btype !== 'NULL') ? btype : null;
+
+  return (
+    <div className={isCrit ? 'nearby-pulse' : ''}
+      style={{ background: '#0d0d0d', border, borderLeft, borderRadius: 2, marginBottom: 6, overflow: 'hidden' }}>
+      <div onClick={() => setOpen(o => !o)}
+        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', cursor: 'pointer' }}>
+        <span style={{ fontSize: 16, flexShrink: 0 }}>🌉</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: TXT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {label || 'Bridge'}
+            </span>
+            <span style={{ fontSize: 7, fontWeight: 700, letterSpacing: '0.1em', padding: '1px 5px',
+              border: `1px solid ${hColor}55`, borderRadius: 2, color: hColor, background: hColor + '15',
+              textTransform: 'uppercase', flexShrink: 0 }}>
+              {h.toFixed(1)}m
+            </span>
+          </div>
+          {!open && (
+            <div style={{ marginTop: 3, display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
+              <span style={{ fontSize: 7, fontWeight: isCrit ? 700 : 400,
+                color: isCrit ? '#cc2222' : MUT,
+                border: `1px solid ${isCrit ? '#cc222255' : '#2a2a2a'}`,
+                borderRadius: 2, padding: '1px 4px', fontFamily: "'IBM Plex Mono',monospace" }}>
+                📍 {dist.toFixed(1)}km away
+              </span>
+              {btypeClean && (
+                <span style={{ fontSize: 7, color: MUT, border: '1px solid #252525', borderRadius: 2, padding: '1px 4px' }}>
+                  {btypeClean}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+        <div style={{ flexShrink: 0, textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: hColor, fontFamily: "'IBM Plex Mono',monospace" }}>
+            {h.toFixed(1)}m
+          </span>
+          <span style={{ fontSize: 8, color: MUT }}>{open ? '▲' : '▼'}</span>
+        </div>
+      </div>
+
+      {open && (
+        <div style={{ padding: '0 12px 12px', borderTop: '1px solid #1a1a1a' }}>
+          <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            {[
+              ['Clearance',    `${h.toFixed(1)} m`],
+              ['Distance',     `${dist.toFixed(2)} km`],
+              ['Bridge Type',  btypeClean || '—'],
+              ['Coordinates',  `${parseFloat(lat).toFixed(5)}, ${parseFloat(lng).toFixed(5)}`],
+            ].map(([lbl, val]) => (
+              <div key={lbl} style={{ background: SURF, border: '1px solid ' + BRD, borderRadius: 2, padding: '6px 8px' }}>
+                <div style={{ fontSize: 7, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>{lbl}</div>
+                <div style={{ fontSize: 10, color: TXT, fontFamily: "'IBM Plex Mono',monospace", wordBreak: 'break-all' }}>{val}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <a href={mapsUrl} target="_blank" rel="noopener noreferrer"
+              onClick={e => e.stopPropagation()}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 8, color: '#5a7a9a', border: '1px solid #1e2e3e', borderRadius: 2, padding: '4px 8px', textDecoration: 'none', background: '#0a1520' }}>
+              📍 Maps
+            </a>
+            <a href={svUrl} target="_blank" rel="noopener noreferrer"
+              onClick={e => e.stopPropagation()}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 8, color: '#5a6a7a', border: '1px solid #1e2a3a', borderRadius: 2, padding: '4px 8px', textDecoration: 'none', background: '#0a1018' }}>
+              🔭 Street View
+            </a>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, countdown, isStale, acceptedJobs, userEmail, onAcceptJob, onReleaseJob, companyConfig, companyId, userPos }) {
   const { rainSoon, maxProb, hoursUntil } = useWeather();
 
@@ -205,6 +294,7 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
   const [showHotspots,    setShowHotspots]    = useState(true);
   const [showTruck,       setShowTruck]       = useState(true);
   const [showBridges,     setShowBridges]     = useState(false);
+  const [bridgeData,      setBridgeData]      = useState([]); // array of [lat,lng,h,label,btype]
 
   // Map state
   const [driverLocations, setDriverLocations] = useState([]);
@@ -604,55 +694,53 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
     if (showTruck)    map.addLayer(tl);  else map.removeLayer(tl);
   }, [showActive, showCleared, showHotspots, showTruck]);
 
-  // Bridge heights layer — fetch GeoJSON from VicRoads when toggled on
+  // Fetch bridge data once when layer is first enabled
   useEffect(() => {
-    const map = mapRef.current, layer = bridgeLayerRef.current;
-    if (!map || !layer) return;
-    if (!showBridges) { map.removeLayer(layer); return; }
-    if (!BRIDGE_URL)  { map.removeLayer(layer); return; }
-
-    layer.clearLayers();
-    map.addLayer(layer);
-
+    if (!showBridges || !BRIDGE_URL || bridgeData.length > 0) return;
     fetch(BRIDGE_URL)
       .then(r => r.json())
       .then(data => {
-        const L = leafletRef.current;
-        if (!L || !mapRef.current) return;
-        layer.clearLayers();
-        // Compact format: { f: ['lat','lng','h','label','type'], r: [...] }
         const records = data.r || data.records || data.features || [];
-        records.forEach(rec => {
-          let lat, lng, height, label, btype;
-          if (Array.isArray(rec)) {
-            // compact: [lat, lng, h, label, type]
-            [lat, lng, height, label, btype] = rec;
-          } else {
-            // GeoJSON feature fallback
-            const coords = rec.geometry?.coordinates;
-            if (!coords) return;
-            [lng, lat] = Array.isArray(coords[0]) ? coords[0] : coords;
-            const p = rec.properties || {};
-            height = p.height_limit ?? p.height ?? p.clearance ?? p.max_height ?? null;
-            label  = p.road_name || p.name || '';
-          }
-          if (lat == null || lng == null || height == null) return;
-          const h = parseFloat(height);
-          const htxt  = h.toFixed(1) + 'm';
-          // colour by clearance: red < 4.0m, amber 4.0–4.6m, blue ≥ 4.6m
-          const color = h < 4.0 ? '#cc3333' : h < 4.6 ? '#cc8822' : '#5a9aee';
-          const tip   = [label, btype].filter(Boolean).join(' · ') || htxt;
-          L.marker([lat, lng], {
-            icon: L.divIcon({
-              className: '',
-              html: `<div style="background:${color}22;border:1px solid ${color}88;color:${color};font-size:8px;font-weight:700;padding:1px 4px;border-radius:2px;white-space:nowrap;font-family:'IBM Plex Mono',monospace;pointer-events:none">${htxt}</div>`,
-              iconSize: [36, 16], iconAnchor: [18, 8],
-            }),
-          }).bindTooltip(tip, { direction: 'top', className: 'towbench-tooltip' }).addTo(layer);
-        });
+        setBridgeData(records);
       })
-      .catch(e => console.warn('Bridge heights fetch failed:', e.message));
-  }, [showBridges, mapReady]); // eslint-disable-line react-hooks/exhaustive-deps
+      .catch(e => console.warn('Bridge data fetch failed:', e.message));
+  }, [showBridges]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Render bridge markers on map from bridgeData
+  useEffect(() => {
+    const map = mapRef.current, layer = bridgeLayerRef.current;
+    if (!map || !layer) return;
+    if (!showBridges || bridgeData.length === 0) { map.removeLayer(layer); layer.clearLayers(); return; }
+    const L = leafletRef.current;
+    if (!L) return;
+    layer.clearLayers();
+    map.addLayer(layer);
+    bridgeData.forEach(rec => {
+      let lat, lng, height, label, btype;
+      if (Array.isArray(rec)) {
+        [lat, lng, height, label, btype] = rec;
+      } else {
+        const coords = rec.geometry?.coordinates;
+        if (!coords) return;
+        [lng, lat] = Array.isArray(coords[0]) ? coords[0] : coords;
+        const p = rec.properties || {};
+        height = p.height_limit ?? p.height ?? p.clearance ?? p.max_height ?? null;
+        label  = p.road_name || p.name || '';
+      }
+      if (lat == null || lng == null || height == null) return;
+      const h     = parseFloat(height);
+      const htxt  = h.toFixed(1) + 'm';
+      const color = h < 4.0 ? '#cc3333' : h < 4.6 ? '#cc8822' : '#5a9aee';
+      const tip   = [label, btype].filter(v => v && v !== 'NULL').join(' · ') || htxt;
+      L.marker([lat, lng], {
+        icon: L.divIcon({
+          className: '',
+          html: `<div style="background:${color}22;border:1px solid ${color}88;color:${color};font-size:8px;font-weight:700;padding:1px 4px;border-radius:2px;white-space:nowrap;font-family:'IBM Plex Mono',monospace;pointer-events:none">${htxt}</div>`,
+          iconSize: [36, 16], iconAnchor: [18, 8],
+        }),
+      }).bindTooltip(tip, { direction: 'top', className: 'towbench-tooltip' }).addTo(layer);
+    });
+  }, [showBridges, bridgeData, mapReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const liveCount    = liveIds.size;
   const cutoff24h    = Date.now() - 24 * 60 * 60 * 1000;
@@ -670,6 +758,22 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
   const customPrice = (traceRoute && towType === 'custom' && traceRoute.legs)
     ? calcCustomPrice(traceRoute.legs, customLegTypes, customLegPcts, totalAdjPct, companyConfig, twoUpTrade, twoUpAccident, allowAccidentTwoUp)
     : null;
+
+  const BRIDGE_LIST_KM  = 2.0;
+  const BRIDGE_FLASH_KM = 0.5;
+
+  const nearbyBridges = useMemo(() => {
+    if (!showBridges || !userPos || !bridgeData.length) return [];
+    return bridgeData
+      .map(rec => {
+        const [lat, lng] = Array.isArray(rec) ? rec : [rec.geometry?.coordinates[1], rec.geometry?.coordinates[0]];
+        const dist = haversineKm(userPos.lat, userPos.lng, lat, lng);
+        return { rec, dist };
+      })
+      .filter(({ dist }) => dist <= BRIDGE_LIST_KM)
+      .sort((a, b) => a.dist - b.dist)
+      .slice(0, 10);
+  }, [showBridges, userPos, bridgeData]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const closeTrace = () => {
     setTraceOpen(false);
@@ -1179,6 +1283,25 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
           />
         )}
       </div>
+
+      {/* Nearby Bridges panel */}
+      {showBridges && nearbyBridges.length > 0 && (
+        <div style={{ flexShrink: 0, maxHeight: 240, overflowY: 'auto', background: '#0a0a0a', borderTop: '1px solid ' + BRD }}>
+          <div style={{ padding: '5px 12px', display: 'flex', alignItems: 'center', gap: 8, position: 'sticky', top: 0, background: '#0a0a0a', zIndex: 10, borderBottom: '1px solid #1a1a1a' }}>
+            <span style={{ fontSize: 7, fontWeight: 700, color: '#5a9aee', letterSpacing: '0.12em', textTransform: 'uppercase', flex: 1 }}>
+              🌉 Bridges Nearby
+            </span>
+            <span style={{ fontSize: 7, color: MUT, fontFamily: "'IBM Plex Mono',monospace" }}>
+              {nearbyBridges.length} within {BRIDGE_LIST_KM}km
+            </span>
+          </div>
+          <div style={{ padding: '8px 12px' }}>
+            {nearbyBridges.map(({ rec, dist }, i) => (
+              <BridgeCard key={i} rec={rec} dist={dist} />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
