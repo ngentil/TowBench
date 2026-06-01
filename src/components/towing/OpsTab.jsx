@@ -198,11 +198,12 @@ function calcCustomPrice(legs, legTypes, legPcts, totalAdjPct, cfg, twoUpTrade, 
 
 function BridgeCard({ rec, dist }) {
   const [open, setOpen] = useState(false);
-  const [lat, lng, height, label, btype] = Array.isArray(rec) ? rec : [
+  const [lat, lng, height, label, btype, maxweight] = Array.isArray(rec) ? rec : [
     rec.geometry?.coordinates[1], rec.geometry?.coordinates[0],
-    rec.properties?.height ?? null, rec.properties?.road_name || '', '',
+    rec.properties?.height ?? null, rec.properties?.road_name || '', '', null,
   ];
   const h         = parseFloat(height);
+  const wt        = maxweight != null ? parseFloat(maxweight) : null;
   const hColor    = h < 4.0 ? '#cc3333' : h < 4.6 ? '#cc8822' : '#5a9aee';
   const isCrit    = dist <= 0.5;
   const borderLeft = isCrit ? '3px solid #cc2222' : `3px solid ${hColor}`;
@@ -227,6 +228,13 @@ function BridgeCard({ rec, dist }) {
               textTransform: 'uppercase', flexShrink: 0 }}>
               {h.toFixed(1)}m
             </span>
+            {wt != null && (
+              <span style={{ fontSize: 7, fontWeight: 700, letterSpacing: '0.1em', padding: '1px 5px',
+                border: '1px solid #4a6a2255', borderRadius: 2, color: '#7aaa33', background: '#4a6a2215',
+                textTransform: 'uppercase', flexShrink: 0 }}>
+                ⚖ {wt % 1 === 0 ? wt : wt.toFixed(1)}t
+              </span>
+            )}
           </div>
           {!open && (
             <div style={{ marginTop: 3, display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -257,6 +265,7 @@ function BridgeCard({ rec, dist }) {
           <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             {[
               ['Clearance',    `${h.toFixed(1)} m`],
+              ...(wt != null ? [['Weight limit', `${wt % 1 === 0 ? wt : wt.toFixed(1)} t`]] : []),
               ['Distance',     `${dist.toFixed(2)} km`],
               ['Bridge Type',  btypeClean || '—'],
               ['Coordinates',  `${parseFloat(lat).toFixed(5)}, ${parseFloat(lng).toFixed(5)}`],
@@ -286,7 +295,7 @@ function BridgeCard({ rec, dist }) {
 }
 
 function BridgeInfoCard({ rec, dist, onClose, pos }) {
-  const [lat, lng, height, label, btype] = Array.isArray(rec) ? rec : [];
+  const [lat, lng, height, label, btype, maxweight] = Array.isArray(rec) ? rec : [];
   const h          = parseFloat(height);
   const hColor     = h < 4.0 ? '#cc3333' : h < 4.6 ? '#cc8822' : '#5a9aee';
   const hLabel     = h < 4.0 ? 'Critical' : h < 4.6 ? 'Tight' : 'Clear';
@@ -328,6 +337,7 @@ function BridgeInfoCard({ rec, dist, onClose, pos }) {
       <div style={{ padding: '5px 8px 6px', borderTop: '1px solid #1e1e1e', display: 'flex', flexDirection: 'column', gap: 3 }}>
         {btypeClean && <InfoRow label="Type"   value={btypeClean} />}
         <InfoRow label="Clear"  value={`${h.toFixed(1)} m`} />
+        {maxweight != null && <InfoRow label="Weight" value={`${parseFloat(maxweight) % 1 === 0 ? parseFloat(maxweight) : parseFloat(maxweight).toFixed(1)} t`} />}
         <InfoRow label="Coords" value={`${parseFloat(lat).toFixed(5)}, ${parseFloat(lng).toFixed(5)}`} />
       </div>
       <div style={{ padding: '5px 8px 7px', borderTop: '1px solid #1e1e1e', display: 'flex', gap: 5, flexWrap: 'wrap' }}>

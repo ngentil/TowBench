@@ -68,6 +68,7 @@ async function run() {
 
     const label = (tags.name || tags['name:en'] || tags.ref || tags.highway || '').trim().toUpperCase() || 'BRIDGE';
     const structType = resolveType(tags);
+    const wt = parseWeight(String(tags.maxweight ?? ''));
 
     records.push([
       parseFloat(center.lat.toFixed(6)),
@@ -75,6 +76,7 @@ async function run() {
       h,
       label,
       structType,
+      wt,  // tonnes, or null
     ]);
   }
 
@@ -85,7 +87,7 @@ async function run() {
   for (const r of records) { const k = r[2].toFixed(1); dist[k] = (dist[k] ?? 0) + 1; }
   for (const [k, v] of Object.entries(dist).sort()) console.log(`  ${k}m: ${v}`);
 
-  const out = { f: ['lat', 'lng', 'h', 'label', 'type'], r: records };
+  const out = { f: ['lat', 'lng', 'h', 'label', 'type', 'maxweight'], r: records };
   writeFileSync(OUT_FILE, JSON.stringify(out));
   console.log(`\nWrote ${OUT_FILE}  (${(JSON.stringify(out).length / 1024).toFixed(1)} KB)`);
 }
@@ -100,6 +102,18 @@ function parseHeight(raw) {
     const inches = ft[2] ? parseInt(ft[2], 10) : 0;
     return parseFloat(((feet * 12 + inches) * 0.0254).toFixed(2));
   }
+  return null;
+}
+
+function parseWeight(raw) {
+  if (!raw) return null;
+  const s = raw.trim().toLowerCase();
+  // "7500 kg" or "7500kg" → tonnes
+  const kg = s.match(/^(\d+(?:\.\d+)?)\s*kg$/);
+  if (kg) return parseFloat((parseFloat(kg[1]) / 1000).toFixed(2));
+  // "3.5 t" or "3.5t" or plain "3.5"
+  const t = s.match(/^(\d+(?:\.\d+)?)\s*t?$/);
+  if (t) return parseFloat(parseFloat(t[1]).toFixed(2));
   return null;
 }
 
