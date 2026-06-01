@@ -616,26 +616,39 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
 
     fetch(BRIDGE_URL)
       .then(r => r.json())
-      .then(geojson => {
+      .then(data => {
         const L = leafletRef.current;
         if (!L || !mapRef.current) return;
         layer.clearLayers();
-        const features = geojson.features || geojson;
-        features.forEach(f => {
-          const coords = f.geometry?.coordinates;
-          if (!coords) return;
-          const [lng, lat] = Array.isArray(coords[0]) ? coords[0] : coords;
-          const props = f.properties || {};
-          const height = props.height_limit ?? props.height ?? props.clearance ?? props.max_height ?? null;
-          const label  = height != null ? `${parseFloat(height).toFixed(1)}m` : '?m';
-          const color  = height == null ? '#888' : parseFloat(height) < 4.0 ? '#cc3333' : parseFloat(height) < 4.5 ? '#cc8822' : '#5a9aee';
+        // Compact format: { f: ['lat','lng','h','label','type'], r: [...] }
+        const records = data.r || data.records || data.features || [];
+        records.forEach(rec => {
+          let lat, lng, height, label, btype;
+          if (Array.isArray(rec)) {
+            // compact: [lat, lng, h, label, type]
+            [lat, lng, height, label, btype] = rec;
+          } else {
+            // GeoJSON feature fallback
+            const coords = rec.geometry?.coordinates;
+            if (!coords) return;
+            [lng, lat] = Array.isArray(coords[0]) ? coords[0] : coords;
+            const p = rec.properties || {};
+            height = p.height_limit ?? p.height ?? p.clearance ?? p.max_height ?? null;
+            label  = p.road_name || p.name || '';
+          }
+          if (lat == null || lng == null || height == null) return;
+          const h = parseFloat(height);
+          const htxt  = h.toFixed(1) + 'm';
+          // colour by clearance: red < 4.0m, amber 4.0–4.6m, blue ≥ 4.6m
+          const color = h < 4.0 ? '#cc3333' : h < 4.6 ? '#cc8822' : '#5a9aee';
+          const tip   = [label, btype].filter(Boolean).join(' · ') || htxt;
           L.marker([lat, lng], {
             icon: L.divIcon({
               className: '',
-              html: `<div style="background:${color}22;border:1px solid ${color}88;color:${color};font-size:8px;font-weight:700;padding:1px 4px;border-radius:2px;white-space:nowrap;font-family:'IBM Plex Mono',monospace;pointer-events:none">${label}</div>`,
-              iconAnchor: [16, 10],
+              html: `<div style="background:${color}22;border:1px solid ${color}88;color:${color};font-size:8px;font-weight:700;padding:1px 4px;border-radius:2px;white-space:nowrap;font-family:'IBM Plex Mono',monospace;pointer-events:none">${htxt}</div>`,
+              iconSize: [36, 16], iconAnchor: [18, 8],
             }),
-          }).bindTooltip(props.road_name || props.name || label, { direction: 'top', className: 'towbench-tooltip' }).addTo(layer);
+          }).bindTooltip(tip, { direction: 'top', className: 'towbench-tooltip' }).addTo(layer);
         });
       })
       .catch(e => console.warn('Bridge heights fetch failed:', e.message));
