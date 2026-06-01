@@ -1,0 +1,36 @@
+name: Fetch Bridge Data
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/fetch-bridges.js'
+      - '.github/workflows/fetch-bridges.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Fetch bridge clearance data from OpenStreetMap
+        run: node scripts/fetch-bridges.js
+
+      - name: Commit updated bridges.json
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add public/bridges.json
+          git diff --staged --quiet && echo "No changes" || (
+            git commit -m "Update bridges.json from OpenStreetMap Overpass API" &&
+            git push
+          )
