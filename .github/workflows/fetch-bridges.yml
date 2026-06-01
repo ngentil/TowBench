@@ -5,6 +5,7 @@ on:
   push:
     paths:
       - 'scripts/fetch-bridges.js'
+      - '.github/workflows/fetch-bridges.yml'
 
 permissions:
   contents: write
