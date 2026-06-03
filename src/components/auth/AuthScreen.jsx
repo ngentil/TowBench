@@ -4,14 +4,16 @@ import { ACC, MUT, BRD, SURF, BG, TXT, GRN, RED, inp, btnA, btnG, sm } from '../
 import { checkUsernameAvailable, generateAvailableUsername } from '../../lib/username';
 
 export default function AuthScreen() {
-  const [mode,            setMode]            = useState('login'); // login | signup | forgot
+  const [mode,            setMode]            = useState('login'); // login | signup | forgot | verify
   const [email,           setEmail]           = useState('');
   const [password,        setPassword]        = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [username,        setUsername]        = useState('');
-  const [availability,    setAvailability]    = useState(null); // null | "checking" | "available" | "taken"
+  const [availability,    setAvailability]    = useState(null);
   const [generating,      setGenerating]      = useState(false);
+  const [otp,             setOtp]             = useState(['','','','','','']);
   const checkRef = useRef(0);
+  const otpRefs  = [useRef(),useRef(),useRef(),useRef(),useRef(),useRef()];
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState('');
   const [message, setMessage] = useState('');
@@ -66,7 +68,7 @@ export default function AuthScreen() {
       if (password !== confirmPassword) { setError("Passwords don't match."); setLoading(false); return; }
       const { error } = await supabase.auth.signUp({ email, password, options: { data: { username: username.trim().toLowerCase() } } });
       if (error) setError(error.message);
-      else setMessage('Check your email to confirm your account.');
+      else { setMode('verify'); setTimeout(() => otpRefs[0].current?.focus(), 100); }
     } else if (mode === 'forgot') {
       const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
       if (error) setError(error.message);
@@ -74,6 +76,65 @@ export default function AuthScreen() {
     }
     setLoading(false);
   };
+
+  const handleOtpChange = (i, val) => {
+    const digit = val.replace(/\D/g, '').slice(-1);
+    const next  = [...otp]; next[i] = digit; setOtp(next);
+    if (digit && i < 5) otpRefs[i + 1].current?.focus();
+    if (next.every(d => d)) verifyOtp(next.join(''));
+  };
+
+  const handleOtpKey = (i, e) => {
+    if (e.key === 'Backspace' && !otp[i] && i > 0) otpRefs[i - 1].current?.focus();
+  };
+
+  const verifyOtp = async (token) => {
+    setLoading(true); setError('');
+    const { error } = await supabase.auth.verifyOtp({ email, token, type: 'signup' });
+    if (error) { setError(error.message); setOtp(['','','','','','']); otpRefs[0].current?.focus(); }
+    setLoading(false);
+  };
+
+  if (mode === 'verify') return (
+    <div style={{ minHeight: '100vh', background: BG, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, fontFamily: "'IBM Plex Mono',monospace" }}>
+      <div style={{ width: '100%', maxWidth: 380 }}>
+        <div style={{ textAlign: 'center', marginBottom: 32 }}>
+          <div style={{ fontSize: 36, marginBottom: 8 }}>🚛</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: ACC, letterSpacing: '0.06em', textTransform: 'uppercase' }}>TowBench</div>
+        </div>
+        <div style={{ background: SURF, border: '1px solid ' + BRD, borderTop: '2px solid ' + ACC, borderRadius: 3, padding: 24 }}>
+          <div style={{ fontSize: 11, color: TXT, fontWeight: 700, marginBottom: 6 }}>Check your email</div>
+          <div style={{ fontSize: 9, color: MUT, marginBottom: 24, lineHeight: 1.7 }}>
+            We sent a 6-digit code to <span style={{ color: TXT }}>{email}</span>. Enter it below to confirm your account.
+          </div>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 16 }}>
+            {otp.map((d, i) => (
+              <input key={i} ref={otpRefs[i]} value={d}
+                onChange={e => handleOtpChange(i, e.target.value)}
+                onKeyDown={e => handleOtpKey(i, e)}
+                onFocus={e => e.target.select()}
+                maxLength={1} inputMode="numeric"
+                style={{ width: 44, height: 52, textAlign: 'center', fontSize: 22, fontWeight: 700,
+                  background: '#0d0d0d', border: '1px solid ' + (d ? ACC : BRD), borderRadius: 2,
+                  color: ACC, fontFamily: "'IBM Plex Mono',monospace", outline: 'none', caretColor: ACC }} />
+            ))}
+          </div>
+          {error && <div style={{ background: RED + '12', border: '1px solid ' + RED + '44', color: RED, fontSize: 10, padding: '8px 12px', borderRadius: 2, marginBottom: 12, lineHeight: 1.5 }}>{error}</div>}
+          <button onClick={() => verifyOtp(otp.join(''))} disabled={loading || otp.some(d => !d)}
+            style={{ ...btnA, width: '100%', padding: '11px 0', fontSize: 10, letterSpacing: '0.1em', opacity: (loading || otp.some(d => !d)) ? 0.4 : 1 }}>
+            {loading ? 'Verifying…' : 'Confirm Account'}
+          </button>
+          <div style={{ textAlign: 'center', marginTop: 14 }}>
+            <button onClick={() => { setMode('signup'); setOtp(['','','','','','']); setError(''); }}
+              style={{ background: 'none', border: 'none', color: MUT, fontSize: 9, cursor: 'pointer', letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'IBM Plex Mono',monospace" }}>
+              ← Back
+            </button>
+          </div>
+        </div>
+        <div style={{ fontSize: 8, color: MUT, textAlign: 'center', marginTop: 24 }}>towbench.com</div>
+      </div>
+    </div>
+  );
 
   return (
     <div style={{ minHeight: '100vh', background: BG, display: 'flex', fontFamily: "'IBM Plex Mono',monospace" }}>
