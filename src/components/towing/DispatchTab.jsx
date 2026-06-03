@@ -108,8 +108,6 @@ export function DispatchModal({ feature, trucks, depots, companyConfig, companyI
   const [searchB,            setSearchB]            = useState('');
   const [searchBResults,     setSearchBResults]     = useState([]);
   const [extraLegs,          setExtraLegs]          = useState([]);
-  const [locatingA,          setLocatingA]          = useState(false);
-  const [locatingB,          setLocatingB]          = useState(false);
 
   const [docketRequired, setDocketRequired] = useState(false);
 
@@ -164,34 +162,6 @@ export function DispatchModal({ feature, trucks, depots, companyConfig, companyI
       setResults(data.map(r => ({ label: r.display_name, lat: parseFloat(r.lat), lng: parseFloat(r.lon) })));
     } catch { setResults([]); }
   }, []);
-
-  const reverseGeocode = useCallback(async (lat, lng) => {
-    try {
-      const res  = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
-      const data = await res.json();
-      const a    = data.address || {};
-      const road   = a.road || a.pedestrian || a.path || '';
-      const suburb = a.suburb || a.town || a.city || a.county || '';
-      return { lat, lng, label: [road, suburb].filter(Boolean).join(', ') || data.display_name || `${lat.toFixed(5)}, ${lng.toFixed(5)}` };
-    } catch {
-      return { lat, lng, label: `${lat.toFixed(5)}, ${lng.toFixed(5)}` };
-    }
-  }, []);
-
-  const useMyLocation = useCallback(async (setPoint, setSearch, setResults, setLocating) => {
-    setLocating(true);
-    try {
-      const coords = await new Promise((res, rej) =>
-        navigator.geolocation.getCurrentPosition(
-          p => res({ lat: p.coords.latitude, lng: p.coords.longitude }),
-          rej, { enableHighAccuracy: true, timeout: 10_000 }
-        )
-      );
-      const p = await reverseGeocode(coords.lat, coords.lng);
-      setPoint(p); setSearch(p.label.split(',')[0].trim()); setResults([]);
-    } catch { /* denied or timeout */ }
-    setLocating(false);
-  }, [reverseGeocode]);
 
   useEffect(() => {
     const t = setTimeout(() => { if (!pointA) geocodeSearch(searchA, setSearchAResults); }, 300);
@@ -360,16 +330,6 @@ export function DispatchModal({ feature, trucks, depots, companyConfig, companyI
               onBlur={() => setTimeout(() => setSearchAResults([]), 150)}
               placeholder="Search address or suburb…"
               style={traceInp} />
-            {navigator.geolocation && !pointA && (
-              <button
-                onClick={() => useMyLocation(setPointA, setSearchA, setSearchAResults, setLocatingA)}
-                disabled={locatingA}
-                style={{ marginTop: 5, width: '100%', padding: '5px 0', borderRadius: 2, cursor: 'pointer',
-                  border: '1px solid #2a4a2a', color: locatingA ? '#444' : GRN, background: '#0a150a',
-                  fontSize: 9, fontWeight: 700, fontFamily: "'IBM Plex Mono',monospace", letterSpacing: '0.06em' }}>
-                {locatingA ? '…locating' : '📍 Use my location'}
-              </button>
-            )}
             {pointA && <div style={{ fontSize: 8, color: GRN, marginTop: 3 }}>🟢 {pointA.label?.split(',').slice(0, 2).join(',')}</div>}
             <AddrDropdown results={searchAResults} onPick={r => { setPointA(r); setSearchA(r.label.split(',')[0].trim()); setSearchAResults([]); }} />
           </div>
@@ -388,16 +348,6 @@ export function DispatchModal({ feature, trucks, depots, companyConfig, companyI
                   onBlur={() => setTimeout(() => setSearchBResults([]), 150)}
                   placeholder="Search address…"
                   style={traceInp} />
-                {navigator.geolocation && !pointB && (
-                  <button
-                    onClick={() => useMyLocation(setPointB, setSearchB, setSearchBResults, setLocatingB)}
-                    disabled={locatingB}
-                    style={{ marginTop: 5, width: '100%', padding: '5px 0', borderRadius: 2, cursor: 'pointer',
-                      border: '1px solid #4a1a1a', color: locatingB ? '#444' : '#cc4444', background: '#150a0a',
-                      fontSize: 9, fontWeight: 700, fontFamily: "'IBM Plex Mono',monospace", letterSpacing: '0.06em' }}>
-                    {locatingB ? '…locating' : '📍 Use my location'}
-                  </button>
-                )}
                 {pointB && <div style={{ fontSize: 8, color: '#cc4444', marginTop: 3 }}>🔴 {pointB.label?.split(',').slice(0, 2).join(',')}</div>}
                 <AddrDropdown results={searchBResults} onPick={r => { setPointB(r); setSearchB(r.label.split(',')[0].trim()); setSearchBResults([]); }} />
               </div>

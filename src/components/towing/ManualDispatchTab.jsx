@@ -345,6 +345,18 @@ export default function ManualDispatchTab({ companyId, companyConfig, userEmail 
             onClearResults={() => setResultsA([])}
             placeholder="Search pickup address…"
           />
+          {!pointA && navigator.geolocation && (
+            <button onClick={async () => {
+              try {
+                const pos = await new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej, { enableHighAccuracy: true, timeout: 10_000 }));
+                const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${pos.coords.latitude}&lon=${pos.coords.longitude}`).then(x => x.json());
+                const a = r.address || {}; const label = [a.road || a.pedestrian || '', a.suburb || a.city || ''].filter(Boolean).join(', ') || r.display_name;
+                setPointA({ lat: pos.coords.latitude, lng: pos.coords.longitude, label }); setSearchA(label.split(',')[0].trim());
+              } catch {}
+            }} style={{ marginTop: 5, width: '100%', padding: '5px 0', borderRadius: 2, cursor: 'pointer', border: '1px solid #2a4a2a', color: GRN, background: '#0a150a', fontSize: 9, fontWeight: 700, fontFamily: "'IBM Plex Mono',monospace", letterSpacing: '0.06em' }}>
+              📍 Use my location
+            </button>
+          )}
           {pointA && <div style={{ fontSize: 7, color: GRN, marginTop: 3 }}>📍 {pointA.label.split(',').slice(0,2).join(',').trim()}</div>}
         </div>
 
@@ -362,6 +374,18 @@ export default function ManualDispatchTab({ companyId, companyConfig, userEmail 
                 onClearResults={() => setResultsB([])}
                 placeholder="Search destination…"
               />
+              {!pointB && navigator.geolocation && (
+                <button onClick={async () => {
+                  try {
+                    const pos = await new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej, { enableHighAccuracy: true, timeout: 10_000 }));
+                    const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${pos.coords.latitude}&lon=${pos.coords.longitude}`).then(x => x.json());
+                    const a = r.address || {}; const label = [a.road || a.pedestrian || '', a.suburb || a.city || ''].filter(Boolean).join(', ') || r.display_name;
+                    setPointB({ lat: pos.coords.latitude, lng: pos.coords.longitude, label }); setSearchB(label.split(',')[0].trim());
+                  } catch {}
+                }} style={{ marginTop: 5, width: '100%', padding: '5px 0', borderRadius: 2, cursor: 'pointer', border: '1px solid #4a1a1a', color: '#cc4444', background: '#150a0a', fontSize: 9, fontWeight: 700, fontFamily: "'IBM Plex Mono',monospace", letterSpacing: '0.06em' }}>
+                  📍 Use my location
+                </button>
+              )}
               {pointB && <div style={{ fontSize: 7, color: '#cc4444', marginTop: 3 }}>📍 {pointB.label.split(',').slice(0,2).join(',').trim()}</div>}
             </div>
           )}
