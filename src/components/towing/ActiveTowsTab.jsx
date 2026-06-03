@@ -91,7 +91,10 @@ function ActiveTowCard({ job, truck, fromDepot, toDepot, onComplete, onCancel })
             <span style={{ color: MUT, fontSize: 8 }}>·</span>
           )}
           {job.tow_fee != null && (
-            <span style={{ fontSize: 10, fontWeight: 700, color: GRN, fontFamily: "'IBM Plex Mono',monospace" }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3,
+              fontSize: 10, fontWeight: 700, color: GRN, fontFamily: "'IBM Plex Mono',monospace",
+              border: '1px solid #2a4a2a', borderRadius: 2, padding: '1px 6px', background: '#0a1a0a' }}>
+              <span style={{ fontSize: 7, fontWeight: 400, color: '#4a8a4a', letterSpacing: '0.08em' }}>EST.</span>
               ${parseFloat(job.tow_fee).toFixed(2)}
             </span>
           )}
