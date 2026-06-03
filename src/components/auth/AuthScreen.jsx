@@ -15,6 +15,7 @@ export default function AuthScreen() {
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState('');
   const [message, setMessage] = useState('');
+  const [agreed,  setAgreed]  = useState(false);
 
   // Reset loading if browser restores page from bfcache after OAuth redirect
   useEffect(() => {
@@ -56,6 +57,7 @@ export default function AuthScreen() {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) setError(error.message);
     } else if (mode === 'signup') {
+      if (!agreed) { setError('You must agree to the Terms, Privacy Policy and Data Retention policy.'); setLoading(false); return; }
       if (!username.trim()) { setError('Username is required.'); setLoading(false); return; }
       if (!/^[a-zA-Z0-9_]{3,20}$/.test(username.trim())) { setError('Username must be 3–20 characters, letters/numbers/underscores only.'); setLoading(false); return; }
       if (availability === 'taken') { setError('That username is already taken — try another.'); setLoading(false); return; }
@@ -173,22 +175,30 @@ export default function AuthScreen() {
               )}
             </div>
 
+            {mode === 'signup' && (
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 14, cursor: 'pointer' }}>
+                <input type="checkbox" checked={agreed} onChange={e => setAgreed(e.target.checked)}
+                  style={{ marginTop: 2, accentColor: ACC, flexShrink: 0 }} />
+                <span style={{ fontSize: 8, color: agreed ? TXT : MUT, lineHeight: 1.7 }}>
+                  I agree to the{' '}
+                  <a href="/terms" onClick={e => e.stopPropagation()} style={{ color: ACC, textDecoration: 'underline', fontFamily: "'IBM Plex Mono',monospace", fontSize: 8 }}>Terms of Service</a>,{' '}
+                  <a href="/privacy" onClick={e => e.stopPropagation()} style={{ color: ACC, textDecoration: 'underline', fontFamily: "'IBM Plex Mono',monospace", fontSize: 8 }}>Privacy Policy</a>{' '}
+                  and{' '}
+                  <a href="/data-retention" onClick={e => e.stopPropagation()} style={{ color: ACC, textDecoration: 'underline', fontFamily: "'IBM Plex Mono',monospace", fontSize: 8 }}>Data Retention Policy</a>.
+                  <span style={{ color: MUT, display: 'block', marginTop: 4 }}>
+                    TowBench collects and retains operational data including job history, location, fleet and dispatch activity. This data may be used to improve the platform.
+                  </span>
+                </span>
+              </label>
+            )}
+
             {error   && <div style={{ background: RED + '12', border: '1px solid ' + RED + '44', color: RED, fontSize: 10, padding: '8px 12px', borderRadius: 2, marginTop: 12, lineHeight: 1.5 }}>{error}</div>}
             {message && <div style={{ background: GRN + '12', border: '1px solid ' + GRN + '44', color: GRN, fontSize: 10, padding: '8px 12px', borderRadius: 2, marginTop: 12, lineHeight: 1.5 }}>{message}</div>}
 
-            <button onClick={handleSubmit} disabled={loading}
-              style={{ ...btnA, width: '100%', marginTop: 16, padding: '11px 0', fontSize: 10, opacity: loading ? 0.6 : 1, letterSpacing: '0.1em' }}>
+            <button onClick={handleSubmit} disabled={loading || (mode === 'signup' && !agreed)}
+              style={{ ...btnA, width: '100%', marginTop: 16, padding: '11px 0', fontSize: 10, opacity: (loading || (mode === 'signup' && !agreed)) ? 0.4 : 1, letterSpacing: '0.1em' }}>
               {loading ? 'Please wait…' : mode === 'login' ? 'Sign In' : mode === 'signup' ? 'Create Account' : 'Send Reset Link'}
             </button>
-
-            {mode === 'signup' && (
-              <div style={{ fontSize: 8, color: MUT, textAlign: 'center', marginTop: 10, lineHeight: 1.7 }}>
-                By creating an account you agree to our{' '}
-                <a href="/terms" style={{ color: ACC, fontSize: 8, fontFamily: "'IBM Plex Mono',monospace", textDecoration: 'underline' }}>Terms of Service</a>
-                {' '}and{' '}
-                <a href="/privacy" style={{ color: ACC, fontSize: 8, fontFamily: "'IBM Plex Mono',monospace", textDecoration: 'underline' }}>Privacy Policy</a>.
-              </div>
-            )}
 
             {mode === 'login' && (
               <div style={{ textAlign: 'center', marginTop: 14 }}>
