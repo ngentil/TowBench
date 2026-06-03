@@ -1010,12 +1010,20 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
                       background: clickTarget === 'A' ? GRN + '11' : 'transparent',
                       fontFamily: "'IBM Plex Mono',monospace",
                     }}>✛</button>
-                  {userPos && (
+                  {navigator.geolocation && (
                     <button
                       onClick={async () => {
                         setLocatingA(true);
-                        const p = await reverseGeocode(userPos.lat, userPos.lng);
-                        setPointA(p); setSearchA(p.label.split(',')[0].trim()); setSearchAResults([]);
+                        try {
+                          const coords = userPos ?? await new Promise((res, rej) =>
+                            navigator.geolocation.getCurrentPosition(
+                              p => res({ lat: p.coords.latitude, lng: p.coords.longitude }),
+                              rej, { enableHighAccuracy: true, timeout: 10_000 }
+                            )
+                          );
+                          const p = await reverseGeocode(coords.lat, coords.lng);
+                          setPointA(p); setSearchA(p.label.split(',')[0].trim()); setSearchAResults([]);
+                        } catch { /* permission denied / timeout */ }
                         setLocatingA(false);
                       }}
                       title="Use my current location"
@@ -1087,12 +1095,20 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
                         background: clickTarget === 'B' ? '#cc444411' : 'transparent',
                         fontFamily: "'IBM Plex Mono',monospace",
                       }}>✛</button>
-                    {userPos && (
+                    {navigator.geolocation && (
                       <button
                         onClick={async () => {
                           setLocatingB(true);
-                          const p = await reverseGeocode(userPos.lat, userPos.lng);
-                          setPointB(p); setSearchB(p.label.split(',')[0].trim()); setSearchBResults([]);
+                          try {
+                            const coords = userPos ?? await new Promise((res, rej) =>
+                              navigator.geolocation.getCurrentPosition(
+                                p => res({ lat: p.coords.latitude, lng: p.coords.longitude }),
+                                rej, { enableHighAccuracy: true, timeout: 10_000 }
+                              )
+                            );
+                            const p = await reverseGeocode(coords.lat, coords.lng);
+                            setPointB(p); setSearchB(p.label.split(',')[0].trim()); setSearchBResults([]);
+                          } catch { /* permission denied / timeout */ }
                           setLocatingB(false);
                         }}
                         title="Use my current location"
