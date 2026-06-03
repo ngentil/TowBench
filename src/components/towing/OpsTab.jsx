@@ -1010,33 +1010,33 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
                       background: clickTarget === 'A' ? GRN + '11' : 'transparent',
                       fontFamily: "'IBM Plex Mono',monospace",
                     }}>✛</button>
-                  {navigator.geolocation && (
-                    <button
-                      onClick={async () => {
-                        setLocatingA(true);
-                        try {
-                          const coords = userPos ?? await new Promise((res, rej) =>
-                            navigator.geolocation.getCurrentPosition(
-                              p => res({ lat: p.coords.latitude, lng: p.coords.longitude }),
-                              rej, { enableHighAccuracy: true, timeout: 10_000 }
-                            )
-                          );
-                          const p = await reverseGeocode(coords.lat, coords.lng);
-                          setPointA(p); setSearchA(p.label.split(',')[0].trim()); setSearchAResults([]);
-                        } catch { /* permission denied / timeout */ }
-                        setLocatingA(false);
-                      }}
-                      title="Use my current location"
-                      disabled={locatingA}
-                      style={{
-                        fontSize: 10, width: 26, borderRadius: 2, cursor: 'pointer', flexShrink: 0,
-                        border: '1px solid #2a4a2a',
-                        color: locatingA ? '#444' : GRN,
-                        background: 'transparent',
-                        fontFamily: "'IBM Plex Mono',monospace",
-                      }}>📍</button>
-                  )}
                 </div>
+                {navigator.geolocation && !pointA && (
+                  <button
+                    onClick={async () => {
+                      setLocatingA(true);
+                      try {
+                        const coords = userPos ?? await new Promise((res, rej) =>
+                          navigator.geolocation.getCurrentPosition(
+                            p => res({ lat: p.coords.latitude, lng: p.coords.longitude }),
+                            rej, { enableHighAccuracy: true, timeout: 10_000 }
+                          )
+                        );
+                        const p = await reverseGeocode(coords.lat, coords.lng);
+                        setPointA(p); setSearchA(p.label.split(',')[0].trim()); setSearchAResults([]);
+                      } catch { /* permission denied / timeout */ }
+                      setLocatingA(false);
+                    }}
+                    disabled={locatingA}
+                    style={{
+                      marginTop: 5, width: '100%', padding: '5px 0', borderRadius: 2, cursor: 'pointer',
+                      border: '1px solid #2a4a2a', color: locatingA ? '#444' : GRN,
+                      background: '#0a150a', fontSize: 9, fontWeight: 700,
+                      fontFamily: "'IBM Plex Mono',monospace", letterSpacing: '0.06em',
+                    }}>
+                    {locatingA ? '…locating' : '📍 Use my location'}
+                  </button>
+                )}
                 {pointA && (
                   <div style={{ fontSize: 7, color: GRN, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     🟢 {pointA.label}
@@ -1095,33 +1095,33 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
                         background: clickTarget === 'B' ? '#cc444411' : 'transparent',
                         fontFamily: "'IBM Plex Mono',monospace",
                       }}>✛</button>
-                    {navigator.geolocation && (
-                      <button
-                        onClick={async () => {
-                          setLocatingB(true);
-                          try {
-                            const coords = userPos ?? await new Promise((res, rej) =>
-                              navigator.geolocation.getCurrentPosition(
-                                p => res({ lat: p.coords.latitude, lng: p.coords.longitude }),
-                                rej, { enableHighAccuracy: true, timeout: 10_000 }
-                              )
-                            );
-                            const p = await reverseGeocode(coords.lat, coords.lng);
-                            setPointB(p); setSearchB(p.label.split(',')[0].trim()); setSearchBResults([]);
-                          } catch { /* permission denied / timeout */ }
-                          setLocatingB(false);
-                        }}
-                        title="Use my current location"
-                        disabled={locatingB}
-                        style={{
-                          fontSize: 10, width: 26, borderRadius: 2, cursor: 'pointer', flexShrink: 0,
-                          border: '1px solid #4a1a1a',
-                          color: locatingB ? '#444' : '#cc4444',
-                          background: 'transparent',
-                          fontFamily: "'IBM Plex Mono',monospace",
-                        }}>📍</button>
-                    )}
                   </div>
+                  {navigator.geolocation && !pointB && (
+                    <button
+                      onClick={async () => {
+                        setLocatingB(true);
+                        try {
+                          const coords = userPos ?? await new Promise((res, rej) =>
+                            navigator.geolocation.getCurrentPosition(
+                              p => res({ lat: p.coords.latitude, lng: p.coords.longitude }),
+                              rej, { enableHighAccuracy: true, timeout: 10_000 }
+                            )
+                          );
+                          const p = await reverseGeocode(coords.lat, coords.lng);
+                          setPointB(p); setSearchB(p.label.split(',')[0].trim()); setSearchBResults([]);
+                        } catch { /* permission denied / timeout */ }
+                        setLocatingB(false);
+                      }}
+                      disabled={locatingB}
+                      style={{
+                        marginTop: 5, width: '100%', padding: '5px 0', borderRadius: 2, cursor: 'pointer',
+                        border: '1px solid #4a1a1a', color: locatingB ? '#444' : '#cc4444',
+                        background: '#150a0a', fontSize: 9, fontWeight: 700,
+                        fontFamily: "'IBM Plex Mono',monospace", letterSpacing: '0.06em',
+                      }}>
+                      {locatingB ? '…locating' : '📍 Use my location'}
+                    </button>
+                  )}
                   {pointB && (
                     <div style={{ fontSize: 7, color: '#cc4444', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       🔴 {pointB.label}
