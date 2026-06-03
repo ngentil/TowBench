@@ -3,6 +3,7 @@ import { supabase } from './lib/supabase';
 import { BG, SURF, BRD, TXT, MUT, ACC, RED, GRN, btnA, btnG, sm } from './lib/styles';
 import TowingSection from './components/towing/TowingSection';
 import { ThemeContext } from './lib/ThemeContext';
+import AuthScreen from './components/auth/AuthScreen';
 
 function getGreeting(name) {
   const h = new Date().getHours();
@@ -718,7 +719,6 @@ export default function App() {
   const [showGreeting,      setShowGreeting]      = useState(false);
   const [greeting,          setGreeting]          = useState('');
   const [showOrigin,        setShowOrigin]        = useState(false);
-  const [loginTab,          setLoginTab]          = useState('driver'); // 'driver' | 'dispatcher'
   const logoClickRef = React.useRef({ count: 0, timer: null });
 
   const THEMES = ['', 'night', 'amber', 'green'];
@@ -819,43 +819,7 @@ export default function App() {
   }
 
   if (!session) {
-    return (
-      <div style={{ minHeight: '100vh', background: BG, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-        <div style={{ width: '100%', maxWidth: 340 }}>
-          <div style={{ marginBottom: 28, textAlign: 'center' }}>
-            <div style={{ fontSize: 22, fontWeight: 700, color: ACC, fontFamily: "'IBM Plex Mono',monospace", letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-              🚛 TowBench
-            </div>
-            <div style={{ fontSize: 9, color: MUT, marginTop: 6, letterSpacing: '0.14em', textTransform: 'uppercase' }}>
-              Tow Fleet &amp; Allocation Management
-            </div>
-          </div>
-
-          {/* Login tab switcher */}
-          <div style={{ display: 'flex', marginBottom: 16, border: '1px solid ' + BRD, borderRadius: 2, overflow: 'hidden' }}>
-            {[
-              { id: 'driver',     label: '🚛 Driver' },
-              { id: 'dispatcher', label: '📋 Dispatcher' },
-              { id: 'owner',      label: '🏢 Owner' },
-            ].map(t => (
-              <button key={t.id} onClick={() => setLoginTab(t.id)}
-                style={{ flex: 1, padding: '8px 0', fontSize: 9, fontWeight: 700, letterSpacing: '0.08em',
-                  textTransform: 'uppercase', cursor: 'pointer', border: 'none',
-                  fontFamily: "'IBM Plex Mono',monospace",
-                  background: loginTab === t.id ? ACC + '22' : 'transparent',
-                  color: loginTab === t.id ? ACC : MUT,
-                  borderBottom: loginTab === t.id ? `2px solid ${ACC}` : '2px solid transparent' }}>
-                {t.label}
-              </button>
-            ))}
-          </div>
-
-          {loginTab === 'driver'     && <DriverFlow onSuccess={() => {}} />}
-          {loginTab === 'dispatcher' && <DispatcherFlow onSuccess={() => {}} />}
-          {loginTab === 'owner'      && <SoleOperatorFlow onSuccess={() => {}} />}
-        </div>
-      </div>
-    );
+    return <AuthScreen />;
   }
 
   if (showGreeting) {
