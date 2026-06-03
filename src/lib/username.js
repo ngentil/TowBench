@@ -24,7 +24,7 @@ export const generateAvailableUsername = async () => {
 };
 
 export const RESERVED_USERNAMES = new Set([
-  'admin','administrator','admins','administration',
+  'administrator','admins','administration',
   'moderator','mod','mods','staff','support','help',
   'towbench','tow_bench','towbench_admin','towbench_support',
   'root','superuser','sysadmin','system','bot','robot',
