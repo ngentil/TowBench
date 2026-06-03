@@ -388,6 +388,8 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
   const [selectedReturnDepotId, setSelectedReturnDepotId] = useState('');
   const [returnDepotPoint,      setReturnDepotPoint]      = useState(null);
   const [routeTrigger,          setRouteTrigger]          = useState(0);
+  const [locatingA,             setLocatingA]             = useState(false);
+  const [locatingB,             setLocatingB]             = useState(false);
   // Custom tab state
   const [customLegTypes,     setCustomLegTypes]     = useState([]);
   const [customLegPcts,      setCustomLegPcts]      = useState([]);
@@ -489,6 +491,20 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
       const data = await res.json();
       setResults(data.map(r => ({ label: r.display_name, lat: parseFloat(r.lat), lng: parseFloat(r.lon) })));
     } catch { setResults([]); }
+  }, []);
+
+  // Reverse geocode GPS coords to a short address label
+  const reverseGeocode = useCallback(async (lat, lng) => {
+    try {
+      const res  = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+      const data = await res.json();
+      const a    = data.address || {};
+      const road = a.road || a.pedestrian || a.path || '';
+      const suburb = a.suburb || a.town || a.city || a.county || '';
+      return { lat, lng, label: [road, suburb].filter(Boolean).join(', ') || data.display_name || `${lat.toFixed(5)}, ${lng.toFixed(5)}` };
+    } catch {
+      return { lat, lng, label: `${lat.toFixed(5)}, ${lng.toFixed(5)}` };
+    }
   }, []);
 
   useEffect(() => {
@@ -994,6 +1010,24 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
                       background: clickTarget === 'A' ? GRN + '11' : 'transparent',
                       fontFamily: "'IBM Plex Mono',monospace",
                     }}>✛</button>
+                  {userPos && (
+                    <button
+                      onClick={async () => {
+                        setLocatingA(true);
+                        const p = await reverseGeocode(userPos.lat, userPos.lng);
+                        setPointA(p); setSearchA(p.label.split(',')[0].trim()); setSearchAResults([]);
+                        setLocatingA(false);
+                      }}
+                      title="Use my current location"
+                      disabled={locatingA}
+                      style={{
+                        fontSize: 10, width: 26, borderRadius: 2, cursor: 'pointer', flexShrink: 0,
+                        border: '1px solid #2a4a2a',
+                        color: locatingA ? '#444' : GRN,
+                        background: 'transparent',
+                        fontFamily: "'IBM Plex Mono',monospace",
+                      }}>📍</button>
+                  )}
                 </div>
                 {pointA && (
                   <div style={{ fontSize: 7, color: GRN, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -1053,6 +1087,24 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
                         background: clickTarget === 'B' ? '#cc444411' : 'transparent',
                         fontFamily: "'IBM Plex Mono',monospace",
                       }}>✛</button>
+                    {userPos && (
+                      <button
+                        onClick={async () => {
+                          setLocatingB(true);
+                          const p = await reverseGeocode(userPos.lat, userPos.lng);
+                          setPointB(p); setSearchB(p.label.split(',')[0].trim()); setSearchBResults([]);
+                          setLocatingB(false);
+                        }}
+                        title="Use my current location"
+                        disabled={locatingB}
+                        style={{
+                          fontSize: 10, width: 26, borderRadius: 2, cursor: 'pointer', flexShrink: 0,
+                          border: '1px solid #4a1a1a',
+                          color: locatingB ? '#444' : '#cc4444',
+                          background: 'transparent',
+                          fontFamily: "'IBM Plex Mono',monospace",
+                        }}>📍</button>
+                    )}
                   </div>
                   {pointB && (
                     <div style={{ fontSize: 7, color: '#cc4444', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
