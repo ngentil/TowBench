@@ -11,9 +11,9 @@ export default function AuthScreen() {
   const [username,        setUsername]        = useState('');
   const [availability,    setAvailability]    = useState(null);
   const [generating,      setGenerating]      = useState(false);
-  const [otp,             setOtp]             = useState(['','','','','','']);
+  const [otp,             setOtp]             = useState(['','','','','','','','']);
   const checkRef = useRef(0);
-  const otpRefs  = [useRef(),useRef(),useRef(),useRef(),useRef(),useRef()];
+  const otpRefs  = [useRef(),useRef(),useRef(),useRef(),useRef(),useRef(),useRef(),useRef()];
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState('');
   const [message, setMessage] = useState('');
@@ -80,7 +80,7 @@ export default function AuthScreen() {
   const handleOtpChange = (i, val) => {
     const digit = val.replace(/\D/g, '').slice(-1);
     const next  = [...otp]; next[i] = digit; setOtp(next);
-    if (digit && i < 5) otpRefs[i + 1].current?.focus();
+    if (digit && i < 7) otpRefs[i + 1].current?.focus();
     if (next.every(d => d)) verifyOtp(next.join(''));
   };
 
@@ -125,7 +125,7 @@ export default function AuthScreen() {
             {loading ? 'Verifying…' : 'Confirm Account'}
           </button>
           <div style={{ textAlign: 'center', marginTop: 14 }}>
-            <button onClick={() => { setMode('signup'); setOtp(['','','','','','']); setError(''); }}
+            <button onClick={() => { setMode('signup'); setOtp(['','','','','','','','']); setError(''); }}
               style={{ background: 'none', border: 'none', color: MUT, fontSize: 9, cursor: 'pointer', letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'IBM Plex Mono',monospace" }}>
               ← Back
             </button>
