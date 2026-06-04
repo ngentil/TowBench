@@ -142,6 +142,7 @@ export default function BridgesTab({ userPos }) {
   const [sortBy,     setSortBy]     = useState('distance');
   const [showSort,   setShowSort]   = useState(false);
   const [nearbyKm,   setNearbyKm]   = useState(() => Number(localStorage.getItem('towbench_bridge_nearby_km') ?? 10));
+  const [subTab,     setSubTab]     = useState('bridges'); // 'bridges' | 'service'
   const sortRef = useRef(null);
 
   const setRadius = km => { setNearbyKm(km); localStorage.setItem('towbench_bridge_nearby_km', km); };
@@ -168,16 +169,21 @@ export default function BridgesTab({ userPos }) {
   const withDist = useMemo(() => bridges.map(rec => ({
     rec,
     dist: userPos ? haversineKm(userPos.lat, userPos.lng, rec[0], rec[1]) : null,
+    isService: String(rec[3] || '').trim().toUpperCase() === 'SERVICE',
   })), [bridges, userPos]);
+
+  const serviceCount = useMemo(() => withDist.filter(e => e.isService).length, [withDist]);
 
   const filtered = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
-    return withDist.filter(({ rec }) => {
+    return withDist.filter(({ rec, isService }) => {
+      if (subTab === 'service'  && !isService) return false;
+      if (subTab === 'bridges'  &&  isService) return false;
       if (!q) return true;
       const [, , , label, btype] = rec;
       return [label, btype].join(' ').toLowerCase().includes(q);
     });
-  }, [withDist, searchTerm]);
+  }, [withDist, searchTerm, subTab]);
 
   const sorted = useMemo(() => [...filtered].sort((a, b) => {
     switch (sortBy) {
@@ -202,7 +208,7 @@ export default function BridgesTab({ userPos }) {
         <div>
           <div style={{ fontSize: 13, fontWeight: 700, color: TXT, letterSpacing: '0.06em' }}>🌉 Bridge Heights</div>
           <div style={{ fontSize: 9, color: MUT, marginTop: 2 }}>
-            OpenStreetMap · {filtered.length} posted clearance restriction{filtered.length !== 1 ? 's' : ''}
+            OpenStreetMap · {filtered.length} {subTab === 'service' ? 'service entr' : 'clearance restriction'}{filtered.length !== 1 ? (subTab === 'service' ? 'ies' : 's') : (subTab === 'service' ? 'y' : '')}
             {critCount  > 0 && <span style={{ color: '#cc3333', marginLeft: 8 }}>· {critCount} &lt;4m</span>}
             {tightCount > 0 && <span style={{ color: '#cc8822', marginLeft: 8 }}>· {tightCount} tight</span>}
             {critNearCount > 0 && <span style={{ color: '#cc2222', marginLeft: 8 }}>· {critNearCount} nearby</span>}
@@ -237,6 +243,23 @@ export default function BridgesTab({ userPos }) {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Sub-tab switcher */}
+      <div style={{ display: 'flex', borderRadius: 2, overflow: 'hidden', border: '1px solid #2a2a2a', marginBottom: 10 }}>
+        {[
+          { id: 'bridges', label: `🌉 Bridges (${withDist.length - serviceCount})` },
+          { id: 'service', label: `🏪 Service Entries (${serviceCount})` },
+        ].map(st => (
+          <button key={st.id} onClick={() => { setSubTab(st.id); setSearchTerm(''); }}
+            style={{ flex: 1, padding: '7px 0', fontSize: 9, fontWeight: 700, letterSpacing: '0.06em',
+              textTransform: 'uppercase', fontFamily: "'IBM Plex Mono',monospace", cursor: 'pointer',
+              border: 'none', background: subTab === st.id ? ACC + '22' : 'transparent',
+              color: subTab === st.id ? ACC : MUT,
+              borderBottom: subTab === st.id ? `2px solid ${ACC}` : '2px solid transparent' }}>
+            {st.label}
+          </button>
+        ))}
       </div>
 
       {/* Search */}
