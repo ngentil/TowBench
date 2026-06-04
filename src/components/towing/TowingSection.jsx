@@ -10,6 +10,7 @@ import TowAnalyticsTab from './TowAnalyticsTab';
 import TowInsTab from './TowInsTab';
 import DriversTab from './DriversTab';
 import ActiveTowsTab from './ActiveTowsTab';
+import CompletedTowsTab from './CompletedTowsTab';
 import ManualDispatchTab from './ManualDispatchTab';
 import BrandingTab from '../admin/BrandingTab';
 import PricingTab from '../admin/PricingTab';
@@ -17,12 +18,14 @@ import DriverApprovalsTab from '../admin/DriverApprovalsTab';
 import MyTowsTab from './MyTowsTab';
 import BridgesTab from './BridgesTab';
 import AlertsTab from './AlertsTab';
+import TabOrderSettings from '../settings/TabOrderSettings';
+import { applyTabOrder } from '../../lib/tabOrder';
 const VICROADS_PROXY = '/.netlify/functions/vicroads-allocations';
 import useDriverLocation from '../../hooks/useDriverLocation';
 
 const POLL_MS = 60_000;
 
-export default function TowingSection({ role, isAdmin, isDispatch, userEmail, companyId, companyConfig, setCompanyConfig }) {
+export default function TowingSection({ role, isAdmin, isDispatch, userEmail, companyId, companyConfig, setCompanyConfig, profile, setProfile }) {
   const [isStandalone,      setIsStandalone]      = useState(false);
   const [standaloneChecked, setStandaloneChecked] = useState(false);
   const [inviteBannerOpen,  setInviteBannerOpen]  = useState(false);
@@ -51,29 +54,61 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, co
   //   dispatch:            Allocations, Map, Analytics, Fleet
   //   admin:               All above + Settings
   //   super_admin:         All tabs
-  const TABS = [
-    { id: 'allocations',  label: '🚦 Tow Allocations',  roles: ['driver','dispatch','admin','super_admin'] },
-    { id: 'dispatch',     label: '🚨 Dispatch',          roles: ['dispatch','admin','super_admin'] },
-    { id: 'activetows',   label: '🚛 Active Tows',       roles: ['dispatch','admin','super_admin'] },
-    { id: 'towins',       label: '🏭 Tow Ins',           roles: ['driver','dispatch','admin','super_admin'] },
-    { id: 'drivers',      label: '👤 Drivers',           roles: ['dispatch','admin','super_admin'] },
-    { id: 'depots',       label: '🏢 Depots',            roles: ['dispatch','admin','super_admin'] },
-    { id: 'fleet',        label: '🚛 Fleet',              roles: ['dispatch','admin','super_admin'] },
-    { id: 'ops',          label: '🗺 Map',               roles: ['driver','dispatch','admin','super_admin'] },
-    { id: 'bridges',      label: '🌉 Bridges',           roles: ['driver','dispatch','admin','super_admin'] },
-    { id: 'waze',         label: '🗺 Waze',              roles: ['dispatch','admin','super_admin'] },
-    { id: 'mytows',       label: '📋 My Tows',           roles: ['driver'], standaloneOnly: true },
-    { id: 'analytics',    label: '📊 Analytics',         roles: ['dispatch','admin','super_admin'] },
-    { id: 'pricing',      label: '💰 Pricing',           roles: ['admin','super_admin'] },
-    { id: 'branding',     label: '🎨 Branding',          roles: ['admin','super_admin'] },
-    { id: 'approvals',    label: '✅ Approvals',          roles: ['admin','super_admin'] },
-  ].filter(t => {
+  const ALL_TABS = [
+    { id: 'allocations',   label: '🚦 Tow Allocations',  roles: ['driver','dispatch','admin','super_admin'] },
+    { id: 'dispatch',      label: '🚨 Dispatch',          roles: ['dispatch','admin','super_admin'] },
+    { id: 'activetows',    label: '🚛 Active Tows',       roles: ['dispatch','admin','super_admin'] },
+    { id: 'completedtows', label: '✓ Completed Tows',     roles: ['dispatch','admin','super_admin'] },
+    { id: 'towins',        label: '🏭 Tow Ins',           roles: ['driver','dispatch','admin','super_admin'] },
+    { id: 'drivers',       label: '👤 Drivers',           roles: ['dispatch','admin','super_admin'] },
+    { id: 'depots',        label: '🏢 Depots',            roles: ['dispatch','admin','super_admin'] },
+    { id: 'fleet',         label: '🚛 Fleet',              roles: ['dispatch','admin','super_admin'] },
+    { id: 'ops',           label: '🗺 Map',               roles: ['driver','dispatch','admin','super_admin'] },
+    { id: 'bridges',       label: '🌉 Bridges',           roles: ['driver','dispatch','admin','super_admin'] },
+    { id: 'waze',          label: '🗺 Waze',              roles: ['dispatch','admin','super_admin'] },
+    { id: 'mytows',        label: '📋 My Tows',           roles: ['driver'], standaloneOnly: true },
+    { id: 'analytics',     label: '📊 Analytics',         roles: ['dispatch','admin','super_admin'] },
+    { id: 'pricing',       label: '💰 Pricing',           roles: ['admin','super_admin'] },
+    { id: 'branding',      label: '🎨 Branding',          roles: ['admin','super_admin'] },
+    { id: 'approvals',     label: '✅ Approvals',          roles: ['admin','super_admin'] },
+  ];
+
+  // Role + standalone filter
+  const roleTabs = ALL_TABS.filter(t => {
     if (role && !t.roles.includes(role)) return false;
     if (t.standaloneOnly && !isStandalone) return false;
     return true;
   });
 
-  const [tab, setTab] = useState('allocations');
+  // Apply saved order and hidden prefs
+  const [localTabPrefs, setLocalTabPrefs] = useState(profile?.tab_preferences ?? {});
+
+  // Sync when profile loads asynchronously (first load profile is null)
+  const prevProfilePrefs = useRef(null);
+  useEffect(() => {
+    const incoming = profile?.tab_preferences;
+    if (incoming && incoming !== prevProfilePrefs.current) {
+      prevProfilePrefs.current = incoming;
+      setLocalTabPrefs(incoming);
+    }
+  }, [profile?.tab_preferences]);
+
+  const orderedTabs = applyTabOrder(roleTabs, localTabPrefs?.order);
+  const hiddenSet   = new Set(localTabPrefs?.hidden ?? []);
+  const TABS        = orderedTabs.filter(t => !hiddenSet.has(t.id));
+
+  // setTabPrefs: update localTabPrefs + propagate to parent profile
+  const setTabPrefs = (prefs) => {
+    setLocalTabPrefs(prefs);
+    prevProfilePrefs.current = prefs;
+    if (setProfile) setProfile(prev => ({ ...prev, tab_preferences: prefs }));
+  };
+
+  const [tab, setTab] = useState(() => {
+    // Start on first visible tab
+    const firstId = orderedTabs.find(t => !hiddenSet.has(t.id))?.id;
+    return firstId || 'allocations';
+  });
 
   // Single GPS watch for the whole session — persists across tab switches.
   // Returns { lat, lng } | null; also writes to driver_locations with company_id.
@@ -258,6 +293,12 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, co
             {t.label}
           </button>
         ))}
+        {/* Tab order settings — always visible, pinned to the right */}
+        <div style={{ flex: 1 }} />
+        <button onClick={() => setTab('taborder')}
+          style={{ flexShrink: 0, padding: '8px 14px', fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: tab === 'taborder' ? ACC : MUT, cursor: 'pointer', border: 'none', background: 'none', borderBottom: tab === 'taborder' ? '2px solid ' + ACC : '2px solid transparent', fontFamily: "'IBM Plex Mono',monospace", whiteSpace: 'nowrap' }}>
+          ⇅ Tabs
+        </button>
       </div>
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         {tab === 'allocations' && (
@@ -288,7 +329,16 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, co
         {tab === 'waze'       && <AlertsTab />}
         {tab === 'mytows'     && <MyTowsTab userEmail={userEmail} />}
         {tab === 'dispatch'   && <ManualDispatchTab companyId={companyId} companyConfig={companyConfig} userEmail={userEmail} />}
-        {tab === 'activetows' && <ActiveTowsTab companyId={companyId} companyConfig={companyConfig} userEmail={userEmail} />}
+        {tab === 'activetows'    && <ActiveTowsTab companyId={companyId} companyConfig={companyConfig} userEmail={userEmail} />}
+        {tab === 'completedtows' && <CompletedTowsTab companyId={companyId} />}
+        {tab === 'taborder'      && (
+          <TabOrderSettings
+            userId={profile?.id}
+            availableTabs={roleTabs}
+            tabPrefs={localTabPrefs}
+            setTabPrefs={setTabPrefs}
+          />
+        )}
         {tab === 'towins' && (
           <TowInsTab companyId={companyId} userEmail={userEmail} isDispatch={isDispatch} companyConfig={companyConfig} />
         )}
