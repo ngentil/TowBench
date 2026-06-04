@@ -889,6 +889,7 @@ export default function App() {
             userEmail={session?.user?.email}
             companyId={profile?.company_id}
             companyConfig={companyConfig} setCompanyConfig={setCompanyConfig}
+            profile={profile} setProfile={setProfile}
           />
         </ThemeContext.Provider>
       </div>
