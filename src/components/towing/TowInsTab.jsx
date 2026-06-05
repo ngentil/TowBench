@@ -512,7 +512,7 @@ function TowInForm({ record, formDepots, allDepots, userEmail, companyId, storag
 }
 
 // ─── Card ──────────────────────────────────────────────────────────────────────
-function TowInCard({ record, allDepots, transfers, photos, storageTypes, isDispatch, onEdit, onRelease, onTransfer, onPhotos, searchTerm, companyConfig }) {
+function TowInCard({ record, allDepots, transfers, photos, storageTypes, isDispatch, onEdit, onRelease, onTransfer, onPhotos, onDelete, searchTerm, companyConfig }) {
   const [open, setOpen] = useState(false);
 
   const xfers      = transfers[record.id] || [];
@@ -626,6 +626,10 @@ function TowInCard({ record, allDepots, transfers, photos, storageTypes, isDispa
               color: photoCount > 0 ? ACC : MUT,
               borderColor: photoCount > 0 ? ACC + '55' : undefined }}>
             📷{photoCount > 0 ? ` ${photoCount}` : ''}
+          </button>
+          <button onClick={e => { e.stopPropagation(); onDelete(record); }}
+            style={{ ...btnG, ...sm, fontSize: 7, color: '#664444', borderColor: '#3a1a1a' }}>
+            ✕
           </button>
           <span style={{ fontSize: 8, color: MUT }}>{open ? '▲' : '▼'}</span>
         </div>
@@ -803,6 +807,16 @@ export default function TowInsTab({ companyId, userEmail, isDispatch, companyCon
     setEditRecord(null);
   };
 
+  const handleDelete = async record => {
+    if (!confirm(`Delete tow-in for ${record.plate}? This cannot be undone.`)) return;
+    const { error } = await supabase.from('tow_ins').delete().eq('id', record.id);
+    if (!error) {
+      setRecords(prev => prev.filter(r => r.id !== record.id));
+      setPhotosMap(prev => { const next = { ...prev }; delete next[record.id]; return next; });
+      setTransfers(prev => { const next = { ...prev }; delete next[record.id]; return next; });
+    }
+  };
+
   const handleRelease = async record => {
     const { data, error } = await supabase.from('tow_ins')
       .update({ date_out: new Date().toISOString() }).eq('id', record.id).select().single();
@@ -847,6 +861,7 @@ export default function TowInsTab({ companyId, userEmail, isDispatch, companyCon
     onRelease: handleRelease,
     onTransfer: (rec, fromDepotId) => setXferTarget({ record: rec, fromDepotId }),
     onPhotos: rec => setPhotoTarget(rec),
+    onDelete: handleDelete,
     searchTerm: search.trim(),
     companyConfig,
   });
