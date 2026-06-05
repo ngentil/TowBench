@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { ACC, MUT, BRD, TXT, GRN, RED, SURF, inp, sel, txa, btnA, btnG, btnD, sm, ovly, mdl, mdlH, mdlB, mdlF } from '../../lib/styles';
 import { FL } from '../ui/shared';
 import { supabase } from '../../lib/supabase';
-import { getDepots, getTrucks, upsertTruck, deleteTruck } from '../../lib/db/towing';
+import { getTrucks, upsertTruck } from '../../lib/db/towing';
 import { RosterCalendar, MiniRoster } from './RosterCalendar';
 
 const ORANGE = '#e8870a';
@@ -280,7 +280,6 @@ function AvailabilityModal({ truck, onSave, onCancel }) {
 }
 
 export default function FleetTab({ isAdmin, companyId }) {
-  const [depots,  setDepots]  = useState([]);
   const [trucks,  setTrucks]  = useState([]);
   const [loading, setLoading] = useState(true);
   const [err,     setErr]     = useState('');
@@ -289,8 +288,8 @@ export default function FleetTab({ isAdmin, companyId }) {
 
   const load = useCallback(async () => {
     try {
-      const [ds, ts] = await Promise.all([getDepots(), getTrucks()]);
-      setDepots(ds); setTrucks(ts); setErr('');
+      const ts = await getTrucks();
+      setTrucks(ts); setErr('');
     } catch (e) { setErr(e.message); }
     finally { setLoading(false); }
   }, []);
@@ -312,7 +311,6 @@ export default function FleetTab({ isAdmin, companyId }) {
     } catch (e) { alert(`Delete failed: ${e.message}`); }
   };
 
-  const depotMap  = new Map(depots.map(d => [d.id, d]));
   const available = trucks.filter(t => t.status === 'available').length;
   const onJob     = trucks.filter(t => t.status === 'on job').length;
 
@@ -340,7 +338,6 @@ export default function FleetTab({ isAdmin, companyId }) {
       {trucks.map(truck => (
         <TruckRow
           key={truck.id} truck={truck} isAdmin={isAdmin}
-          depot={depotMap.get(truck.depot_id) ?? null}
           onEdit={() => setTruckForm(truck)}
           onDelete={() => handleDeleteTruck(truck)}
           onAvail={() => setAvailModal(truck)}
@@ -460,7 +457,7 @@ function AccessCodesPanel() {
   );
 }
 
-function TruckRow({ truck, isAdmin, depot, onEdit, onDelete, onAvail }) {
+function TruckRow({ truck, isAdmin, onEdit, onDelete, onAvail }) {
   const hasOverride = truck.override_active;
   const hasRelief   = !!(truck.relief_driver_name || truck.relief_da_number);
   const sc          = hasOverride && !hasRelief ? RED : statusColor(truck.status);
@@ -486,11 +483,6 @@ function TruckRow({ truck, isAdmin, depot, onEdit, onDelete, onAvail }) {
           <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 2, alignItems: 'center' }}>
             {truck.truck_type && (
               <span style={{ fontSize: 8, color: MUT, fontFamily: "'IBM Plex Mono',monospace" }}>{truck.truck_type}</span>
-            )}
-            {depot && (
-              <span style={{ fontSize: 7, color: ACC, border: `1px solid ${ACC}44`, borderRadius: 2, padding: '0px 4px', fontFamily: "'IBM Plex Mono',monospace" }}>
-                {depot.name}
-              </span>
             )}
           </div>
           {hasOverride && truck.override_return_date && (
