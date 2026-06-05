@@ -527,22 +527,40 @@ export function DispatchModal({ feature, trucks, depots, companyConfig, companyI
 export function CompleteModal({ job, trucks, depots, storageTypes, companyId, userEmail, onSave, onCancel }) {
   const [status,        setStatus]        = useState('in_yard');
   const [plate,         setPlate]         = useState('');
-  const [makeModel,     setMakeModel]     = useState('');
+  const [make,          setMake]          = useState('');
+  const [model,         setModel]         = useState('');
   const [storageTypeId, setStorageTypeId] = useState(storageTypes[0]?.id || '');
   const [chargeTo,      setChargeTo]      = useState('');
   const [notes,         setNotes]         = useState('');
+  const [photos,        setPhotos]        = useState([]); // [{ file, preview }]
   const [saving,        setSaving]        = useState(false);
   const [err,           setErr]           = useState('');
+  const [userId,        setUserId]        = useState(null);
+  const photoRef = useRef(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setUserId(data?.user?.id));
+    return () => photos.forEach(p => URL.revokeObjectURL(p.preview));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const truck = trucks.find(t => t.id === job.truck_id);
   const depot = depots.find(d => d.id === (job.to_depot_id || job.from_depot_id));
+
+  const addPhotos = (files) => {
+    setPhotos(prev => [...prev, ...Array.from(files).map(file => ({ file, preview: URL.createObjectURL(file) }))]);
+  };
+  const removePhoto = (idx) => {
+    setPhotos(prev => { URL.revokeObjectURL(prev[idx].preview); return prev.filter((_, i) => i !== idx); });
+  };
 
   const confirm = async () => {
     if (status === 'in_yard'   && !plate.trim())    { setErr('Plate is required.'); return; }
     if (status === 'cancelled' && !chargeTo.trim()) { setErr('Charge To reference is required.'); return; }
     setSaving(true); setErr('');
 
-    const { error: tiErr } = await supabase.from('tow_ins').insert({
+    const makeModel = [make.trim(), model.trim()].filter(Boolean).join(' ') || null;
+
+    const { data: towIn, error: tiErr } = await supabase.from('tow_ins').insert({
       company_id:        companyId,
       dispatched_job_id: job.id,
       plate:             plate.trim().toUpperCase() || (status === 'cancelled' ? 'CANCELLED' : 'UNKNOWN'),
@@ -553,19 +571,39 @@ export function CompleteModal({ job, trucks, depots, storageTypes, companyId, us
       tow_fee:           job.tow_fee || null,
       distance_km:       job.distance_km || null,
       tow_type:          job.tow_type || null,
-      make_model:        makeModel.trim() || null,
+      make_model:        makeModel,
+      make:              make.trim() || null,
+      model:             model.trim() || null,
       notes:             notes.trim() || null,
       charge_to:         status === 'cancelled' ? chargeTo.trim() : null,
       cancelled:         status === 'cancelled',
       created_by:        userEmail,
-    });
+    }).select().single();
+
     if (tiErr) { setErr(tiErr.message); setSaving(false); return; }
 
-    await supabase.from('dispatched_jobs')
-      .update({
-        status:       status === 'cancelled' ? 'cancelled' : 'completed',
-        completed_at: new Date().toISOString(),
-      }).eq('id', job.id);
+    // Upload photos
+    if (photos.length > 0 && towIn?.id && userId) {
+      for (const { file } of photos) {
+        try {
+          const ext  = file.name.split('.').pop() || 'jpg';
+          const path = `${userId}/${towIn.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+          const { error: upErr } = await supabase.storage
+            .from('tow-in-photos').upload(path, file, { upsert: false });
+          if (!upErr) {
+            await supabase.from('tow_in_photos').insert({
+              tow_in_id: towIn.id, company_id: companyId,
+              path, file_name: file.name, created_by: userEmail,
+            });
+          }
+        } catch (_) { /* non-fatal */ }
+      }
+    }
+
+    await supabase.from('dispatched_jobs').update({
+      status:       status === 'cancelled' ? 'cancelled' : 'completed',
+      completed_at: new Date().toISOString(),
+    }).eq('id', job.id);
 
     setSaving(false);
     onSave();
@@ -579,18 +617,20 @@ export function CompleteModal({ job, trucks, depots, storageTypes, companyId, us
           <button style={{ ...btnG, ...sm }} onClick={onCancel}>✕</button>
         </div>
         <div style={{ ...mdlB, display: 'flex', flexDirection: 'column', gap: 12 }}>
+
           {/* Job summary */}
           <div style={{ background: '#0a0a0a', border: '1px solid #1e1e1e', borderRadius: 2, padding: '8px 10px' }}>
             <div style={{ fontSize: 10, color: TXT, fontWeight: 700 }}>{job.pickup_label}</div>
             <div style={{ fontSize: 8, color: MUT, marginTop: 2 }}>
               {truck ? `${truck.plate}${truck.first_name ? ` · ${truck.first_name}` : ''}` : '—'}
               {job.distance_km ? ` · ${parseFloat(job.distance_km).toFixed(1)} km` : ''}
-              {job.tow_fee    ? ` · $${parseFloat(job.tow_fee).toFixed(2)}` : ''}
-              {job.tow_type   ? <span style={{ color: job.tow_type === 'accident' ? '#cc4444' : '#2299aa', marginLeft: 4 }}> {job.tow_type}</span> : null}
+              {job.tow_fee     ? ` · $${parseFloat(job.tow_fee).toFixed(2)}` : ''}
+              {job.tow_type    ? <span style={{ color: job.tow_type === 'accident' ? '#cc4444' : '#2299aa', marginLeft: 4 }}> {job.tow_type}</span> : null}
             </div>
+            {depot && <div style={{ fontSize: 8, color: ACC, marginTop: 3 }}>🏢 {depot.name}{depot.suburb ? ` · ${depot.suburb}` : ''}</div>}
           </div>
 
-          {/* Outcome toggle */}
+          {/* Outcome */}
           <div>
             <FL t="Outcome" />
             <div style={{ display: 'flex', gap: 6 }}>
@@ -609,16 +649,19 @@ export function CompleteModal({ job, trucks, depots, storageTypes, companyId, us
 
           {status === 'in_yard' && (
             <>
+              <div>
+                <FL t="Plate *" />
+                <input style={inp} value={plate} onChange={e => setPlate(e.target.value.toUpperCase())}
+                  placeholder="ABC123" autoFocus autoCapitalize="characters" />
+              </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <div>
-                  <FL t="Plate *" />
-                  <input style={inp} value={plate} onChange={e => setPlate(e.target.value.toUpperCase())}
-                    placeholder="ABC123" autoFocus autoCapitalize="characters" />
+                  <FL t="Make" />
+                  <input style={inp} value={make} onChange={e => setMake(e.target.value)} placeholder="Toyota" />
                 </div>
                 <div>
-                  <FL t="Make / Model" />
-                  <input style={inp} value={makeModel} onChange={e => setMakeModel(e.target.value)}
-                    placeholder="Toyota Camry" />
+                  <FL t="Model" />
+                  <input style={inp} value={model} onChange={e => setModel(e.target.value)} placeholder="Camry" />
                 </div>
               </div>
               {storageTypes.length > 0 && (
@@ -626,13 +669,35 @@ export function CompleteModal({ job, trucks, depots, storageTypes, companyId, us
                   <FL t="Storage Type" />
                   <select style={inp} value={storageTypeId} onChange={e => setStorageTypeId(e.target.value)}>
                     {storageTypes.map(s => (
-                      <option key={s.id} value={s.id}>
-                        {s.name} · ${parseFloat(s.daily_rate).toFixed(2)}/day
-                      </option>
+                      <option key={s.id} value={s.id}>{s.name} · ${parseFloat(s.daily_rate).toFixed(2)}/day</option>
                     ))}
                   </select>
                 </div>
               )}
+              {/* Photos */}
+              <div>
+                <FL t="Photos" />
+                {photos.length > 0 && (
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+                    {photos.map((p, i) => (
+                      <div key={i} style={{ position: 'relative' }}>
+                        <img src={p.preview} alt=""
+                          style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 2, border: '1px solid #2a2a2a', display: 'block' }} />
+                        <button onClick={() => removePhoto(i)}
+                          style={{ position: 'absolute', top: 2, right: 2, width: 16, height: 16, borderRadius: '50%',
+                            background: RED, border: 'none', color: '#fff', fontSize: 9, cursor: 'pointer',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>✕</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <button onClick={() => photoRef.current?.click()} style={{ ...btnG, ...sm, fontSize: 8 }}>
+                  📷 Add Photos
+                </button>
+                <input ref={photoRef} type="file" accept="image/*" multiple capture="environment"
+                  style={{ display: 'none' }}
+                  onChange={e => { if (e.target.files?.length) addPhotos(e.target.files); e.target.value = ''; }} />
+              </div>
             </>
           )}
 
