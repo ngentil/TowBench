@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 import { ACC, MUT, BRD, TXT, GRN, RED, SURF, inp, sel, btnA, btnG, btnD, sm } from '../../lib/styles';
 import { FL } from '../ui/shared';
+import { getTrucks, getDepots } from '../../lib/db/towing';
 
 const ORANGE = '#e8870a';
 
@@ -112,12 +113,9 @@ export default function ManualDispatchTab({ companyId, companyConfig, userEmail 
   const [err,     setErr]     = useState('');
 
   useEffect(() => {
-    if (!companyId) return;
-    supabase.from('tow_trucks').select('id,plate,truck_type,depot_id,auth_email').eq('company_id', companyId)
-      .then(({ data }) => setTrucks(data || []));
-    supabase.from('depots').select('id,name,suburb,lat,lng').eq('company_id', companyId)
-      .then(({ data }) => setDepots(data || []));
-  }, [companyId]);
+    getTrucks().then(data => setTrucks(data || [])).catch(() => {});
+    getDepots().then(data => setDepots(data || [])).catch(() => {});
+  }, []);
 
   // Auto-pick depot when truck changes
   useEffect(() => {
