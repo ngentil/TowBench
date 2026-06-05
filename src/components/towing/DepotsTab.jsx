@@ -231,16 +231,14 @@ export default function DepotsTab({ isAdmin, companyId }) {
             {depots.length} depot{depots.length !== 1 ? 's' : ''}
           </div>
         </div>
-        {isAdmin && (
-          <button onClick={() => setDepotForm({})} style={{ ...btnA, ...sm, fontSize: 8 }}>+ Add Depot</button>
-        )}
+        <button onClick={() => setDepotForm({})} style={{ ...btnA, ...sm, fontSize: 8 }}>+ Add Depot</button>
       </div>
       {err && <div style={{ fontSize: 9, color: RED, marginBottom: 12 }}>{err}</div>}
       {loading && <div style={{ fontSize: 10, color: MUT, textAlign: 'center', padding: '32px 0' }}>Loading depots…</div>}
       {!loading && depots.length === 0 && (
         <div style={{ fontSize: 10, color: MUT, textAlign: 'center', padding: '32px 0', lineHeight: 1.8 }}>
-          No depots yet.
-          {isAdmin && <><br /><button onClick={() => setDepotForm({})} style={{ ...btnA, ...sm, marginTop: 8 }}>Add First Depot</button></>}
+          No depots yet.<br />
+          <button onClick={() => setDepotForm({})} style={{ ...btnA, ...sm, marginTop: 8 }}>Add First Depot</button>
         </div>
       )}
       {depots.map(depot => {
@@ -266,12 +264,8 @@ export default function DepotsTab({ isAdmin, companyId }) {
                 )}
               </div>
               <div style={{ display: 'flex', gap: 4, flexShrink: 0, alignItems: 'center' }}>
-                {isAdmin && (
-                  <>
-                    <button onClick={e => { e.stopPropagation(); setDepotForm(depot); }} style={{ ...btnG, ...sm, fontSize: 8 }}>Edit</button>
-                    <button onClick={e => { e.stopPropagation(); handleDeleteDepot(depot); }} style={{ ...btnD, ...sm, fontSize: 8 }}>Delete</button>
-                  </>
-                )}
+                {isAdmin && <button onClick={e => { e.stopPropagation(); setDepotForm(depot); }} style={{ ...btnG, ...sm, fontSize: 8 }}>Edit</button>}
+                <button onClick={e => { e.stopPropagation(); handleDeleteDepot(depot); }} style={{ ...btnD, ...sm, fontSize: 8 }}>Delete</button>
                 <span style={{ fontSize: 9, color: MUT, marginLeft: 4 }}>{isOpen ? '▲' : '▼'}</span>
               </div>
             </div>
@@ -297,22 +291,18 @@ export default function DepotsTab({ isAdmin, companyId }) {
                             <div style={{ fontSize: 8, color: MUT, marginTop: 2, fontFamily: "'IBM Plex Mono',monospace" }}>{truck.truck_type}</div>
                           )}
                         </div>
-                        {isAdmin && (
-                          <button onClick={() => handleUnassignTruck(truck)}
-                            style={{ fontSize: 8, color: '#884040', border: '1px solid #3a1a1a', background: 'none', borderRadius: 2, padding: '3px 7px', cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", whiteSpace: 'nowrap', flexShrink: 0 }}>
-                            Remove
-                          </button>
-                        )}
+                        <button onClick={() => handleUnassignTruck(truck)}
+                          style={{ fontSize: 8, color: '#884040', border: '1px solid #3a1a1a', background: 'none', borderRadius: 2, padding: '3px 7px', cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", whiteSpace: 'nowrap', flexShrink: 0 }}>
+                          Remove
+                        </button>
                       </div>
                     );
                   })
                 )}
-                {isAdmin && (
-                  <button onClick={() => setAssignModal(depot)}
-                    style={{ fontSize: 8, color: MUT, border: '1px dashed #2a2a2a', borderRadius: 2, background: 'transparent', padding: '4px 10px', cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", marginTop: 4 }}>
-                    + Assign truck to {depot.name}
-                  </button>
-                )}
+                <button onClick={() => setAssignModal(depot)}
+                  style={{ fontSize: 8, color: MUT, border: '1px dashed #2a2a2a', borderRadius: 2, background: 'transparent', padding: '4px 10px', cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", marginTop: 4 }}>
+                  + Assign truck to {depot.name}
+                </button>
               </div>
             )}
           </div>
