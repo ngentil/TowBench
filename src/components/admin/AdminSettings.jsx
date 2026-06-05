@@ -166,23 +166,27 @@ export default function AdminSettings({ companyConfig, setCompanyConfig, company
   };
 
   const saveBranding = async () => {
+    if (!companyId) { setBrandErr('No company ID — cannot save.'); return; }
     setSaving(true); setSaved(false); setBrandErr('');
     const payload = {
+      company_id:   companyId,
       company_name: name.trim() || 'TowBench',
       accent_color: accent,
-      logo_url: logo.trim() || null,
-      updated_at: new Date().toISOString(),
+      logo_url:     logo.trim() || null,
+      updated_at:   new Date().toISOString(),
     };
     const { data, error } = await supabase.from('company_config')
-      .update(payload).eq('company_id', companyId).select().single();
+      .upsert(payload, { onConflict: 'company_id' }).select().single();
     setSaving(false);
     if (error) { setBrandErr(error.message); return; }
     if (data) { setCompanyConfig(data); setSaved(true); setTimeout(() => setSaved(false), 2500); }
   };
 
   const savePricing = async () => {
+    if (!companyId) { setPriceErr('No company ID — cannot save pricing.'); return; }
     setPriceSaving(true); setPriceSaved(false); setPriceErr('');
     const payload = {
+      company_id:                companyId,
       trade_base_fee:            parseFloat(tradeBaseFee)    || 0,
       accident_base_fee:         parseFloat(accidentBaseFee) || 0,
       trade_per_km_fee:          parseFloat(tradePerKm)      || 0,
@@ -201,7 +205,7 @@ export default function AdminSettings({ companyConfig, setCompanyConfig, company
       updated_at: new Date().toISOString(),
     };
     const { data, error } = await supabase.from('company_config')
-      .update(payload).eq('company_id', companyId).select().single();
+      .upsert(payload, { onConflict: 'company_id' }).select().single();
     setPriceSaving(false);
     if (error) { setPriceErr(error.message); return; }
     if (data) { setCompanyConfig(data); setPriceSaved(true); setTimeout(() => setPriceSaved(false), 2500); }
