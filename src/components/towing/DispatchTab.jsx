@@ -525,7 +525,10 @@ export function DispatchModal({ feature, trucks, depots, companyConfig, companyI
 
 // ─── Complete modal ────────────────────────────────────────────────────────────
 export function CompleteModal({ job, trucks, depots, storageTypes, companyId, userEmail, onSave, onCancel }) {
-  const [status,        setStatus]        = useState('in_yard');
+  const hasTowIn = !!job.to_depot_id; // only log a tow-in if the job destination was a depot
+  const depot    = hasTowIn ? depots.find(d => d.id === job.to_depot_id) : null;
+
+  const [status,        setStatus]        = useState(hasTowIn ? 'in_yard' : 'completed');
   const [plate,         setPlate]         = useState('');
   const [make,          setMake]          = useState('');
   const [model,         setModel]         = useState('');
@@ -544,7 +547,6 @@ export function CompleteModal({ job, trucks, depots, storageTypes, companyId, us
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const truck = trucks.find(t => t.id === job.truck_id);
-  const depot = depots.find(d => d.id === (job.to_depot_id || job.from_depot_id));
 
   const addPhotos = (files) => {
     setPhotos(prev => [...prev, ...Array.from(files).map(file => ({ file, preview: URL.createObjectURL(file) }))]);
@@ -554,49 +556,48 @@ export function CompleteModal({ job, trucks, depots, storageTypes, companyId, us
   };
 
   const confirm = async () => {
-    if (status === 'in_yard'   && !plate.trim())    { setErr('Plate is required.'); return; }
-    if (status === 'cancelled' && !chargeTo.trim()) { setErr('Charge To reference is required.'); return; }
+    if (hasTowIn && status === 'in_yard' && !plate.trim()) { setErr('Plate is required.'); return; }
+    if (status === 'cancelled' && !chargeTo.trim())         { setErr('Charge To reference is required.'); return; }
     setSaving(true); setErr('');
 
-    const makeModel = [make.trim(), model.trim()].filter(Boolean).join(' ') || null;
+    // Only insert a tow_in if the job destination was a depot
+    if (hasTowIn && status !== 'cancelled') {
+      const makeModel = [make.trim(), model.trim()].filter(Boolean).join(' ') || null;
+      const { data: towIn, error: tiErr } = await supabase.from('tow_ins').insert({
+        company_id:        companyId,
+        dispatched_job_id: job.id,
+        plate:             plate.trim().toUpperCase() || 'UNKNOWN',
+        vehicle_type:      'motor_car',
+        storage_type_id:   storageTypeId || null,
+        depot_id:          depot?.id || null,
+        date_in:           new Date().toISOString(),
+        tow_fee:           job.tow_fee || null,
+        distance_km:       job.distance_km || null,
+        tow_type:          job.tow_type || null,
+        make_model:        makeModel,
+        make:              make.trim() || null,
+        model:             model.trim() || null,
+        notes:             notes.trim() || null,
+        created_by:        userEmail,
+      }).select().single();
 
-    const { data: towIn, error: tiErr } = await supabase.from('tow_ins').insert({
-      company_id:        companyId,
-      dispatched_job_id: job.id,
-      plate:             plate.trim().toUpperCase() || (status === 'cancelled' ? 'CANCELLED' : 'UNKNOWN'),
-      vehicle_type:      'motor_car',
-      storage_type_id:   status === 'in_yard' ? (storageTypeId || null) : null,
-      depot_id:          depot?.id || null,
-      date_in:           new Date().toISOString(),
-      tow_fee:           job.tow_fee || null,
-      distance_km:       job.distance_km || null,
-      tow_type:          job.tow_type || null,
-      make_model:        makeModel,
-      make:              make.trim() || null,
-      model:             model.trim() || null,
-      notes:             notes.trim() || null,
-      charge_to:         status === 'cancelled' ? chargeTo.trim() : null,
-      cancelled:         status === 'cancelled',
-      created_by:        userEmail,
-    }).select().single();
+      if (tiErr) { setErr(tiErr.message); setSaving(false); return; }
 
-    if (tiErr) { setErr(tiErr.message); setSaving(false); return; }
-
-    // Upload photos
-    if (photos.length > 0 && towIn?.id && userId) {
-      for (const { file } of photos) {
-        try {
-          const ext  = file.name.split('.').pop() || 'jpg';
-          const path = `${userId}/${towIn.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-          const { error: upErr } = await supabase.storage
-            .from('tow-in-photos').upload(path, file, { upsert: false });
-          if (!upErr) {
-            await supabase.from('tow_in_photos').insert({
-              tow_in_id: towIn.id, company_id: companyId,
-              path, file_name: file.name, created_by: userEmail,
-            });
-          }
-        } catch (_) { /* non-fatal */ }
+      if (photos.length > 0 && towIn?.id && userId) {
+        for (const { file } of photos) {
+          try {
+            const ext  = file.name.split('.').pop() || 'jpg';
+            const path = `${userId}/${towIn.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+            const { error: upErr } = await supabase.storage
+              .from('tow-in-photos').upload(path, file, { upsert: false });
+            if (!upErr) {
+              await supabase.from('tow_in_photos').insert({
+                tow_in_id: towIn.id, company_id: companyId,
+                path, file_name: file.name, created_by: userEmail,
+              });
+            }
+          } catch (_) { /* non-fatal */ }
+        }
       }
     }
 
@@ -608,6 +609,10 @@ export function CompleteModal({ job, trucks, depots, storageTypes, companyId, us
     setSaving(false);
     onSave();
   };
+
+  const outcomeOptions = hasTowIn
+    ? [['in_yard', '✓ Vehicle in Yard', GRN], ['cancelled', '✗ Job Cancelled', RED]]
+    : [['completed', '✓ Job Completed', GRN], ['cancelled', '✗ Job Cancelled', RED]];
 
   return (
     <div style={ovly} onClick={e => e.target === e.currentTarget && onCancel()}>
@@ -628,13 +633,18 @@ export function CompleteModal({ job, trucks, depots, storageTypes, companyId, us
               {job.tow_type    ? <span style={{ color: job.tow_type === 'accident' ? '#cc4444' : '#2299aa', marginLeft: 4 }}> {job.tow_type}</span> : null}
             </div>
             {depot && <div style={{ fontSize: 8, color: ACC, marginTop: 3 }}>🏢 {depot.name}{depot.suburb ? ` · ${depot.suburb}` : ''}</div>}
+            {!hasTowIn && (
+              <div style={{ fontSize: 7, color: MUT, marginTop: 3, fontStyle: 'italic' }}>
+                No depot destination — completing as tow job only (no tow-in record)
+              </div>
+            )}
           </div>
 
           {/* Outcome */}
           <div>
             <FL t="Outcome" />
             <div style={{ display: 'flex', gap: 6 }}>
-              {[['in_yard', '✓ Vehicle in Yard', GRN], ['cancelled', '✗ Job Cancelled', RED]].map(([val, label, col]) => (
+              {outcomeOptions.map(([val, label, col]) => (
                 <button key={val} onClick={() => setStatus(val)}
                   style={{ flex: 1, fontSize: 9, padding: '7px 0', borderRadius: 2, cursor: 'pointer',
                     fontFamily: "'IBM Plex Mono',monospace",
@@ -647,7 +657,8 @@ export function CompleteModal({ job, trucks, depots, storageTypes, companyId, us
             </div>
           </div>
 
-          {status === 'in_yard' && (
+          {/* Tow-in fields: only when destination was a depot */}
+          {hasTowIn && status === 'in_yard' && (
             <>
               <div>
                 <FL t="Plate *" />
@@ -703,11 +714,13 @@ export function CompleteModal({ job, trucks, depots, storageTypes, companyId, us
 
           {status === 'cancelled' && (
             <>
-              <div>
-                <FL t="Plate (if known)" />
-                <input style={inp} value={plate} onChange={e => setPlate(e.target.value.toUpperCase())}
-                  placeholder="Optional" autoCapitalize="characters" />
-              </div>
+              {hasTowIn && (
+                <div>
+                  <FL t="Plate (if known)" />
+                  <input style={inp} value={plate} onChange={e => setPlate(e.target.value.toUpperCase())}
+                    placeholder="Optional" autoCapitalize="characters" />
+                </div>
+              )}
               <div>
                 <FL t="Charge To *" />
                 <input style={inp} value={chargeTo} onChange={e => setChargeTo(e.target.value)}
