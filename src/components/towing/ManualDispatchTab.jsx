@@ -112,11 +112,14 @@ export default function ManualDispatchTab({ companyId, companyConfig, userEmail 
   const [err,     setErr]     = useState('');
 
   useEffect(() => {
-    if (!companyId) return;
-    supabase.from('tow_trucks').select('id,plate,truck_type,depot_id,auth_email').eq('company_id', companyId)
-      .then(({ data }) => setTrucks(data || []));
-    supabase.from('depots').select('id,name,suburb,lat,lng').eq('company_id', companyId)
-      .then(({ data }) => setDepots(data || []));
+    const truckQ = supabase.from('tow_trucks').select('id,plate,truck_type,depot_id,auth_email');
+    const depotQ = supabase.from('depots').select('id,name,suburb,lat,lng');
+    if (companyId) {
+      truckQ.eq('company_id', companyId);
+      depotQ.eq('company_id', companyId);
+    }
+    truckQ.then(({ data }) => setTrucks(data || []));
+    depotQ.then(({ data }) => setDepots(data || []));
   }, [companyId]);
 
   // Auto-pick depot when truck changes

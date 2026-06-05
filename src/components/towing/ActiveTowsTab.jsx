@@ -150,24 +150,19 @@ export default function ActiveTowsTab({ companyId, companyConfig, userEmail }) {
   const [completeJob,  setCompleteJob]  = useState(null);
 
   const loadJobs = useCallback(async () => {
-    if (!companyId) return;
-    const { data } = await supabase
-      .from('dispatched_jobs')
-      .select('*')
-      .eq('company_id', companyId)
-      .eq('status', 'in_progress')
-      .order('dispatched_at', { ascending: false });
+    let q = supabase.from('dispatched_jobs').select('*').eq('status', 'in_progress').order('dispatched_at', { ascending: false });
+    if (companyId) q = q.eq('company_id', companyId);
+    const { data } = await q;
     setJobs(data || []);
     setLoading(false);
   }, [companyId]);
 
   useEffect(() => {
-    if (!companyId) return;
-    Promise.all([
-      supabase.from('tow_trucks').select('id,plate,truck_type,depot_id').eq('company_id', companyId),
-      supabase.from('depots').select('id,name,suburb').eq('company_id', companyId),
-      supabase.from('storage_types').select('*').eq('company_id', companyId).order('daily_rate', { ascending: false }),
-    ]).then(([t, d, s]) => {
+    const tq = supabase.from('tow_trucks').select('id,plate,truck_type,depot_id');
+    const dq = supabase.from('depots').select('id,name,suburb');
+    const sq = supabase.from('storage_types').select('*').order('daily_rate', { ascending: false });
+    if (companyId) { tq.eq('company_id', companyId); dq.eq('company_id', companyId); sq.eq('company_id', companyId); }
+    Promise.all([tq, dq, sq]).then(([t, d, s]) => {
       setTrucks(t.data || []);
       setDepots(d.data || []);
       setStorageTypes(s.data || []);

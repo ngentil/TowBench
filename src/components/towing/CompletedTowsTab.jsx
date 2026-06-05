@@ -135,15 +135,14 @@ export default function CompletedTowsTab({ companyId }) {
   const [filter,  setFilter]  = useState('all'); // 'all' | 'completed' | 'cancelled'
 
   const loadJobs = useCallback(async (off = 0, append = false) => {
-    if (!companyId) return;
     setLoading(true);
     let query = supabase
       .from('dispatched_jobs')
       .select('*')
-      .eq('company_id', companyId)
       .order('completed_at', { ascending: false, nullsLast: true })
       .order('dispatched_at', { ascending: false })
       .range(off, off + PAGE);
+    if (companyId) query = query.eq('company_id', companyId);
 
     if (filter === 'completed') query = query.eq('status', 'completed');
     else if (filter === 'cancelled') query = query.eq('status', 'cancelled');
@@ -159,11 +158,10 @@ export default function CompletedTowsTab({ companyId }) {
   }, [companyId, filter]);
 
   useEffect(() => {
-    if (!companyId) return;
-    Promise.all([
-      supabase.from('tow_trucks').select('id,plate,truck_type,depot_id').eq('company_id', companyId),
-      supabase.from('depots').select('id,name,suburb').eq('company_id', companyId),
-    ]).then(([t, d]) => {
+    const tq = supabase.from('tow_trucks').select('id,plate,truck_type,depot_id');
+    const dq = supabase.from('depots').select('id,name,suburb');
+    if (companyId) { tq.eq('company_id', companyId); dq.eq('company_id', companyId); }
+    Promise.all([tq, dq]).then(([t, d]) => {
       setTrucks(t.data || []);
       setDepots(d.data || []);
     });
