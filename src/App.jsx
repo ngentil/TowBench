@@ -715,6 +715,7 @@ export default function App() {
   const [authChecked,       setAuthChecked]       = useState(false);
   const [profile,           setProfile]           = useState(null); // user_profiles row
   const [truck,             setTruck]             = useState(null); // tow_trucks row (drivers only)
+  const [effectiveCompanyId, setEffectiveCompanyId] = useState(null); // null for super_admin until resolved
   const [companyConfig,     setCompanyConfig]     = useState({ company_name: 'TowBench', accent_color: '#e8670a', logo_url: null });
   const [showGreeting,      setShowGreeting]      = useState(false);
   const [greeting,          setGreeting]          = useState('');
@@ -773,23 +774,33 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Company config: load by company_id once profile is known, subscribe to changes
+  // Company config: load by company_id once profile is known, subscribe to changes.
+  // super_admin has company_id = null — fall back to the first company in the DB.
   useEffect(() => {
-    if (!profile?.company_id) return;
+    if (!profile) return;
     const applyConfig = cfg => {
       setCompanyConfig(cfg);
       if (cfg.accent_color) document.documentElement.style.setProperty('--acc', cfg.accent_color);
     };
-    supabase.from('company_config').select('*').eq('company_id', profile.company_id).single()
-      .then(({ data }) => { if (data) applyConfig(data); })
-      .catch(() => {});
-    const chan = supabase.channel('company_config_changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'company_config',
-          filter: `company_id=eq.${profile.company_id}` },
-          payload => { if (payload.new) applyConfig(payload.new); })
-      .subscribe();
-    return () => supabase.removeChannel(chan);
-  }, [profile?.company_id]);
+    const setup = async (cid) => {
+      setEffectiveCompanyId(cid);
+      const { data } = await supabase.from('company_config').select('*').eq('company_id', cid).single();
+      if (data) applyConfig(data);
+      const chan = supabase.channel('company_config_changes_' + cid)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'company_config',
+            filter: `company_id=eq.${cid}` },
+            payload => { if (payload.new) applyConfig(payload.new); })
+        .subscribe();
+      return () => supabase.removeChannel(chan);
+    };
+    if (profile.company_id) {
+      setup(profile.company_id);
+    } else if (profile.role === 'super_admin') {
+      // Resolve to first available company
+      supabase.from('companies').select('id').order('created_at').limit(1).single()
+        .then(({ data }) => { if (data?.id) setup(data.id); });
+    }
+  }, [profile?.company_id, profile?.role]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const signOut = () => {
     if (session?.user?.id) sessionStorage.removeItem(`towbench_greeted_${session.user.id}`);
@@ -887,7 +898,7 @@ export default function App() {
           <TowingSection
             role={role} isAdmin={isAdmin} isDispatch={isDispatch}
             userEmail={session?.user?.email}
-            companyId={profile?.company_id}
+            companyId={effectiveCompanyId}
             companyConfig={companyConfig} setCompanyConfig={setCompanyConfig}
             profile={profile} setProfile={setProfile}
           />
