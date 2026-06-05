@@ -16,20 +16,29 @@ function ahSurcharge(cfg) {
   return (t >= start || t < end) ? (parseFloat(isWE ? cfg.after_hours_fee_weekend : cfg.after_hours_fee_weekday) || 0) : 0;
 }
 
-function calcPrice(totalKm, cfg, towType, twoUpTrade, twoUpAccident) {
+function calcPriceBreakdown(totalKm, cfg, towType, twoUpTrade, twoUpAccident) {
   if (!cfg || !totalKm) return null;
-  const sur = ahSurcharge(cfg);
+  const sur      = ahSurcharge(cfg);
   const allowAcc = cfg.allow_accident_twoup ?? false;
-  const result = {};
+  const result   = {};
+
   if (towType === 'accident' || towType === 'both') {
-    const base = parseFloat(cfg.accident_base_fee) || 0;
-    const km   = Math.max(0, totalKm - 8) * (parseFloat(cfg.accident_per_km_fee) || 0);
-    if (base > 0) result.accident = (base + km + sur) * ((twoUpAccident && allowAcc) ? 2 : 1);
+    const base     = parseFloat(cfg.accident_base_fee) || 0;
+    const freeKm   = 8;
+    const billable = Math.max(0, totalKm - freeKm);
+    const perKm    = parseFloat(cfg.accident_per_km_fee) || 0;
+    const kmCharge = billable * perKm;
+    const mul      = (twoUpAccident && allowAcc) ? 2 : 1;
+    if (base > 0) result.accident = { base, freeKm, billable, perKm, kmCharge, sur, mul, total: (base + kmCharge + sur) * mul };
   }
   if (towType === 'trade' || towType === 'both') {
-    const base = parseFloat(cfg.trade_base_fee) || 0;
-    const km   = Math.max(0, totalKm - 10) * (parseFloat(cfg.trade_per_km_fee) || 0);
-    if (base > 0) result.trade = (base + km + sur) * (twoUpTrade ? 2 : 1);
+    const base     = parseFloat(cfg.trade_base_fee) || 0;
+    const freeKm   = 10;
+    const billable = Math.max(0, totalKm - freeKm);
+    const perKm    = parseFloat(cfg.trade_per_km_fee) || 0;
+    const kmCharge = billable * perKm;
+    const mul      = twoUpTrade ? 2 : 1;
+    if (base > 0) result.trade = { base, freeKm, billable, perKm, kmCharge, sur, mul, total: (base + kmCharge + sur) * mul };
   }
   return Object.keys(result).length ? result : null;
 }
@@ -181,8 +190,8 @@ export default function ManualDispatchTab({ companyId, companyConfig, userEmail 
     return () => { cancelled = true; };
   }, [fromDepot, fromDepotPoint, pointA, destEnabled, pointB, extraStops, returnDepot, returnDepotPoint]);
 
-  const price = route ? calcPrice(route.km, companyConfig, towType, twoUpTrade, twoUpAccident) : null;
-  const totalFee = price ? (typeof price === 'number' ? price : (price.accident ?? 0) + (price.trade ?? 0)) : null;
+  const breakdown = route ? calcPriceBreakdown(route.km, companyConfig, towType, twoUpTrade, twoUpAccident) : null;
+  const totalFee  = breakdown ? ((breakdown.accident?.total ?? 0) + (breakdown.trade?.total ?? 0)) || null : null;
 
   const reset = () => {
     setTruckId(''); setTowType('accident'); setTwoUpTrade(false); setTwoUpAccident(false);
@@ -419,27 +428,90 @@ export default function ManualDispatchTab({ companyId, companyConfig, userEmail 
               <span style={{ fontSize: 9, color: MUT }}>Calculating route…</span>
             ) : route && (
               <>
-                <div style={{ display: 'flex', gap: 10, alignItems: 'baseline', flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: ORANGE, fontFamily: "'IBM Plex Mono',monospace" }}>
+                {/* Total distance + time */}
+                <div style={{ display: 'flex', gap: 10, alignItems: 'baseline', marginBottom: 6 }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: ORANGE, fontFamily: "'IBM Plex Mono',monospace" }}>
                     {route.km.toFixed(1)} km
                   </span>
                   <span style={{ fontSize: 9, color: MUT }}>~{route.min} min</span>
-                  {price?.accident != null && (
-                    <span style={{ fontSize: 10, color: RED, fontFamily: "'IBM Plex Mono',monospace" }}>
-                      Acc ${price.accident.toFixed(2)}
-                    </span>
-                  )}
-                  {price?.trade != null && (
-                    <span style={{ fontSize: 10, color: ACC, fontFamily: "'IBM Plex Mono',monospace" }}>
-                      Trade ${price.trade.toFixed(2)}
-                    </span>
-                  )}
                 </div>
+
+                {/* Leg breakdown */}
                 {route.legs.map((leg, i) => (
-                  <div key={i} style={{ fontSize: 8, color: MUT, marginTop: 4, fontFamily: "'IBM Plex Mono',monospace" }}>
-                    {leg.label} · {leg.km.toFixed(1)} km
+                  <div key={i} style={{ fontSize: 8, color: MUT, fontFamily: "'IBM Plex Mono',monospace", marginBottom: 2,
+                    display: 'flex', justifyContent: 'space-between' }}>
+                    <span>{leg.label}</span>
+                    <span style={{ color: '#444' }}>{leg.km.toFixed(1)} km</span>
                   </div>
                 ))}
+
+                {/* Pricing breakdown */}
+                {breakdown && (
+                  <div style={{ marginTop: 10, borderTop: '1px solid #1a1a1a', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {[['accident', breakdown.accident, RED], ['trade', breakdown.trade, ACC]].map(([type, bd, col]) => {
+                      if (!bd) return null;
+                      const { base, freeKm, billable, perKm, kmCharge, sur, mul, total } = bd;
+                      return (
+                        <div key={type}>
+                          <div style={{ fontSize: 7, color: col, letterSpacing: '0.1em', textTransform: 'uppercase',
+                            fontWeight: 700, marginBottom: 5, fontFamily: "'IBM Plex Mono',monospace" }}>
+                            {type}
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, fontFamily: "'IBM Plex Mono',monospace" }}>
+                              <span style={{ color: MUT }}>Base fee</span>
+                              <span style={{ color: TXT }}>${base.toFixed(2)}</span>
+                            </div>
+                            {perKm > 0 && (
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, fontFamily: "'IBM Plex Mono',monospace" }}>
+                                <span style={{ color: MUT }}>
+                                  {billable > 0
+                                    ? <>{billable.toFixed(1)} km × ${perKm.toFixed(2)}/km <span style={{ color: '#333' }}>(first {freeKm} km free)</span></>
+                                    : <span style={{ color: '#333' }}>0 km billable (first {freeKm} km free)</span>}
+                                </span>
+                                <span style={{ color: billable > 0 ? TXT : '#333' }}>+${kmCharge.toFixed(2)}</span>
+                              </div>
+                            )}
+                            {sur > 0 && (
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, fontFamily: "'IBM Plex Mono',monospace" }}>
+                                <span style={{ color: '#cc8844' }}>After hours surcharge</span>
+                                <span style={{ color: '#cc8844' }}>+${sur.toFixed(2)}</span>
+                              </div>
+                            )}
+                            {mul > 1 && (
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, fontFamily: "'IBM Plex Mono',monospace" }}>
+                                <span style={{ color: ACC }}>Two-up multiplier</span>
+                                <span style={{ color: ACC }}>× {mul}</span>
+                              </div>
+                            )}
+                            <div style={{ borderTop: '1px solid #1e1e1e', paddingTop: 4, marginTop: 1,
+                              display: 'flex', justifyContent: 'space-between' }}>
+                              <span style={{ fontSize: 9, color: MUT }}>Total</span>
+                              <span style={{ fontSize: 13, fontWeight: 700, color: col, fontFamily: "'IBM Plex Mono',monospace" }}>
+                                ${total.toFixed(2)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {breakdown.accident && breakdown.trade && (
+                      <div style={{ borderTop: '1px solid #252525', paddingTop: 8,
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: 9, color: MUT, fontFamily: "'IBM Plex Mono',monospace" }}>Combined total</span>
+                        <span style={{ fontSize: 14, fontWeight: 700, color: GRN, fontFamily: "'IBM Plex Mono',monospace" }}>
+                          ${((breakdown.accident?.total ?? 0) + (breakdown.trade?.total ?? 0)).toFixed(2)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {!breakdown && companyConfig && (
+                  <div style={{ marginTop: 8, fontSize: 8, color: '#333', fontFamily: "'IBM Plex Mono',monospace" }}>
+                    No pricing configured — set fees in Settings
+                  </div>
+                )}
               </>
             )}
           </div>
