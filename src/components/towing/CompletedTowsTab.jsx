@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { ACC, MUT, BRD, TXT, GRN, RED, SURF } from '../../lib/styles';
 import { supabase } from '../../lib/supabase';
 import { fmtShort } from '../../lib/utils';
+import { getTrucks, getDepots } from '../../lib/db/towing';
 
 const ORANGE = '#e8870a';
 const PAGE = 50;
@@ -158,15 +159,12 @@ export default function CompletedTowsTab({ companyId }) {
   }, [companyId, filter]);
 
   useEffect(() => {
-    const tq = supabase.from('tow_trucks').select('id,plate,truck_type,depot_id');
-    const dq = supabase.from('depots').select('id,name,suburb');
-    if (companyId) { tq.eq('company_id', companyId); dq.eq('company_id', companyId); }
-    Promise.all([tq, dq]).then(([t, d]) => {
-      setTrucks(t.data || []);
-      setDepots(d.data || []);
+    Promise.all([getTrucks(), getDepots()]).then(([trucks, depots]) => {
+      setTrucks(trucks || []);
+      setDepots(depots || []);
     });
     loadJobs(0);
-  }, [companyId, loadJobs]);
+  }, [loadJobs]);
 
   const completedCount  = jobs.filter(j => j.status === 'completed').length;
   const cancelledCount  = jobs.filter(j => j.status === 'cancelled').length;

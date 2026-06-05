@@ -3,6 +3,7 @@ import { ACC, MUT, BRD, TXT, GRN, RED, SURF } from '../../lib/styles';
 import { supabase } from '../../lib/supabase';
 import { fmtShort, fmtTimer } from '../../lib/utils';
 import { CompleteModal } from './DispatchTab';
+import { getTrucks, getDepots } from '../../lib/db/towing';
 
 const ORANGE = '#e8870a';
 
@@ -158,13 +159,11 @@ export default function ActiveTowsTab({ companyId, companyConfig, userEmail }) {
   }, [companyId]);
 
   useEffect(() => {
-    const tq = supabase.from('tow_trucks').select('id,plate,truck_type,depot_id');
-    const dq = supabase.from('depots').select('id,name,suburb');
     const sq = supabase.from('storage_types').select('*').order('daily_rate', { ascending: false });
-    if (companyId) { tq.eq('company_id', companyId); dq.eq('company_id', companyId); sq.eq('company_id', companyId); }
-    Promise.all([tq, dq, sq]).then(([t, d, s]) => {
-      setTrucks(t.data || []);
-      setDepots(d.data || []);
+    if (companyId) sq.eq('company_id', companyId);
+    Promise.all([getTrucks(), getDepots(), sq]).then(([trucks, depots, s]) => {
+      setTrucks(trucks || []);
+      setDepots(depots || []);
       setStorageTypes(s.data || []);
     });
     loadJobs();
