@@ -28,6 +28,7 @@ function StorageSection({ companyId }) {
   }, [companyId]);
 
   const addType = async () => {
+    if (!companyId) { setErr('No company ID — cannot save.'); return; }
     if (!newName.trim()) { setErr('Name is required.'); return; }
     const rate = parseFloat(newRate);
     if (isNaN(rate) || rate < 0) { setErr('Enter a valid daily rate.'); return; }
@@ -114,8 +115,10 @@ export default function PricingTab({ companyConfig, setCompanyConfig, companyId 
   const [priceErr,    setPriceErr]    = useState('');
 
   const savePricing = async () => {
+    if (!companyId) { setPriceErr('No company ID — cannot save pricing.'); return; }
     setPriceSaving(true); setPriceSaved(false); setPriceErr('');
     const payload = {
+      company_id:                companyId,
       trade_base_fee:            parseFloat(tradeBaseFee)    || 0,
       accident_base_fee:         parseFloat(accidentBaseFee) || 0,
       trade_per_km_fee:          parseFloat(tradePerKm)      || 0,
@@ -130,7 +133,7 @@ export default function PricingTab({ companyConfig, setCompanyConfig, companyId 
       updated_at: new Date().toISOString(),
     };
     const { data, error } = await supabase.from('company_config')
-      .update(payload).eq('company_id', companyId).select().single();
+      .upsert(payload, { onConflict: 'company_id' }).select().single();
     setPriceSaving(false);
     if (error) { setPriceErr(error.message); return; }
     if (data) { setCompanyConfig(data); setPriceSaved(true); setTimeout(() => setPriceSaved(false), 2500); }
