@@ -22,6 +22,7 @@ import TabOrderSettings from '../settings/TabOrderSettings';
 import { applyTabOrder } from '../../lib/tabOrder';
 const VICROADS_PROXY = '/.netlify/functions/vicroads-allocations';
 import useDriverLocation from '../../hooks/useDriverLocation';
+import { useBridgeAlerts } from '../../hooks/useBridgeAlerts';
 
 const POLL_MS = 60_000;
 
@@ -112,7 +113,14 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, co
 
   // Single GPS watch for the whole session — persists across tab switches.
   // Returns { lat, lng } | null; also writes to driver_locations with company_id.
-  const userPos = useDriverLocation(userEmail, companyId);
+  const userPos           = useDriverLocation(userEmail, companyId);
+  const bridgeAlert       = useBridgeAlerts(userPos);
+  const [dismissedBridge, setDismissedBridge] = useState(null);
+  const visibleBridgeAlert = bridgeAlert && bridgeAlert.label !== dismissedBridge ? bridgeAlert : null;
+  // Clear dismiss when moving to a different bridge
+  useEffect(() => {
+    if (bridgeAlert?.label !== dismissedBridge) setDismissedBridge(null);
+  }, [bridgeAlert?.label]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const ids = TABS.map(t => t.id);
@@ -283,6 +291,31 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, co
               {inviteErr && <span style={{ fontSize: 8, color: '#cc3333' }}>{inviteErr}</span>}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Low bridge proximity alert — shown across all tabs */}
+      {visibleBridgeAlert && (
+        <div style={{
+          background: '#3a0000', borderBottom: '2px solid #cc2222',
+          padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 10,
+          flexShrink: 0, fontFamily: "'IBM Plex Mono',monospace", animation: 'pulseRed 1s ease-in-out infinite',
+        }}>
+          <span style={{ fontSize: 18, flexShrink: 0 }}>⚠️</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#ff4444', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+              Low Bridge Ahead
+            </div>
+            <div style={{ fontSize: 9, color: '#cc8888', marginTop: 2 }}>
+              {visibleBridgeAlert.label} · {visibleBridgeAlert.height.toFixed(1)} m clearance · {(visibleBridgeAlert.dist * 1000).toFixed(0)} m away
+            </div>
+          </div>
+          <button onClick={() => setDismissedBridge(visibleBridgeAlert.label)} title="Dismiss"
+            style={{ background: 'none', border: '1px solid #cc222255', borderRadius: 2,
+              color: '#cc6666', fontSize: 12, cursor: 'pointer', padding: '2px 8px',
+              fontFamily: "'IBM Plex Mono',monospace" }}>
+            ✕
+          </button>
         </div>
       )}
 
