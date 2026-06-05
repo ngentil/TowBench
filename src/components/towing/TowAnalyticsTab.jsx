@@ -3,9 +3,12 @@ import { ACC, MUT, BRD, TXT, GRN, SURF } from '../../lib/styles';
 
 const ORANGE = '#e8870a';
 const PERIODS = [
-  { label: '24h', ms: 864e5   },
-  { label: '7d',  ms: 6048e5  },
-  { label: '31d', ms: Infinity },
+  { label: '24h', ms: 864e5         },
+  { label: '7d',  ms: 7  * 864e5   },
+  { label: '31d', ms: 31 * 864e5   },
+  { label: '3m',  ms: 90 * 864e5   },
+  { label: '6m',  ms: 180 * 864e5  },
+  { label: '12m', ms: 365 * 864e5  },
 ];
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -125,7 +128,7 @@ function DowChart({ counts }) {
 }
 
 export default function TowAnalyticsTab({ allFeatures, liveIds, loading }) {
-  const [periodMs, setPeriodMs] = useState(Infinity);
+  const [periodMs, setPeriodMs] = useState(31 * 864e5);
   const winW = useWindowWidth(), isMobile = winW < 640;
 
   const features = useMemo(() => {
@@ -149,28 +152,26 @@ export default function TowAnalyticsTab({ allFeatures, liveIds, loading }) {
   const peakHour    = hourCounts[peakHourIdx] > 0 ? `${String(peakHourIdx).padStart(2,'0')}:00–${String(peakHourIdx+1).padStart(2,'0')}:00` : '—';
   const topSuburbs = tally(features, f => f.properties?.reference?.startIntersectionLocality);
   const topRoads   = tally(features, f => f.properties?.closedRoadName);
-  const incTypes   = tally(features, f => f.properties?.eventSubType);
-  const impTypes   = tally(features, f => f.properties?.impact?.impactType);
   const durations  = features.filter(f=>f._logMeta?.firstSeen).map(f=>(new Date(f._logMeta.clearedAt||f._logMeta.lastSeen)-new Date(f._logMeta.firstSeen))/60000).filter(m=>m>0&&m<1440);
   const avgDuration = durations.length ? durations.reduce((a,b)=>a+b,0)/durations.length : null;
   const laneValues = features.map(f=>f.properties?.numberLanesImpacted).filter(n=>n!=null&&n>0);
   const avgLanes   = laneValues.length ? (laneValues.reduce((a,b)=>a+b,0)/laneValues.length).toFixed(1) : '—';
-  const days        = periodMs === Infinity ? 31 : Math.round(periodMs / 864e5);
+  const days        = Math.round(periodMs / 864e5);
   const avgPerDay   = features.length ? (features.length / days).toFixed(1) : '0';
   const topSuburb   = topSuburbs[0]?.[0] || '—';
   const periodLabel = PERIODS.find(p => p.ms === periodMs)?.label || '31d';
 
   return (
     <div style={{ padding: 16, flex: 1, overflowY: 'auto' }}>
-      <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14,flexWrap:'wrap',gap:8 }}>
+      <div style={{ marginBottom:14 }}>
         <div>
           <div style={{ fontSize:13,fontWeight:700,color:TXT,letterSpacing:'0.06em' }}>📊 Tow Analytics</div>
-          <div style={{ fontSize:9,color:MUT,marginTop:2 }}>{loading&&allFeatures.length===0?'Loading…':`${features.length} allocation${features.length!==1?'s':''} · ${periodMs===Infinity?'last 31 days':`last ${periodLabel}`}`}</div>
+          <div style={{ fontSize:9,color:MUT,marginTop:2 }}>{loading&&allFeatures.length===0?'Loading…':`${features.length} allocation${features.length!==1?'s':''} · last ${periodLabel}`}</div>
         </div>
-        <div style={{ display:'flex',gap:4 }}>
+        <div style={{ display:'flex',gap:6,marginTop:10,flexWrap:'wrap' }}>
           {PERIODS.map(p=>(
             <button key={p.label} onClick={()=>setPeriodMs(p.ms)}
-              style={{ fontSize:8,fontWeight:700,padding:'3px 9px',borderRadius:2,cursor:'pointer',fontFamily:"'IBM Plex Mono',monospace",letterSpacing:'0.06em',border:`1px solid ${p.ms===periodMs?ACC+'88':'#2a2a2a'}`,color:p.ms===periodMs?ACC:MUT,background:p.ms===periodMs?ACC+'11':'#0d0d0d' }}>
+              style={{ width:60,height:60,borderRadius:4,cursor:'pointer',fontFamily:"'IBM Plex Mono',monospace",fontWeight:700,fontSize:12,letterSpacing:'0.06em',border:`2px solid ${p.ms===periodMs?ACC:'#2a2a2a'}`,color:p.ms===periodMs?ACC:MUT,background:p.ms===periodMs?ACC+'22':'#0d0d0d',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0 }}>
               {p.label}
             </button>
           ))}
@@ -196,17 +197,6 @@ export default function TowAnalyticsTab({ allFeatures, liveIds, loading }) {
         <div style={{ background:SURF,border:'1px solid '+BRD,borderRadius:2,padding:'10px 12px' }}>
           <div style={{ fontSize:8,color:MUT,letterSpacing:'0.1em',textTransform:'uppercase',fontWeight:700,marginBottom:10 }}>Jobs by Day of Week</div>
           <DowChart counts={dowCounts} />
-        </div>
-      </div>
-
-      <div style={{ display:'grid',gridTemplateColumns:isMobile?'1fr':'1fr 1fr',gap:12,marginBottom:14 }}>
-        <div style={{ background:SURF,border:'1px solid '+BRD,borderRadius:2,padding:'10px 12px' }}>
-          <div style={{ fontSize:8,color:MUT,letterSpacing:'0.1em',textTransform:'uppercase',fontWeight:700,marginBottom:10 }}>Incident Type</div>
-          <BarList data={incTypes} color={ORANGE} maxBars={8} labelWidth={130} />
-        </div>
-        <div style={{ background:SURF,border:'1px solid '+BRD,borderRadius:2,padding:'10px 12px' }}>
-          <div style={{ fontSize:8,color:MUT,letterSpacing:'0.1em',textTransform:'uppercase',fontWeight:700,marginBottom:10 }}>Impact Type</div>
-          <BarList data={impTypes} color='#5a7a9a' maxBars={6} labelWidth={130} />
         </div>
       </div>
 

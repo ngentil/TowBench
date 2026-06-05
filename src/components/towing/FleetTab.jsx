@@ -326,16 +326,14 @@ export default function FleetTab({ isAdmin, companyId }) {
             {onJob > 0     && <span style={{ color: ORANGE, marginLeft: 8 }}>· {onJob} on job</span>}
           </div>
         </div>
-        {isAdmin && (
-          <button onClick={() => setTruckForm({})} style={{ ...btnA, ...sm, fontSize: 8 }}>+ Add Vehicle</button>
-        )}
+        <button onClick={() => setTruckForm({})} style={{ ...btnA, ...sm, fontSize: 8 }}>+ Add Vehicle</button>
       </div>
       {err && <div style={{ fontSize: 9, color: RED, marginBottom: 12 }}>{err}</div>}
       {loading && <div style={{ fontSize: 10, color: MUT, textAlign: 'center', padding: '32px 0' }}>Loading vehicles…</div>}
       {!loading && trucks.length === 0 && (
         <div style={{ fontSize: 10, color: MUT, textAlign: 'center', padding: '32px 0', lineHeight: 1.8 }}>
           No vehicles yet.<br />
-          {isAdmin && <button onClick={() => setTruckForm({})} style={{ ...btnA, ...sm, marginTop: 8, fontSize: 8 }}>+ Add Vehicle</button>}
+          <button onClick={() => setTruckForm({})} style={{ ...btnA, ...sm, marginTop: 8, fontSize: 8 }}>+ Add Vehicle</button>
         </div>
       )}
       {trucks.map(truck => (
@@ -502,13 +500,11 @@ function TruckRow({ truck, isAdmin, depot, onEdit, onDelete, onAvail }) {
           )}
           <MiniRoster schedule={activeSched} />
         </div>
-        {isAdmin && (
-          <div style={{ display: 'flex', gap: 4, flexShrink: 0, alignSelf: 'flex-start' }}>
-            <button onClick={onAvail}  style={{ ...btnG, ...sm, fontSize: 8, color: hasOverride ? '#cccc44' : MUT, borderColor: hasOverride ? '#5a5a14' : undefined }}>📅</button>
-            <button onClick={onEdit}   style={{ ...btnG, ...sm, fontSize: 8 }}>Edit</button>
-            <button onClick={onDelete} style={{ ...btnD, ...sm, fontSize: 8 }}>Delete</button>
-          </div>
-        )}
+        <div style={{ display: 'flex', gap: 4, flexShrink: 0, alignSelf: 'flex-start' }}>
+          {isAdmin && <button onClick={onAvail} style={{ ...btnG, ...sm, fontSize: 8, color: hasOverride ? '#cccc44' : MUT, borderColor: hasOverride ? '#5a5a14' : undefined }}>📅</button>}
+          {isAdmin && <button onClick={onEdit}  style={{ ...btnG, ...sm, fontSize: 8 }}>Edit</button>}
+          <button onClick={onDelete} style={{ ...btnD, ...sm, fontSize: 8 }}>Delete</button>
+        </div>
       </div>
     </div>
   );
