@@ -8,7 +8,7 @@ import { supabase } from '../../lib/supabase';
 import OpsTab from './OpsTab';
 import TowAnalyticsTab from './TowAnalyticsTab';
 import TowInsTab from './TowInsTab';
-import DriversTab from './DriversTab';
+import MyDetailsTab from './MyDetailsTab';
 import ActiveTowsTab from './ActiveTowsTab';
 import CompletedTowsTab from './CompletedTowsTab';
 import ManualDispatchTab from './ManualDispatchTab';
@@ -59,7 +59,7 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, co
     { id: 'activetows',    label: '🚛 Active Tows',       roles: ['dispatch','admin','super_admin'] },
     { id: 'completedtows', label: '✓ Completed Tows',     roles: ['dispatch','admin','super_admin'] },
     { id: 'towins',        label: '🏭 Tow Ins',           roles: ['driver','dispatch','admin','super_admin'] },
-    { id: 'drivers',       label: '👤 Drivers',           roles: ['dispatch','admin','super_admin'] },
+    { id: 'drivers',       label: '👤 My Details',         roles: ['driver','dispatch','admin','super_admin'] },
     { id: 'depots',        label: '🏢 Depots',            roles: ['dispatch','admin','super_admin'] },
     { id: 'fleet',         label: '🚚 My Vehicles',        roles: ['dispatch','admin','super_admin'] },
     { id: 'ops',           label: '🗺 Map',               roles: ['driver','dispatch','admin','super_admin'] },
@@ -374,7 +374,7 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, co
         {tab === 'analytics' && (
           <TowAnalyticsTab allFeatures={allFeatures} liveIds={liveIds} loading={loading} userEmail={userEmail} />
         )}
-        {tab === 'drivers'   && <DriversTab companyId={companyId} isDispatch={isDispatch} role={role} />}
+        {tab === 'drivers'   && <MyDetailsTab userEmail={userEmail} companyId={companyId} role={role} />}
         {tab === 'depots'    && <DepotsTab isAdmin={isAdmin} companyId={companyId} />}
         {tab === 'fleet'     && <FleetTab isAdmin={isAdmin} companyId={companyId} />}
         {tab === 'pricing'   && <PricingTab companyConfig={companyConfig} setCompanyConfig={setCompanyConfig} companyId={companyId} />}
