@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import { ACC, MUT, BRD, TXT, GRN, RED, SURF, inp, txa, btnA, btnG, sm, ovly, mdl, mdlH, mdlB, mdlF } from '../../lib/styles';
 import { Highlight } from '../ui/shared';
+import { getDepots } from '../../lib/db/towing';
 
 const FL = ({ t }) => (
   <div style={{ fontSize: 8, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}>{t}</div>
@@ -534,9 +535,9 @@ function TowInCard({ record, allDepots, transfers, photos, storageTypes, isDispa
             <span style={{ fontSize: 12, fontWeight: 700, color: TXT, letterSpacing: '0.1em' }}>
               <Highlight text={record.plate} term={searchTerm} />
             </span>
-            {record.make_model && (
+            {(record.make || record.model || record.make_model) && (
               <span style={{ fontSize: 9, color: MUT }}>
-                <Highlight text={record.make_model} term={searchTerm} />
+                <Highlight text={[record.make, record.model].filter(Boolean).join(' ') || record.make_model} term={searchTerm} />
               </span>
             )}
             <span style={{ fontSize: 7, fontWeight: 700, letterSpacing: '0.08em', padding: '1px 5px',
@@ -545,6 +546,13 @@ function TowInCard({ record, allDepots, transfers, photos, storageTypes, isDispa
               textTransform: 'uppercase' }}>
               {released ? 'Released' : 'In Storage'}
             </span>
+            {record.dispatched_job_id && (
+              <span style={{ fontSize: 7, fontWeight: 700, letterSpacing: '0.08em', padding: '1px 5px',
+                border: '1px solid #3a6a3a', borderRadius: 2, color: GRN, background: GRN + '12',
+                textTransform: 'uppercase' }}>
+                🏢 {depotLabel(allDepots, record.depot_id)}
+              </span>
+            )}
           </div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginTop: 3 }}>
             <span style={{ fontSize: 8, color: MUT }}>
@@ -742,19 +750,24 @@ export default function TowInsTab({ companyId, userEmail, isDispatch, companyCon
   const [search,        setSearch]        = useState('');
 
   const load = useCallback(async () => {
-    if (!companyId) return;
+    let towInsQuery  = supabase.from('tow_ins').select('*').order('date_in', { ascending: false });
+    let photosQuery  = supabase.from('tow_in_photos').select('id, tow_in_id, path, file_name, created_at').order('created_at');
+    let storageQuery = supabase.from('storage_types').select('*').order('daily_rate', { ascending: false });
+    if (companyId) {
+      towInsQuery  = towInsQuery.eq('company_id', companyId);
+      photosQuery  = photosQuery.eq('company_id', companyId);
+      storageQuery = storageQuery.eq('company_id', companyId);
+    }
 
-    const [{ data: recs }, { data: deps }, { data: xfers }, { data: trucks }, { data: pics }, { data: stData }] = await Promise.all([
-      supabase.from('tow_ins').select('*').eq('company_id', companyId).order('date_in', { ascending: false }),
-      supabase.from('depots').select('*').eq('company_id', companyId).order('name'),
+    const [{ data: recs }, depList, { data: xfers }, { data: pics }, { data: stData }] = await Promise.all([
+      towInsQuery,
+      getDepots(),
       supabase.from('tow_in_transfers').select('*').order('transferred_at'),
-      supabase.from('tow_trucks').select('depot_id').eq('auth_email', userEmail).eq('company_id', companyId),
-      supabase.from('tow_in_photos').select('id, tow_in_id, path, file_name, created_at').eq('company_id', companyId).order('created_at'),
-      supabase.from('storage_types').select('*').eq('company_id', companyId).order('daily_rate', { ascending: false }),
+      photosQuery,
+      storageQuery,
     ]);
 
     const recList  = recs  || [];
-    const depList  = deps  || [];
     const xferList = xfers || [];
     const picList  = pics  || [];
 
@@ -770,22 +783,16 @@ export default function TowInsTab({ companyId, userEmail, isDispatch, companyCon
       picsMap[p.tow_in_id].push(p);
     });
 
-    let fDepots = depList;
-    if (!isDispatch && trucks && trucks.length > 0) {
-      const ids = new Set(trucks.map(t => t.depot_id).filter(Boolean));
-      fDepots = depList.filter(d => ids.has(d.id));
-    }
-
     setRecords(recList);
     setAllDepots(depList);
-    setFormDepots(fDepots.length > 0 ? fDepots : depList);
+    setFormDepots(depList);
     setTransfers(xferMap);
     setPhotosMap(picsMap);
     setStorageTypes(stData || []);
     setLoading(false);
-  }, [companyId, userEmail, isDispatch]);
+  }, [companyId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); }, [load]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSave = saved => {
     setRecords(prev => {
