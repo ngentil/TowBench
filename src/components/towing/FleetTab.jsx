@@ -284,8 +284,8 @@ export default function FleetTab({ isAdmin, companyId }) {
   const [trucks,  setTrucks]  = useState([]);
   const [loading, setLoading] = useState(true);
   const [err,     setErr]     = useState('');
-  const [truckForm,   setTruckForm]   = useState(null);
-  const [availModal,  setAvailModal]  = useState(null);
+  const [truckForm,  setTruckForm]  = useState(null);
+  const [availModal, setAvailModal] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -304,15 +304,14 @@ export default function FleetTab({ isAdmin, companyId }) {
   };
 
   const handleDeleteTruck = async (truck) => {
-    if (!confirm(`Delete truck ${truck.plate}?`)) return;
+    if (!confirm(`Delete ${truck.plate}?`)) return;
     try {
       await deleteTruck(truck.id);
       setTrucks(prev => prev.filter(t => t.id !== truck.id));
     } catch (e) { alert(`Delete failed: ${e.message}`); }
   };
 
-  const trucksByDepot = depots.map(d => ({ depot: d, trucks: trucks.filter(t => t.depot_id === d.id) }));
-  const unassigned = trucks.filter(t => !t.depot_id);
+  const depotMap  = new Map(depots.map(d => [d.id, d]));
   const available = trucks.filter(t => t.status === 'available').length;
   const onJob     = trucks.filter(t => t.status === 'on job').length;
 
@@ -320,50 +319,37 @@ export default function FleetTab({ isAdmin, companyId }) {
     <div style={{ padding: 16, flex: 1, overflowY: 'auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, gap: 8, flexWrap: 'wrap' }}>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: TXT, letterSpacing: '0.06em' }}>🚛 Fleet</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: TXT, letterSpacing: '0.06em' }}>🚚 My Vehicles</div>
           <div style={{ fontSize: 9, color: MUT, marginTop: 2 }}>
-            {trucks.length} truck{trucks.length !== 1 ? 's' : ''}
+            {trucks.length} vehicle{trucks.length !== 1 ? 's' : ''}
             {available > 0 && <span style={{ color: GRN, marginLeft: 8 }}>· {available} available</span>}
             {onJob > 0     && <span style={{ color: ORANGE, marginLeft: 8 }}>· {onJob} on job</span>}
           </div>
         </div>
         {isAdmin && (
-          <button onClick={() => setTruckForm({})} style={{ ...btnA, ...sm, fontSize: 8 }}>+ Add Truck</button>
+          <button onClick={() => setTruckForm({})} style={{ ...btnA, ...sm, fontSize: 8 }}>+ Add Vehicle</button>
         )}
       </div>
       {err && <div style={{ fontSize: 9, color: RED, marginBottom: 12 }}>{err}</div>}
-      {loading && <div style={{ fontSize: 10, color: MUT, textAlign: 'center', padding: '32px 0' }}>Loading fleet…</div>}
+      {loading && <div style={{ fontSize: 10, color: MUT, textAlign: 'center', padding: '32px 0' }}>Loading vehicles…</div>}
       {!loading && trucks.length === 0 && (
         <div style={{ fontSize: 10, color: MUT, textAlign: 'center', padding: '32px 0', lineHeight: 1.8 }}>
-          No trucks yet. Click + Add Truck to get started.
+          No vehicles yet.<br />
+          {isAdmin && <button onClick={() => setTruckForm({})} style={{ ...btnA, ...sm, marginTop: 8, fontSize: 8 }}>+ Add Vehicle</button>}
         </div>
       )}
-      {trucksByDepot.map(({ depot, trucks: dTrucks }) => (
-        <div key={depot.id} style={{ marginBottom: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6, borderLeft: `2px solid ${ACC}`, paddingLeft: 8 }}>
-            <div>
-              <span style={{ fontSize: 10, fontWeight: 700, color: TXT }}>{depot.name}</span>
-              {depot.suburb && <span style={{ fontSize: 8, color: MUT, marginLeft: 6 }}>{depot.suburb}</span>}
-              <span style={{ fontSize: 8, color: MUT, marginLeft: 8 }}>{dTrucks.length} truck{dTrucks.length !== 1 ? 's' : ''}</span>
-            </div>
-          </div>
-          {dTrucks.length === 0 && <div style={{ fontSize: 9, color: MUT, padding: '8px 10px', background: '#0a0a0a', border: '1px solid #1a1a1a', borderRadius: 2, marginBottom: 4 }}>No trucks assigned to this depot.</div>}
-          {dTrucks.map(truck => (
-            <TruckRow key={truck.id} truck={truck} isAdmin={isAdmin} onEdit={() => setTruckForm(truck)} onDelete={() => handleDeleteTruck(truck)} onAvail={() => setAvailModal(truck)} />
-          ))}
-        </div>
+      {trucks.map(truck => (
+        <TruckRow
+          key={truck.id} truck={truck} isAdmin={isAdmin}
+          depot={depotMap.get(truck.depot_id) ?? null}
+          onEdit={() => setTruckForm(truck)}
+          onDelete={() => handleDeleteTruck(truck)}
+          onAvail={() => setAvailModal(truck)}
+        />
       ))}
-      {unassigned.length > 0 && (
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 8, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 6, borderLeft: '2px solid #444', paddingLeft: 8 }}>Unassigned ({unassigned.length})</div>
-          {unassigned.map(truck => (
-            <TruckRow key={truck.id} truck={truck} isAdmin={isAdmin} onEdit={() => setTruckForm(truck)} onDelete={() => handleDeleteTruck(truck)} onAvail={() => setAvailModal(truck)} />
-          ))}
-        </div>
-      )}
       {isAdmin && <AccessRequestsPanel />}
       {isAdmin && <AccessCodesPanel />}
-      {truckForm  !== null && <TruckForm truck={truckForm?.id ? truckForm : truckForm} onSave={handleSaveTruck} onCancel={() => setTruckForm(null)} />}
+      {truckForm  !== null && <TruckForm truck={truckForm} onSave={handleSaveTruck} onCancel={() => setTruckForm(null)} />}
       {availModal !== null && <AvailabilityModal truck={availModal} onSave={async (updated) => { await handleSaveTruck(updated); setAvailModal(null); }} onCancel={() => setAvailModal(null)} />}
     </div>
   );
@@ -475,7 +461,7 @@ function AccessCodesPanel() {
   );
 }
 
-function TruckRow({ truck, isAdmin, onEdit, onDelete, onAvail }) {
+function TruckRow({ truck, isAdmin, depot, onEdit, onDelete, onAvail }) {
   const hasOverride = truck.override_active;
   const hasRelief   = !!(truck.relief_driver_name || truck.relief_da_number);
   const sc          = hasOverride && !hasRelief ? RED : statusColor(truck.status);
@@ -498,9 +484,16 @@ function TruckRow({ truck, isAdmin, onEdit, onDelete, onAvail }) {
               <span style={{ fontSize: 7, fontWeight: 700, letterSpacing: '0.1em', padding: '1px 5px', border: '1px solid #6a6a1a', borderRadius: 2, color: '#cccc44', background: '#cccc4411', textTransform: 'uppercase' }}>Relief</span>
             )}
           </div>
-          {truck.truck_type && (
-            <div style={{ fontSize: 8, color: MUT, marginTop: 2, fontFamily: "'IBM Plex Mono',monospace" }}>{truck.truck_type}</div>
-          )}
+          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 2, alignItems: 'center' }}>
+            {truck.truck_type && (
+              <span style={{ fontSize: 8, color: MUT, fontFamily: "'IBM Plex Mono',monospace" }}>{truck.truck_type}</span>
+            )}
+            {depot && (
+              <span style={{ fontSize: 7, color: ACC, border: `1px solid ${ACC}44`, borderRadius: 2, padding: '0px 4px', fontFamily: "'IBM Plex Mono',monospace" }}>
+                {depot.name}
+              </span>
+            )}
+          </div>
           {hasOverride && truck.override_return_date && (
             <div style={{ fontSize: 8, color: MUT, marginTop: 2 }}>Returns {fmtDate(truck.override_return_date)}</div>
           )}

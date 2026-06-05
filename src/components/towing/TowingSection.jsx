@@ -12,9 +12,7 @@ import DriversTab from './DriversTab';
 import ActiveTowsTab from './ActiveTowsTab';
 import CompletedTowsTab from './CompletedTowsTab';
 import ManualDispatchTab from './ManualDispatchTab';
-import BrandingTab from '../admin/BrandingTab';
 import PricingTab from '../admin/PricingTab';
-import DriverApprovalsTab from '../admin/DriverApprovalsTab';
 import MyTowsTab from './MyTowsTab';
 import BridgesTab from './BridgesTab';
 import AlertsTab from './AlertsTab';
@@ -63,15 +61,13 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, co
     { id: 'towins',        label: '🏭 Tow Ins',           roles: ['driver','dispatch','admin','super_admin'] },
     { id: 'drivers',       label: '👤 Drivers',           roles: ['dispatch','admin','super_admin'] },
     { id: 'depots',        label: '🏢 Depots',            roles: ['dispatch','admin','super_admin'] },
-    { id: 'fleet',         label: '🚛 Fleet',              roles: ['dispatch','admin','super_admin'] },
+    { id: 'fleet',         label: '🚚 My Vehicles',        roles: ['dispatch','admin','super_admin'] },
     { id: 'ops',           label: '🗺 Map',               roles: ['driver','dispatch','admin','super_admin'] },
     { id: 'bridges',       label: '🌉 Bridges',           roles: ['driver','dispatch','admin','super_admin'] },
     { id: 'waze',          label: '🗺 Waze',              roles: ['dispatch','admin','super_admin'] },
     { id: 'mytows',        label: '📋 My Tows',           roles: ['driver'], standaloneOnly: true },
     { id: 'analytics',     label: '📊 Analytics',         roles: ['dispatch','admin','super_admin'] },
     { id: 'pricing',       label: '💰 Pricing',           roles: ['admin','super_admin'] },
-    { id: 'branding',      label: '🎨 Branding',          roles: ['admin','super_admin'] },
-    { id: 'approvals',     label: '✅ Approvals',          roles: ['admin','super_admin'] },
   ];
 
   // Role + standalone filter
@@ -382,8 +378,6 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, co
         {tab === 'depots'    && <DepotsTab isAdmin={isAdmin} companyId={companyId} />}
         {tab === 'fleet'     && <FleetTab isAdmin={isAdmin} companyId={companyId} />}
         {tab === 'pricing'   && <PricingTab companyConfig={companyConfig} setCompanyConfig={setCompanyConfig} companyId={companyId} />}
-        {tab === 'branding'  && <BrandingTab companyConfig={companyConfig} setCompanyConfig={setCompanyConfig} companyId={companyId} />}
-        {tab === 'approvals' && <DriverApprovalsTab companyId={companyId} />}
       </div>
     </div>
   );
