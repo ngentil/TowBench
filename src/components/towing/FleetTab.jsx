@@ -306,7 +306,8 @@ export default function FleetTab({ isAdmin, companyId }) {
   const handleDeleteTruck = async (truck) => {
     if (!confirm(`Delete ${truck.plate}?`)) return;
     try {
-      await deleteTruck(truck.id);
+      const { error } = await supabase.rpc('delete_truck', { p_truck_id: truck.id });
+      if (error) throw error;
       setTrucks(prev => prev.filter(t => t.id !== truck.id));
     } catch (e) { alert(`Delete failed: ${e.message}`); }
   };
