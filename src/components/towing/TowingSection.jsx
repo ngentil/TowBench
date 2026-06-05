@@ -63,7 +63,7 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, co
     { id: 'towins',        label: '🏭 Tow Ins',           roles: ['driver','dispatch','admin','super_admin'] },
     { id: 'drivers',       label: '👤 Drivers',           roles: ['dispatch','admin','super_admin'] },
     { id: 'depots',        label: '🏢 Depots',            roles: ['dispatch','admin','super_admin'] },
-    { id: 'fleet',         label: '🚛 Fleet',              roles: ['dispatch','admin','super_admin'] },
+    { id: 'fleet',         label: '🚚 My Vehicles',        roles: ['dispatch','admin','super_admin'] },
     { id: 'ops',           label: '🗺 Map',               roles: ['driver','dispatch','admin','super_admin'] },
     { id: 'bridges',       label: '🌉 Bridges',           roles: ['driver','dispatch','admin','super_admin'] },
     { id: 'waze',          label: '🗺 Waze',              roles: ['dispatch','admin','super_admin'] },
