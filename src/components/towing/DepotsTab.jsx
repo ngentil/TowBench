@@ -205,11 +205,11 @@ export default function DepotsTab({ isAdmin, companyId }) {
   };
 
   const handleAssignTruck = async (truckId) => {
-    const truck = trucks.find(t => t.id === truckId);
-    if (!truck || !assignModal) return;
+    if (!assignModal) return;
     try {
-      const saved = await upsertTruck({ ...truck, depot_id: assignModal.id });
-      setTrucks(prev => prev.map(t => t.id === saved.id ? saved : t));
+      const { error } = await supabase.rpc('set_truck_depot', { p_truck_id: truckId, p_depot_id: assignModal.id });
+      if (error) throw error;
+      setTrucks(prev => prev.map(t => t.id === truckId ? { ...t, depot_id: assignModal.id } : t));
       setAssignModal(null);
     } catch (e) { alert(`Assign failed: ${e.message}`); }
   };
@@ -217,8 +217,9 @@ export default function DepotsTab({ isAdmin, companyId }) {
   const handleUnassignTruck = async (truck) => {
     if (!confirm(`Remove ${truck.plate} from depot?`)) return;
     try {
-      const saved = await upsertTruck({ ...truck, depot_id: null });
-      setTrucks(prev => prev.map(t => t.id === saved.id ? saved : t));
+      const { error } = await supabase.rpc('set_truck_depot', { p_truck_id: truck.id, p_depot_id: null });
+      if (error) throw error;
+      setTrucks(prev => prev.map(t => t.id === truck.id ? { ...t, depot_id: null } : t));
     } catch (e) { alert(`Remove failed: ${e.message}`); }
   };
 
