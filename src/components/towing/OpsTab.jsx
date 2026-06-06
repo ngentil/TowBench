@@ -358,6 +358,8 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
   const [showTruck,       setShowTruck]       = useState(true);
   const [showBridges,     setShowBridges]     = useState(false);
   const [bridgeData,      setBridgeData]      = useState([]); // array of [lat,lng,h,label,btype]
+  const [showEmergency,   setShowEmergency]   = useState(false);
+  const [emergencyData,   setEmergencyData]   = useState([]);
 
   // Map state
   const [driverLocations, setDriverLocations] = useState([]);
@@ -411,6 +413,7 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
   const routeLayerRef           = useRef(null);
   const tracePinLayerRef        = useRef(null);
   const bridgeLayerRef          = useRef(null);
+  const emergencyLayerRef       = useRef(null);
   const userPosRef              = useRef(null);
   const selectedLatLngRef       = useRef(null);
   const selectedBridgeLatLngRef = useRef(null);
@@ -623,15 +626,17 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
       const routeLayer    = L.layerGroup().addTo(map);
       const tracePinLayer = L.layerGroup().addTo(map);
       const bridgeLayer   = L.layerGroup(); // not added by default — toggled on demand
+      const emergencyLayer = L.layerGroup(); // not added by default — toggled on demand
 
-      activeLayerRef.current   = activeLayer;
-      clearedLayerRef.current  = clearedLayer;
-      hotspotLayerRef.current  = hotspotLayer;
-      truckLayerRef.current    = truckLayer;
-      routeLayerRef.current    = routeLayer;
-      tracePinLayerRef.current = tracePinLayer;
-      bridgeLayerRef.current   = bridgeLayer;
-      mapRef.current           = map;
+      activeLayerRef.current    = activeLayer;
+      clearedLayerRef.current   = clearedLayer;
+      hotspotLayerRef.current   = hotspotLayer;
+      truckLayerRef.current     = truckLayer;
+      routeLayerRef.current     = routeLayer;
+      tracePinLayerRef.current  = tracePinLayer;
+      bridgeLayerRef.current    = bridgeLayer;
+      emergencyLayerRef.current = emergencyLayer;
+      mapRef.current            = map;
 
       if (!document.getElementById('ops-full-style')) {
         const s = document.createElement('style');
@@ -848,6 +853,66 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
     });
   }, [showBridges, bridgeData, mapReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Fetch VicEmergency incidents when layer is enabled
+  useEffect(() => {
+    if (!showEmergency) return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const res  = await fetch('/.netlify/functions/vic-emergency');
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        const list = Array.isArray(data) ? data : (data.results || data.incidents || []);
+        if (!cancelled) setEmergencyData(list);
+      } catch { /* ignore */ }
+    };
+    load();
+    const poll = setInterval(load, 60_000);
+    return () => { cancelled = true; clearInterval(poll); };
+  }, [showEmergency]);
+
+  // Render VicEmergency markers on map
+  useEffect(() => {
+    const map = mapRef.current, layer = emergencyLayerRef.current;
+    if (!map || !layer) return;
+    if (!showEmergency || emergencyData.length === 0) { map.removeLayer(layer); layer.clearLayers(); return; }
+    const L = leafletRef.current;
+    if (!L) return;
+    layer.clearLayers();
+    map.addLayer(layer);
+    const emCatColor = cat => {
+      const c = (cat || '').toUpperCase();
+      if (c.includes('ACCIDENT')) return '#af3a3a';
+      if (c.includes('HAZMAT'))   return '#c46a1a';
+      if (c.includes('FIRE'))     return '#c45a10';
+      if (c.includes('STORM') || c.includes('FLOOD')) return '#4a80c4';
+      return '#666';
+    };
+    emergencyData.forEach(inc => {
+      const lat = inc.location?.latitude;
+      const lng = inc.location?.longitude;
+      if (lat == null || lng == null) return;
+      const cat        = inc.category1 || inc.category2 || '';
+      const color      = emCatColor(cat);
+      const isAccident = cat.toUpperCase().includes('ACCIDENT');
+      const sz         = 8;
+      const dotHtml    = isAccident
+        ? `<div style="position:relative;width:${sz}px;height:${sz}px">` +
+          `<div style="position:absolute;top:50%;left:50%;width:${sz}px;height:${sz}px;border-radius:50%;background:${color};animation:ops-pulse 2s ease-out infinite"></div>` +
+          `<div style="position:absolute;top:50%;left:50%;width:${sz}px;height:${sz}px;border-radius:50%;background:${color};transform:translate(-50%,-50%);opacity:0.95"></div>` +
+          `</div>`
+        : `<div style="width:${sz}px;height:${sz}px;border-radius:50%;background:${color};opacity:0.85"></div>`;
+      const tip    = [inc.name || inc.title, inc.severity].filter(Boolean).join(' · ');
+      const marker = L.marker([lat, lng], {
+        icon: L.divIcon({ className: '', html: dotHtml, iconSize: [sz, sz], iconAnchor: [sz / 2, sz / 2] }),
+        bubblingMouseEvents: false,
+        zIndexOffset: isAccident ? 95 : 85,
+      });
+      marker.addTo(layer);
+      if (tip) marker.bindTooltip(tip, { direction: 'top', className: 'towbench-tooltip' });
+    });
+  }, [showEmergency, emergencyData, mapReady]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const liveCount    = liveIds.size;
   const cutoff24h    = Date.now() - 24 * 60 * 60 * 1000;
   const clearedCount = allFeatures.filter(f => {
@@ -911,6 +976,7 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
         {BRIDGE_URL && (
           <LayerBadge active={showBridges} onClick={() => setShowBridges(v => !v)} color="#5a9aee" label="🌉 Bridges" />
         )}
+        <LayerBadge active={showEmergency} onClick={() => setShowEmergency(v => !v)} color="#af3a3a" label="🚨 Emergency" />
 
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
           {rainSoon && (
