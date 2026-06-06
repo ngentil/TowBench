@@ -22,7 +22,7 @@ function calcPriceBreakdown(totalKm, cfg, towType, twoUpTrade, twoUpAccident) {
   const allowAcc = cfg.allow_accident_twoup ?? false;
   const result   = {};
 
-  if (towType === 'accident' || towType === 'both') {
+  if (towType === 'accident' || towType === 'custom') {
     const base     = parseFloat(cfg.accident_base_fee) || 0;
     const freeKm   = 8;
     const billable = Math.max(0, totalKm - freeKm);
@@ -31,7 +31,7 @@ function calcPriceBreakdown(totalKm, cfg, towType, twoUpTrade, twoUpAccident) {
     const mul      = (twoUpAccident && allowAcc) ? 2 : 1;
     if (base > 0) result.accident = { base, freeKm, billable, perKm, kmCharge, sur, mul, total: (base + kmCharge + sur) * mul };
   }
-  if (towType === 'trade' || towType === 'both') {
+  if (towType === 'trade' || towType === 'custom') {
     const base     = parseFloat(cfg.trade_base_fee) || 0;
     const freeKm   = 10;
     const billable = Math.max(0, totalKm - freeKm);
@@ -74,7 +74,7 @@ function AddrSearch({ label, value, onChange, onPick, results, onClearResults, p
   );
 }
 
-const TOW_TYPES = ['accident', 'trade', 'both'];
+const TOW_TYPES = ['accident', 'trade', 'custom'];
 
 export default function ManualDispatchTab({ companyId, companyConfig, userEmail }) {
   const [trucks, setTrucks] = useState([]);
@@ -305,28 +305,6 @@ export default function ManualDispatchTab({ companyId, companyConfig, userEmail 
           <div style={{ display: 'flex', gap: 6 }}>{TOW_TYPES.map(typeBtn)}</div>
         </div>
 
-        {/* Two-up toggles */}
-        {(towType === 'trade' || towType === 'both') && (
-          <div style={{ marginBottom: 10 }}>
-            <Toggle on={twoUpTrade} onToggle={() => setTwoUpTrade(v => !v)} label="×2 Two-up / Swinger (Trade)" />
-          </div>
-        )}
-        {(towType === 'accident' || towType === 'both') && allowAccidentTwoUp && (
-          <div style={{ marginBottom: 10 }}>
-            <Toggle on={twoUpAccident} onToggle={() => setTwoUpAccident(v => !v)} label="×2 Two-up / Swinger (Accident)" />
-          </div>
-        )}
-
-        {/* Docket required (trade/both only) */}
-        {towType !== 'accident' && (
-          <div style={{ marginBottom: 10 }}>
-            <Toggle
-              on={docketRequired}
-              onToggle={() => setDocketRequired(v => !v)}
-              label="Require docket number from driver"
-            />
-          </div>
-        )}
 
         <div style={{ borderTop: '1px solid #1a1a1a', margin: '14px 0' }} />
 
