@@ -178,15 +178,22 @@ export default function TowAnalyticsTab({ allFeatures, liveIds, loading }) {
         </div>
       </div>
 
-      <div style={{ display:'flex',gap:8,marginBottom:14,flexWrap:'wrap' }}>
+      <div style={{ display:'flex',gap:8,marginBottom:8,flexWrap:'wrap' }}>
         <KpiCard label="Total"        value={features.length}          color={TXT}    />
         <KpiCard label="Active"       value={activeCount}              color={GRN}    />
         <KpiCard label="Cleared"      value={clearedCount}             color={MUT}    />
         <KpiCard label="Avg / Day"    value={avgPerDay}                color={ACC}    />
         <KpiCard label="Peak Hour"    value={peakHour}                 color={ORANGE} sub={hourCounts[peakHourIdx]>0?`${hourCounts[peakHourIdx]} jobs`:undefined} />
-        <KpiCard label="Top Suburb"   value={topSuburb}                color={GRN}    sub={topSuburbs[0]?`${topSuburbs[0][1]} jobs`:undefined} />
         <KpiCard label="Avg Duration" value={fmtDuration(avgDuration)} color={MUT}    sub={durations.length?`from ${durations.length} jobs`:'insufficient data'} />
-        <KpiCard label="Avg Lanes"    value={avgLanes}                 color={ORANGE} sub={laneValues.length?`${laneValues.length} jobs`:undefined} />
+      </div>
+
+      {/* Top Suburb — full width */}
+      <div style={{ background: SURF, border: '1px solid ' + BRD, borderTop: `2px solid ${GRN}`, borderRadius: 2, padding: '10px 14px', marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <div>
+          <div style={{ fontSize: 7, color: MUT, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 4 }}>Top Suburb</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: GRN, fontFamily: "'IBM Plex Mono',monospace", lineHeight: 1.1 }}>{topSuburb}</div>
+        </div>
+        {topSuburbs[0] && <div style={{ fontSize: 13, fontWeight: 700, color: MUT, fontFamily: "'IBM Plex Mono',monospace", whiteSpace: 'nowrap' }}>{topSuburbs[0][1]} jobs</div>}
       </div>
 
       <div style={{ display:'grid',gridTemplateColumns:isMobile?'1fr':'1fr 1fr',gap:12,marginBottom:14 }}>
