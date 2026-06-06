@@ -753,11 +753,15 @@ export default function App() {
   };
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    // Timeout so a hanging Supabase call never leaves the user on the loading screen
+    const timeout = setTimeout(() => setAuthChecked(true), 5000);
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      clearTimeout(timeout);
+      if (error) console.error('getSession error:', error);
       setSession(session);
       setAuthChecked(true);
       if (session) loadUserData(session.user.id, session.user.email, false);
-    });
+    }).catch(e => { clearTimeout(timeout); console.error('getSession threw:', e); setAuthChecked(true); });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
       if (session) {
@@ -771,7 +775,7 @@ export default function App() {
         setTruck(null);
       }
     });
-    return () => subscription.unsubscribe();
+    return () => { clearTimeout(timeout); subscription.unsubscribe(); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Company config: load by company_id once profile is known, subscribe to changes.
