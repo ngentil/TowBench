@@ -111,7 +111,7 @@ export default function VesselsTab() {
       const res  = await fetch(VESSELS_URL);
       if (res.status === 500) {
         const d = await res.json();
-        if (d.error?.includes('AIS_HUB_USER')) { setNoKey(true); setLoading(false); return; }
+        if (d.error?.includes('AISSTREAM_KEY')) { setNoKey(true); setLoading(false); return; }
         throw new Error(d.error || res.status);
       }
       if (!res.ok) throw new Error(`${res.status}`);
@@ -157,10 +157,10 @@ export default function VesselsTab() {
         <div style={{ padding: 14, background: '#0d1a0d', border: '1px solid #1e3a1e', borderRadius: 3 }}>
           <div style={{ fontSize: 10, color: '#5a9a6a', fontWeight: 700, marginBottom: 6 }}>Setup required</div>
           <div style={{ fontSize: 9, color: MUT, lineHeight: 1.6 }}>
-            Register a free account at <strong style={{ color: '#7ab07a' }}>aishub.net</strong> to get a username, then set:
+            Sign in with GitHub at <strong style={{ color: '#7ab07a' }}>aisstream.io</strong> (free), copy your API key, then set:
           </div>
           <div style={{ marginTop: 8, fontSize: 9, fontFamily: "'IBM Plex Mono',monospace", color: '#6a9a7a', background: '#0a0f0a', border: '1px solid #1e2e1e', borderRadius: 2, padding: '6px 10px' }}>
-            AIS_HUB_USER = your-username
+            AISSTREAM_KEY = your-api-key
           </div>
           <div style={{ marginTop: 6, fontSize: 8, color: '#444' }}>in Netlify → Site settings → Environment variables</div>
         </div>
