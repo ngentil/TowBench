@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { ACC, MUT, BRD, TXT, SURF, GRN, RED, inp, btnA, btnG, sm } from '../../lib/styles';
+import { ACC, MUT, BRD, TXT, SURF, RED, inp, btnA, sm } from '../../lib/styles';
 
 const numInp = (value, onChange, placeholder = '0.00') => (
   <input type="number" min="0" step="0.01" value={value} onChange={onChange} placeholder={placeholder}
@@ -12,111 +12,60 @@ const timeInp = (value, onChange) => (
     style={{ ...inp, width: '100%', boxSizing: 'border-box', fontFamily: "'IBM Plex Mono',monospace" }} />
 );
 
-function StorageSection({ companyId }) {
-  const [types,   setTypes]   = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [newName, setNewName] = useState('');
-  const [newRate, setNewRate] = useState('');
-  const [adding,  setAdding]  = useState(false);
-  const [err,     setErr]     = useState('');
-
-  useEffect(() => {
-    if (!companyId) return;
-    supabase.from('storage_types').select('*')
-      .eq('company_id', companyId).order('daily_rate', { ascending: false })
-      .then(({ data }) => { setTypes(data || []); setLoading(false); });
-  }, [companyId]);
-
-  const addType = async () => {
-    if (!companyId) { setErr('No company ID — cannot save.'); return; }
-    if (!newName.trim()) { setErr('Name is required.'); return; }
-    const rate = parseFloat(newRate);
-    if (isNaN(rate) || rate < 0) { setErr('Enter a valid daily rate.'); return; }
-    setAdding(true); setErr('');
-    const { data, error } = await supabase.from('storage_types')
-      .insert({ company_id: companyId, name: newName.trim(), daily_rate: rate })
-      .select().single();
-    if (error) { setErr(error.message); setAdding(false); return; }
-    setTypes(prev => [...prev, data].sort((a, b) => b.daily_rate - a.daily_rate));
-    setNewName(''); setNewRate(''); setAdding(false);
-  };
-
-  const deleteType = async id => {
-    await supabase.from('storage_types').delete().eq('id', id);
-    setTypes(prev => prev.filter(t => t.id !== id));
-  };
-
-  const updateRate = async (id, rate) => {
-    const r = parseFloat(rate);
-    if (isNaN(r)) return;
-    await supabase.from('storage_types').update({ daily_rate: r }).eq('id', id);
-    setTypes(prev => prev.map(t => t.id === id ? { ...t, daily_rate: r } : t)
-      .sort((a, b) => b.daily_rate - a.daily_rate));
-  };
-
-  if (loading) return <div style={{ fontSize: 9, color: MUT }}>Loading…</div>;
-
-  return (
-    <>
-      {types.length === 0 && <div style={{ fontSize: 9, color: MUT, marginBottom: 10 }}>No storage types yet.</div>}
-      {types.map((t, i) => (
-        <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-          <div style={{ flex: 1, fontSize: 10, color: TXT, fontFamily: "'IBM Plex Mono',monospace" }}>{t.name}</div>
-          {i === 0 && <span style={{ fontSize: 7, color: ACC, border: `1px solid ${ACC}55`, borderRadius: 2, padding: '1px 5px' }}>DEFAULT</span>}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <span style={{ fontSize: 8, color: MUT }}>$</span>
-            <input type="number" min="0" step="0.01"
-              defaultValue={parseFloat(t.daily_rate).toFixed(2)}
-              onBlur={e => updateRate(t.id, e.target.value)}
-              style={{ ...inp, width: 72, padding: '4px 6px', fontSize: 10 }} />
-            <span style={{ fontSize: 8, color: MUT }}>/day</span>
-          </div>
-          <button onClick={() => deleteType(t.id)}
-            style={{ background: 'none', border: '1px solid #3a1a1a', color: '#884040',
-              fontSize: 9, padding: '3px 8px', borderRadius: 2, cursor: 'pointer',
-              fontFamily: "'IBM Plex Mono',monospace" }}>✕</button>
-        </div>
-      ))}
-      <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 10, flexWrap: 'wrap' }}>
-        <input value={newName} onChange={e => setNewName(e.target.value)}
-          placeholder="e.g. Secure Undercover"
-          style={{ ...inp, flex: 1, minWidth: 140, padding: '6px 8px', fontSize: 10 }} />
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <span style={{ fontSize: 8, color: MUT }}>$</span>
-          <input type="number" min="0" step="0.01" value={newRate}
-            onChange={e => setNewRate(e.target.value)} placeholder="0.00"
-            onKeyDown={e => e.key === 'Enter' && addType()}
-            style={{ ...inp, width: 72, padding: '6px 8px', fontSize: 10 }} />
-          <span style={{ fontSize: 8, color: MUT }}>/day</span>
-        </div>
-        <button onClick={addType} disabled={adding} style={{ ...btnA, ...sm, opacity: adding ? 0.6 : 1 }}>
-          {adding ? '…' : '+ Add'}
-        </button>
-      </div>
-      {err && <div style={{ fontSize: 9, color: RED, marginTop: 6 }}>{err}</div>}
-    </>
-  );
-}
+const STORAGE_PRESETS = [
+  'Motor car, under cover',
+  'Motor cycle, under cover',
+  'Motor car, in locked yard',
+  'Motor cycle, in locked yard',
+];
 
 export default function PricingTab({ companyConfig, setCompanyConfig, companyId }) {
-  const [tradeBaseFee,      setTradeBaseFee]      = useState(String(companyConfig.trade_base_fee          ?? '0'));
-  const [accidentBaseFee,   setAccidentBaseFee]   = useState(String(companyConfig.accident_base_fee       ?? '0'));
-  const [tradePerKm,        setTradePerKm]        = useState(String(companyConfig.trade_per_km_fee        ?? '0'));
-  const [accidentPerKm,     setAccidentPerKm]     = useState(String(companyConfig.accident_per_km_fee     ?? '0'));
-  const [ahFeeWD,           setAhFeeWD]           = useState(String(companyConfig.after_hours_fee_weekday ?? '0'));
-  const [ahFeeWE,           setAhFeeWE]           = useState(String(companyConfig.after_hours_fee_weekend ?? '0'));
-  const [ahStartWD,         setAhStartWD]         = useState(companyConfig.after_hours_start_weekday ?? '18:00');
-  const [ahEndWD,           setAhEndWD]           = useState(companyConfig.after_hours_end_weekday   ?? '06:00');
-  const [ahStartWE,         setAhStartWE]         = useState(companyConfig.after_hours_start_weekend ?? '18:00');
-  const [ahEndWE,           setAhEndWE]           = useState(companyConfig.after_hours_end_weekend   ?? '06:00');
-  const [allowAccidentTwoUp, setAllowAccidentTwoUp] = useState(companyConfig.allow_accident_twoup ?? false);
-  const [priceSaving, setPriceSaving] = useState(false);
-  const [priceSaved,  setPriceSaved]  = useState(false);
-  const [priceErr,    setPriceErr]    = useState('');
+  const [tradeBaseFee,       setTradeBaseFee]       = useState(String(companyConfig.trade_base_fee          ?? '0'));
+  const [accidentBaseFee,    setAccidentBaseFee]     = useState(String(companyConfig.accident_base_fee       ?? '0'));
+  const [tradePerKm,         setTradePerKm]          = useState(String(companyConfig.trade_per_km_fee        ?? '0'));
+  const [accidentPerKm,      setAccidentPerKm]       = useState(String(companyConfig.accident_per_km_fee     ?? '0'));
+  const [ahFeeWD,            setAhFeeWD]             = useState(String(companyConfig.after_hours_fee_weekday ?? '0'));
+  const [ahFeeWE,            setAhFeeWE]             = useState(String(companyConfig.after_hours_fee_weekend ?? '0'));
+  const [ahStartWD,          setAhStartWD]           = useState(companyConfig.after_hours_start_weekday ?? '18:00');
+  const [ahEndWD,            setAhEndWD]             = useState(companyConfig.after_hours_end_weekday   ?? '06:00');
+  const [ahStartWE,          setAhStartWE]           = useState(companyConfig.after_hours_start_weekend ?? '18:00');
+  const [ahEndWE,            setAhEndWE]             = useState(companyConfig.after_hours_end_weekend   ?? '06:00');
+  const [allowAccidentTwoUp, setAllowAccidentTwoUp]  = useState(companyConfig.allow_accident_twoup ?? false);
+
+  // Storage type rates keyed by preset name
+  const [storageRates, setStorageRates] = useState(() =>
+    Object.fromEntries(STORAGE_PRESETS.map(n => [n, '']))
+  );
+  // Track existing row IDs so we can update vs insert
+  const [storageIds, setStorageIds] = useState({});
+
+  const [saving, setSaving] = useState(false);
+  const [saved,  setSaved]  = useState(false);
+  const [err,    setErr]    = useState('');
+
+  // Load storage types on mount / companyId change
+  useEffect(() => {
+    if (!companyId) return;
+    supabase.from('storage_types').select('id, name, daily_rate')
+      .eq('company_id', companyId)
+      .in('name', STORAGE_PRESETS)
+      .then(({ data }) => {
+        if (!data) return;
+        const rates = {}, ids = {};
+        for (const row of data) {
+          rates[row.name] = String(parseFloat(row.daily_rate).toFixed(2));
+          ids[row.name]   = row.id;
+        }
+        setStorageRates(prev => ({ ...prev, ...rates }));
+        setStorageIds(ids);
+      });
+  }, [companyId]);
 
   const savePricing = async () => {
-    if (!companyId) { setPriceErr('No company ID — cannot save pricing.'); return; }
-    setPriceSaving(true); setPriceSaved(false); setPriceErr('');
+    if (!companyId) { setErr('No company ID — cannot save.'); return; }
+    setSaving(true); setSaved(false); setErr('');
+
+    // 1 — company_config upsert
     const payload = {
       company_id:                companyId,
       trade_base_fee:            parseFloat(tradeBaseFee)    || 0,
@@ -130,14 +79,58 @@ export default function PricingTab({ companyConfig, setCompanyConfig, companyId 
       after_hours_start_weekend: ahStartWE,
       after_hours_end_weekend:   ahEndWE,
       allow_accident_twoup:      allowAccidentTwoUp,
-      updated_at: new Date().toISOString(),
+      updated_at:                new Date().toISOString(),
     };
-    const { data, error } = await supabase.from('company_config')
-      .upsert(payload, { onConflict: 'company_id' }).select().single();
-    setPriceSaving(false);
-    if (error) { setPriceErr(error.message); return; }
-    if (data) { setCompanyConfig(data); setPriceSaved(true); setTimeout(() => setPriceSaved(false), 2500); }
+    const { data: cfgData, error: cfgErr } = await supabase
+      .from('company_config')
+      .upsert(payload, { onConflict: 'company_id' })
+      .select().single();
+    if (cfgErr) { setErr(cfgErr.message); setSaving(false); return; }
+    if (cfgData) setCompanyConfig(cfgData);
+
+    // 2 — storage types: update existing rows, insert missing ones
+    const newIds = { ...storageIds };
+    for (const name of STORAGE_PRESETS) {
+      const rate = parseFloat(storageRates[name]);
+      if (isNaN(rate)) continue; // blank = skip
+      if (newIds[name]) {
+        await supabase.from('storage_types')
+          .update({ daily_rate: rate })
+          .eq('id', newIds[name]);
+      } else {
+        const { data: ins } = await supabase.from('storage_types')
+          .insert({ company_id: companyId, name, daily_rate: rate })
+          .select('id').single();
+        if (ins?.id) newIds[name] = ins.id;
+      }
+    }
+    setStorageIds(newIds);
+
+    setSaving(false); setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
   };
+
+  const rateRow = (name, isDefault) => (
+    <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 9, color: TXT }}>{name}</div>
+        {isDefault && (
+          <span style={{ fontSize: 7, color: ACC, border: `1px solid ${ACC}55`, borderRadius: 2, padding: '0px 4px' }}>
+            DEFAULT
+          </span>
+        )}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <span style={{ fontSize: 8, color: MUT }}>$</span>
+        <input type="number" min="0" step="0.01"
+          value={storageRates[name]}
+          onChange={e => setStorageRates(r => ({ ...r, [name]: e.target.value }))}
+          placeholder="0.00"
+          style={{ ...inp, width: 80, padding: '4px 6px', fontSize: 10 }} />
+        <span style={{ fontSize: 8, color: MUT }}>/day</span>
+      </div>
+    </div>
+  );
 
   return (
     <div style={{ padding: 16, flex: 1, overflowY: 'auto' }}>
@@ -145,17 +138,18 @@ export default function PricingTab({ companyConfig, setCompanyConfig, companyId 
         <div style={{ fontSize: 13, fontWeight: 700, color: TXT, letterSpacing: '0.06em' }}>💰 Pricing</div>
         <div style={{ fontSize: 9, color: MUT, marginTop: 2 }}>Used in the Trace route pill to estimate job cost</div>
       </div>
-      <div style={{ background: SURF, border: '1px solid ' + BRD, borderRadius: 2, padding: '16px 18px', maxWidth: 480, marginBottom: 24 }}>
+
+      <div style={{ background: SURF, border: '1px solid ' + BRD, borderRadius: 2, padding: '16px 18px', maxWidth: 480, marginBottom: 16 }}>
 
         {/* Base fees */}
         <div style={{ fontSize: 8, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 8 }}>Base Fee</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
           <div>
-            <div style={{ fontSize: 8, color: MUT, marginBottom: 5 }}>Trade Tow <span style={{ color: '#2a2a2a' }}>· first 10 km</span></div>
+            <div style={{ fontSize: 8, color: MUT, marginBottom: 5 }}>Trade Tow <span style={{ color: '#444' }}>· first 10 km</span></div>
             {numInp(tradeBaseFee, e => setTradeBaseFee(e.target.value))}
           </div>
           <div>
-            <div style={{ fontSize: 8, color: MUT, marginBottom: 5 }}>Accident Tow <span style={{ color: '#2a2a2a' }}>· first 8 km</span></div>
+            <div style={{ fontSize: 8, color: MUT, marginBottom: 5 }}>Accident Tow <span style={{ color: '#444' }}>· first 8 km</span></div>
             {numInp(accidentBaseFee, e => setAccidentBaseFee(e.target.value))}
           </div>
         </div>
@@ -189,12 +183,17 @@ export default function PricingTab({ companyConfig, setCompanyConfig, companyId 
         {/* Two-up for accident */}
         <div style={{ marginBottom: 14 }}>
           <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer' }}>
-            <div onClick={() => setAllowAccidentTwoUp(v => !v)} style={{ width: 36, height: 20, borderRadius: 10, background: allowAccidentTwoUp ? ACC : '#2a2a2a', position: 'relative', flexShrink: 0, marginTop: 1, transition: 'background 0.2s', cursor: 'pointer' }}>
-              <div style={{ width: 14, height: 14, borderRadius: 7, background: '#fff', position: 'absolute', top: 3, left: allowAccidentTwoUp ? 19 : 3, transition: 'left 0.2s' }} />
+            <div onClick={() => setAllowAccidentTwoUp(v => !v)}
+              style={{ width: 36, height: 20, borderRadius: 10, background: allowAccidentTwoUp ? ACC : '#2a2a2a',
+                position: 'relative', flexShrink: 0, marginTop: 1, transition: 'background 0.2s', cursor: 'pointer' }}>
+              <div style={{ width: 14, height: 14, borderRadius: 7, background: '#fff', position: 'absolute',
+                top: 3, left: allowAccidentTwoUp ? 19 : 3, transition: 'left 0.2s' }} />
             </div>
             <div>
               <div style={{ fontSize: 9, color: allowAccidentTwoUp ? TXT : MUT }}>Allow two-up / swinger for accident tows</div>
-              <div style={{ fontSize: 7, color: '#333', marginTop: 2, lineHeight: 1.5 }}>Vic law prohibits it at crash scenes — only enable if permitted in your jurisdiction</div>
+              <div style={{ fontSize: 7, color: '#444', marginTop: 2, lineHeight: 1.5 }}>
+                Vic law prohibits it at crash scenes — only enable if permitted in your jurisdiction
+              </div>
             </div>
           </label>
         </div>
@@ -219,27 +218,28 @@ export default function PricingTab({ companyConfig, setCompanyConfig, companyId 
             {timeInp(ahEndWE, e => setAhEndWE(e.target.value))}
           </div>
         </div>
-        <div style={{ fontSize: 8, color: MUT, marginBottom: 16, lineHeight: 1.6 }}>
+        <div style={{ fontSize: 8, color: MUT, marginBottom: 20, lineHeight: 1.6 }}>
           After-hours spans midnight — any time ≥ start OR &lt; end counts.
         </div>
 
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <button onClick={savePricing} disabled={priceSaving}
-            style={{ ...btnA, fontSize: 9, padding: '7px 14px', opacity: priceSaving ? 0.6 : 1 }}>
-            {priceSaving ? 'Saving…' : 'Save Pricing'}
-          </button>
-          {priceSaved && <span style={{ fontSize: 9, color: '#3d9e50' }}>✓ Saved</span>}
-          {priceErr   && <span style={{ fontSize: 9, color: '#cc4444' }}>{priceErr}</span>}
+        {/* Storage types — inline */}
+        <div style={{ borderTop: '1px solid ' + BRD, paddingTop: 16, marginBottom: 14 }}>
+          <div style={{ fontSize: 8, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}>
+            Storage Rates
+          </div>
+          <div style={{ fontSize: 8, color: MUT, marginBottom: 12 }}>Daily rate per vehicle — top item is the default</div>
+          {STORAGE_PRESETS.map((name, i) => rateRow(name, i === 0))}
         </div>
-      </div>
 
-      {/* Storage Types */}
-      <div style={{ marginBottom: 8 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: TXT, letterSpacing: '0.04em', marginBottom: 4 }}>Storage Types</div>
-        <div style={{ fontSize: 9, color: MUT, marginBottom: 12 }}>Sorted most expensive first — top item is the default selection</div>
-      </div>
-      <div style={{ background: SURF, border: '1px solid ' + BRD, borderRadius: 2, padding: '16px 18px', maxWidth: 480, marginBottom: 24 }}>
-        <StorageSection companyId={companyId} />
+        {/* Save */}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button onClick={savePricing} disabled={saving}
+            style={{ ...btnA, fontSize: 9, padding: '7px 14px', opacity: saving ? 0.6 : 1 }}>
+            {saving ? 'Saving…' : 'Save Pricing & Storage'}
+          </button>
+          {saved && <span style={{ fontSize: 9, color: '#3d9e50' }}>✓ Saved</span>}
+          {err   && <span style={{ fontSize: 9, color: '#cc4444' }}>{err}</span>}
+        </div>
       </div>
     </div>
   );
