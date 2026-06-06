@@ -360,6 +360,10 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
   const [bridgeData,      setBridgeData]      = useState([]); // array of [lat,lng,h,label,btype]
   const [showEmergency,   setShowEmergency]   = useState(false);
   const [emergencyData,   setEmergencyData]   = useState([]);
+  const [showVessels,     setShowVessels]     = useState(false);
+  const [vesselData,      setVesselData]      = useState([]);
+  const [showAircraft,    setShowAircraft]    = useState(false);
+  const [aircraftData,    setAircraftData]    = useState([]);
 
   // Map state
   const [driverLocations, setDriverLocations] = useState([]);
@@ -414,6 +418,8 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
   const tracePinLayerRef        = useRef(null);
   const bridgeLayerRef          = useRef(null);
   const emergencyLayerRef       = useRef(null);
+  const vesselLayerRef          = useRef(null);
+  const aircraftLayerRef        = useRef(null);
   const userPosRef              = useRef(null);
   const selectedLatLngRef       = useRef(null);
   const selectedBridgeLatLngRef = useRef(null);
@@ -627,6 +633,8 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
       const tracePinLayer = L.layerGroup().addTo(map);
       const bridgeLayer   = L.layerGroup(); // not added by default — toggled on demand
       const emergencyLayer = L.layerGroup(); // not added by default — toggled on demand
+      const vesselLayer    = L.layerGroup();
+      const aircraftLayer  = L.layerGroup();
 
       activeLayerRef.current    = activeLayer;
       clearedLayerRef.current   = clearedLayer;
@@ -636,6 +644,8 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
       tracePinLayerRef.current  = tracePinLayer;
       bridgeLayerRef.current    = bridgeLayer;
       emergencyLayerRef.current = emergencyLayer;
+      vesselLayerRef.current    = vesselLayer;
+      aircraftLayerRef.current  = aircraftLayer;
       mapRef.current            = map;
 
       if (!document.getElementById('ops-full-style')) {
@@ -913,6 +923,112 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
     });
   }, [showEmergency, emergencyData, mapReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Fetch AIS vessel data when layer enabled
+  useEffect(() => {
+    if (!showVessels) return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const res = await fetch('/.netlify/functions/ais-vessels');
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (!cancelled && data.vessels) setVesselData(data.vessels);
+      } catch { /* ignore */ }
+    };
+    load();
+    const poll = setInterval(load, 60_000);
+    return () => { cancelled = true; clearInterval(poll); };
+  }, [showVessels]);
+
+  // Render AIS vessel markers
+  useEffect(() => {
+    const map = mapRef.current, layer = vesselLayerRef.current;
+    if (!map || !layer) return;
+    if (!showVessels || vesselData.length === 0) { map.removeLayer(layer); layer.clearLayers(); return; }
+    const L = leafletRef.current;
+    if (!L) return;
+    layer.clearLayers();
+    map.addLayer(layer);
+    const vesselIcon = t => {
+      const n = parseInt(t) || 0;
+      if (n >= 70 && n <= 79) return '🚢';
+      if (n >= 80 && n <= 89) return '⛽';
+      if (n >= 60 && n <= 69) return '🛳️';
+      if (n === 31 || n === 32 || n === 52) return '⚓';
+      if (n === 30) return '🎣';
+      if (n === 36 || n === 37) return '⛵';
+      return '🚤';
+    };
+    vesselData.forEach(v => {
+      const lat = v.LATITUDE, lng = v.LONGITUDE;
+      if (lat == null || lng == null) return;
+      const name = (v.NAME || '').trim() || `MMSI ${v.MMSI}`;
+      const sog  = v.SOG ?? 0;
+      const icon = vesselIcon(v.TYPE);
+      const html = `<div style="font-size:16px;line-height:1;filter:drop-shadow(0 1px 3px #000)">${icon}</div>`;
+      const tip  = [name, `${sog.toFixed(1)} kn`, v.DEST ? `→ ${(v.DEST || '').trim()}` : ''].filter(Boolean).join(' · ');
+      const marker = L.marker([lat, lng], {
+        icon: L.divIcon({ className: '', html, iconSize: [18, 18], iconAnchor: [9, 9] }),
+        zIndexOffset: 60,
+      });
+      marker.addTo(layer);
+      if (tip) marker.bindTooltip(tip, { direction: 'top', className: 'towbench-tooltip' });
+    });
+  }, [showVessels, vesselData, mapReady]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetch ADS-B aircraft data when layer enabled
+  useEffect(() => {
+    if (!showAircraft) return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const res = await fetch('/.netlify/functions/adsb-aircraft');
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (!cancelled && data.aircraft) setAircraftData(data.aircraft);
+      } catch { /* ignore */ }
+    };
+    load();
+    const poll = setInterval(load, 30_000);
+    return () => { cancelled = true; clearInterval(poll); };
+  }, [showAircraft]);
+
+  // Render ADS-B aircraft markers
+  useEffect(() => {
+    const map = mapRef.current, layer = aircraftLayerRef.current;
+    if (!map || !layer) return;
+    if (!showAircraft || aircraftData.length === 0) { map.removeLayer(layer); layer.clearLayers(); return; }
+    const L = leafletRef.current;
+    if (!L) return;
+    layer.clearLayers();
+    map.addLayer(layer);
+    const acColor = alt => {
+      if (alt == null || alt === 'ground') return '#555';
+      if (alt >= 20000) return '#4a6a9a';
+      if (alt >= 5000)  return '#3d9e50';
+      if (alt >= 1000)  return '#c4a43a';
+      return '#c46a1a';
+    };
+    aircraftData.forEach(ac => {
+      const lat = ac.lat, lng = ac.lon;
+      if (lat == null || lng == null) return;
+      const callsign = (ac.flight || '').trim() || ac.hex || '';
+      const alt      = typeof ac.alt_baro === 'number' ? ac.alt_baro : null;
+      const gs       = ac.gs != null ? Math.round(ac.gs) : null;
+      const track    = ac.track ?? 0;
+      const color    = acColor(alt ?? ac.alt_baro);
+      // ✈ (U+2708) renders pointing upper-right (~45° from north); subtract 45° to align with track
+      const html = `<div style="font-size:13px;line-height:1;transform:rotate(${Math.round(track - 45)}deg);color:${color};filter:drop-shadow(0 0 2px ${color}99)">✈</div>`;
+      const tip  = [callsign, ac.r, alt != null ? `${alt.toLocaleString()}ft` : (alt === 'ground' ? 'Ground' : ''), gs ? `${gs}kn` : ''].filter(Boolean).join(' · ');
+      const marker = L.marker([lat, lng], {
+        icon: L.divIcon({ className: '', html, iconSize: [14, 14], iconAnchor: [7, 7] }),
+        zIndexOffset: 50,
+      });
+      marker.addTo(layer);
+      if (tip) marker.bindTooltip(tip, { direction: 'top', className: 'towbench-tooltip' });
+    });
+  }, [showAircraft, aircraftData, mapReady]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const liveCount    = liveIds.size;
   const cutoff24h    = Date.now() - 24 * 60 * 60 * 1000;
   const clearedCount = allFeatures.filter(f => {
@@ -977,6 +1093,8 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
           <LayerBadge active={showBridges} onClick={() => setShowBridges(v => !v)} color="#5a9aee" label="🌉 Bridges" />
         )}
         <LayerBadge active={showEmergency} onClick={() => setShowEmergency(v => !v)} color="#af3a3a" label="🚨 Emergency" />
+        <LayerBadge active={showVessels}  onClick={() => setShowVessels(v  => !v)} color="#2a8aaf" label="⛵ Vessels" />
+        <LayerBadge active={showAircraft} onClick={() => setShowAircraft(v => !v)} color="#4a6a9a" label="✈ Aircraft" />
 
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
           {rainSoon && (
