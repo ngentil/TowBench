@@ -39,7 +39,7 @@ function KpiCard({ label, value, sub, color = TXT }) {
   return (
     <div style={{ background: SURF, border: '1px solid ' + BRD, borderTop: `2px solid ${color}`, borderRadius: 2, padding: '10px 12px', flex: 1, minWidth: 90 }}>
       <div style={{ fontSize: 7, color: MUT, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: 18, fontWeight: 700, color, fontFamily: "'IBM Plex Mono',monospace", lineHeight: 1 }}>{value}</div>
+      <div style={{ fontSize: 18, fontWeight: 700, color, fontFamily: "'IBM Plex Mono',monospace", lineHeight: 1.2, wordBreak: 'break-word', overflowWrap: 'break-word' }}>{value}</div>
       {sub && <div style={{ fontSize: 8, color: MUT, marginTop: 4 }}>{sub}</div>}
     </div>
   );

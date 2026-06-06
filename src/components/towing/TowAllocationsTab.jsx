@@ -238,13 +238,6 @@ function AllocationCard({ feature, fromLog, userPos, nearbyKm, acceptedJob, user
               ✓ Accept
             </button>
           )}
-          {/* Dispatcher: Allocate button → opens trace/dispatch modal */}
-          {isLive && isDispatch && (
-            <button onClick={e => { e.stopPropagation(); onDispatch(feature); }}
-              style={{ background: '#cc444411', border: '1px solid #cc444455', borderRadius: 2, color: '#cc4444', fontSize: 8, padding: '3px 7px', cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>
-              ▶ Allocate
-            </button>
-          )}
           {/* Driver: dispatched badge showing truck + depot */}
           {isLive && !isDispatch && dispatchedJob && (() => {
             const truck = trucks?.find(t => t.id === dispatchedJob.truck_id);
