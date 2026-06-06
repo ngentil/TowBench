@@ -45,29 +45,39 @@ export default function PricingTab({ companyConfig, setCompanyConfig, companyId 
 
   // Load storage types on mount / companyId change
   useEffect(() => {
-    if (!companyId) return;
-    supabase.from('storage_types').select('id, name, daily_rate')
-      .eq('company_id', companyId)
-      .in('name', STORAGE_PRESETS)
-      .then(({ data }) => {
-        if (!data) return;
-        const rates = {}, ids = {};
-        for (const row of data) {
-          rates[row.name] = String(parseFloat(row.daily_rate).toFixed(2));
-          ids[row.name]   = row.id;
-        }
-        setStorageRates(prev => ({ ...prev, ...rates }));
-        setStorageIds(ids);
-      });
+    const load = async (cid) => {
+      const { data } = await supabase.from('storage_types').select('id, name, daily_rate')
+        .eq('company_id', cid).in('name', STORAGE_PRESETS);
+      if (!data) return;
+      const rates = {}, ids = {};
+      for (const row of data) {
+        rates[row.name] = String(parseFloat(row.daily_rate).toFixed(2));
+        ids[row.name]   = row.id;
+      }
+      setStorageRates(prev => ({ ...prev, ...rates }));
+      setStorageIds(ids);
+    };
+    if (companyId) {
+      load(companyId);
+    } else {
+      supabase.from('companies').select('id').order('created_at').limit(1).maybeSingle()
+        .then(({ data }) => { if (data?.id) load(data.id); });
+    }
   }, [companyId]);
 
   const savePricing = async () => {
-    if (!companyId) { setErr('No company ID — cannot save.'); return; }
+    let cid = companyId;
+    if (!cid) {
+      // Race: effectiveCompanyId not yet resolved — fetch inline
+      const { data } = await supabase.from('companies').select('id').order('created_at').limit(1).maybeSingle();
+      cid = data?.id;
+    }
+    if (!cid) { setErr('No company found — check Supabase setup.'); return; }
     setSaving(true); setSaved(false); setErr('');
 
     // 1 — company_config upsert
     const payload = {
-      company_id:                companyId,
+      company_id:                cid,
       trade_base_fee:            parseFloat(tradeBaseFee)    || 0,
       accident_base_fee:         parseFloat(accidentBaseFee) || 0,
       trade_per_km_fee:          parseFloat(tradePerKm)      || 0,
@@ -99,7 +109,7 @@ export default function PricingTab({ companyConfig, setCompanyConfig, companyId 
           .eq('id', newIds[name]);
       } else {
         const { data: ins } = await supabase.from('storage_types')
-          .insert({ company_id: companyId, name, daily_rate: rate })
+          .insert({ company_id: cid, name, daily_rate: rate })
           .select('id').single();
         if (ins?.id) newIds[name] = ins.id;
       }

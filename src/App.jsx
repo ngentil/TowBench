@@ -795,9 +795,10 @@ export default function App() {
     };
     if (profile.company_id) {
       setup(profile.company_id);
-    } else if (profile.role === 'super_admin') {
-      // Resolve to first available company
-      supabase.from('companies').select('id').order('created_at').limit(1).single()
+    } else {
+      // No company on profile (super_admin or admin before company created) —
+      // fall back to the first company in the DB.
+      supabase.from('companies').select('id').order('created_at').limit(1).maybeSingle()
         .then(({ data }) => { if (data?.id) setup(data.id); });
     }
   }, [profile?.company_id, profile?.role]); // eslint-disable-line react-hooks/exhaustive-deps
