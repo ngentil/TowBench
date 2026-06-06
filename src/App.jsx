@@ -737,7 +737,7 @@ export default function App() {
 
   const loadUserData = async (userId, userEmail, welcome = false) => {
     const [profileRes, truckRes] = await Promise.all([
-      supabase.from('user_profiles').select('*').eq('id', userId).single(),
+      supabase.from('user_profiles').select('*').eq('id', userId).maybeSingle(),
       supabase.from('tow_trucks').select('*').eq('auth_email', userEmail).maybeSingle(),
     ]);
     const prof = profileRes.data || null;
