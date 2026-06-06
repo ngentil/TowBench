@@ -319,7 +319,9 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, co
         {TABS.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
             style={{ flexShrink: 0, padding: '8px 14px', fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: tab === t.id ? ACC : MUT, cursor: 'pointer', border: 'none', background: 'none', borderBottom: tab === t.id ? '2px solid ' + ACC : '2px solid transparent', fontFamily: "'IBM Plex Mono',monospace", whiteSpace: 'nowrap' }}>
-            {t.label}
+            {t.id === 'waze'
+              ? <img src="https://www.waze.com/favicon.ico" alt="Waze" style={{ width: 16, height: 16, verticalAlign: 'middle', opacity: tab === 'waze' ? 1 : 0.45, display: 'block' }} />
+              : t.label}
           </button>
         ))}
         {/* Tab order settings — always visible, pinned to the right */}
