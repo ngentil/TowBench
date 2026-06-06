@@ -23,7 +23,7 @@ exports.handler = async function () {
       });
     };
 
-    const timer = setTimeout(finish, 4000);
+    const timer = setTimeout(finish, 7000);
 
     ws.on('error', (e) => {
       if (resolved) return;
@@ -36,7 +36,7 @@ exports.handler = async function () {
       ws.send(JSON.stringify({
         Apikey: KEY,
         BoundingBoxes: [[[-38.5, 144.5], [-37.5, 145.2]]],
-        FilterMessageTypes: ['PositionReport', 'ShipStaticData'],
+        FilterMessageTypes: ['PositionReport', 'StandardClassBPositionReport', 'ShipStaticData'],
       }));
     });
 
@@ -44,8 +44,8 @@ exports.handler = async function () {
       try {
         const msg  = JSON.parse(data.toString());
         const meta = msg.MetaData || {};
-        if (msg.MessageType === 'PositionReport') {
-          const pos  = msg.Message?.PositionReport || {};
+        if (msg.MessageType === 'PositionReport' || msg.MessageType === 'StandardClassBPositionReport') {
+          const pos  = msg.Message?.PositionReport || msg.Message?.StandardClassBPositionReport || {};
           const mmsi = meta.MMSI || pos.UserID;
           if (!mmsi) return;
           const prev = vessels.get(mmsi) || {};
