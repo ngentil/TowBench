@@ -368,7 +368,7 @@ export default function ManualDispatchTab({ companyId, companyConfig, userEmail 
 
             {/* Per-variable modifiers */}
             <div style={{ fontSize: 7, color: '#3a3a3a', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>Adjustments</div>
-            {[['Base / Callout', 'base'], ['Per km charge', 'km'], ['After hours', 'ah']].map(([label, key]) => {
+            {[['Base fee', 'base'], ['Per km charge', 'km'], ['After hours (callout)', 'ah']].map(([label, key]) => {
               const mod = customMods[key];
               const isModified = mod.pct !== 100 || mod.x2;
               return (
