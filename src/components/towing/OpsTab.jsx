@@ -148,12 +148,12 @@ function calcTracePrice(totalKm, cfg, towType, twoUpTrade, twoUpAccident, allowA
   const accBase = parseFloat(cfg.accident_base_fee) || 0;
   const trdBase = parseFloat(cfg.trade_base_fee)    || 0;
   const result = {};
-  if ((towType === 'accident' || towType === 'both') && accBase > 0) {
+  if ((towType === 'accident' || towType === 'custom') && accBase > 0) {
     const km  = Math.max(0, totalKm - 8) * (parseFloat(cfg.accident_per_km_fee) || 0);
     const mul = (twoUpAccident && allowAccidentTwoUp) ? 2 : 1;
     result.accident = (accBase + km + ahSurcharge) * mul;
   }
-  if ((towType === 'trade' || towType === 'both') && trdBase > 0) {
+  if ((towType === 'trade' || towType === 'custom') && trdBase > 0) {
     const km  = Math.max(0, totalKm - 10) * (parseFloat(cfg.trade_per_km_fee) || 0);
     const mul = twoUpTrade ? 2 : 1;
     result.trade = (trdBase + km + ahSurcharge) * mul;
@@ -1227,28 +1227,6 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
                 </select>
               )}
             </div>
-
-            {/* Two-up — Trade */}
-            {(towType === 'trade' || towType === 'both') && (
-              <div style={{ padding: '6px 10px', borderBottom: '1px solid #1a1a1a' }}>
-                <div style={{ fontSize: 7, color: '#444', marginBottom: 4, letterSpacing: '0.08em' }}>Trade</div>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer' }}>
-                  <input type="checkbox" checked={twoUpTrade} onChange={e => setTwoUpTrade(e.target.checked)} />
-                  <span style={{ fontSize: 8, color: twoUpTrade ? ACC : '#555' }}>×2 Two-up / Swinger</span>
-                </label>
-              </div>
-            )}
-
-            {/* Two-up — Accident */}
-            {(towType === 'accident' || towType === 'both') && allowAccidentTwoUp && (
-              <div style={{ padding: '6px 10px', borderBottom: '1px solid #1a1a1a' }}>
-                <div style={{ fontSize: 7, color: '#444', marginBottom: 4, letterSpacing: '0.08em' }}>Accident</div>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer' }}>
-                  <input type="checkbox" checked={twoUpAccident} onChange={e => setTwoUpAccident(e.target.checked)} />
-                  <span style={{ fontSize: 8, color: twoUpAccident ? ACC : '#555' }}>×2 Two-up / Swinger</span>
-                </label>
-              </div>
-            )}
 
             {/* Custom pricing panel */}
             {towType === 'custom' && traceRoute?.legs && (() => {
