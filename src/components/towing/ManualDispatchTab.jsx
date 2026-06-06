@@ -43,6 +43,36 @@ function calcPriceBreakdown(totalKm, cfg, towType, twoUpTrade, twoUpAccident) {
   return Object.keys(result).length ? result : null;
 }
 
+function calcCustomBreakdown(totalKm, cfg, inclAccident, inclTrade, mods) {
+  if (!cfg || !totalKm) return null;
+  const sur = ahSurcharge(cfg);
+  const applyMod = (val, key) => val * ((mods[key]?.pct ?? 100) / 100) * (mods[key]?.x2 ? 2 : 1);
+  const result = {};
+  if (inclAccident) {
+    const base     = applyMod(parseFloat(cfg.accident_base_fee) || 0, 'base');
+    const freeKm   = 8;
+    const billable = Math.max(0, totalKm - freeKm);
+    const perKm    = parseFloat(cfg.accident_per_km_fee) || 0;
+    const kmCharge = applyMod(billable * perKm, 'km');
+    const surAdj   = applyMod(sur, 'ah');
+    const total    = base + kmCharge + surAdj;
+    if ((parseFloat(cfg.accident_base_fee) || 0) > 0 || perKm > 0)
+      result.accident = { base, freeKm, billable, perKm, kmCharge, sur: surAdj, mul: 1, total };
+  }
+  if (inclTrade) {
+    const base     = applyMod(parseFloat(cfg.trade_base_fee) || 0, 'base');
+    const freeKm   = 10;
+    const billable = Math.max(0, totalKm - freeKm);
+    const perKm    = parseFloat(cfg.trade_per_km_fee) || 0;
+    const kmCharge = applyMod(billable * perKm, 'km');
+    const surAdj   = applyMod(sur, 'ah');
+    const total    = base + kmCharge + surAdj;
+    if ((parseFloat(cfg.trade_base_fee) || 0) > 0 || perKm > 0)
+      result.trade = { base, freeKm, billable, perKm, kmCharge, sur: surAdj, mul: 1, total };
+  }
+  return Object.keys(result).length ? result : null;
+}
+
 function AddrSearch({ label, value, onChange, onPick, results, onClearResults, placeholder }) {
   return (
     <div style={{ position: 'relative' }}>
@@ -84,6 +114,15 @@ export default function ManualDispatchTab({ companyId, companyConfig, userEmail 
   const [towType,   setTowType]   = useState('accident');
   const [twoUpTrade,    setTwoUpTrade]    = useState(false);
   const [twoUpAccident, setTwoUpAccident] = useState(false);
+
+  // Custom tow type state
+  const [customAccident, setCustomAccident] = useState(true);
+  const [customTrade,    setCustomTrade]    = useState(false);
+  const [customMods,     setCustomMods]     = useState({
+    base: { pct: 100, x2: false },
+    km:   { pct: 100, x2: false },
+    ah:   { pct: 100, x2: false },
+  });
 
   // From depot
   const [fromDepot,       setFromDepot]       = useState(true);
@@ -190,11 +229,17 @@ export default function ManualDispatchTab({ companyId, companyConfig, userEmail 
     return () => { cancelled = true; };
   }, [fromDepot, fromDepotPoint, pointA, destEnabled, pointB, extraStops, returnDepot, returnDepotPoint]);
 
-  const breakdown = route ? calcPriceBreakdown(route.km, companyConfig, towType, twoUpTrade, twoUpAccident) : null;
+  const breakdown = route
+    ? (towType === 'custom'
+        ? calcCustomBreakdown(route.km, companyConfig, customAccident, customTrade, customMods)
+        : calcPriceBreakdown(route.km, companyConfig, towType, twoUpTrade, twoUpAccident))
+    : null;
   const totalFee  = breakdown ? ((breakdown.accident?.total ?? 0) + (breakdown.trade?.total ?? 0)) || null : null;
 
   const reset = () => {
     setTruckId(''); setTowType('accident'); setTwoUpTrade(false); setTwoUpAccident(false);
+    setCustomAccident(true); setCustomTrade(false);
+    setCustomMods({ base: { pct: 100, x2: false }, km: { pct: 100, x2: false }, ah: { pct: 100, x2: false } });
     setDocketRequired(false);
     setFromDepot(true); setFromDepotId(''); setFromDepotPoint(null);
     setSearchA(''); setResultsA([]); setPointA(null);
@@ -300,11 +345,58 @@ export default function ManualDispatchTab({ companyId, companyConfig, userEmail 
         </div>
 
         {/* Tow type */}
-        <div style={{ marginBottom: 14 }}>
+        <div style={{ marginBottom: towType === 'custom' ? 10 : 14 }}>
           <FL t="Tow Type" />
           <div style={{ display: 'flex', gap: 6 }}>{TOW_TYPES.map(typeBtn)}</div>
         </div>
 
+        {/* Custom pricing panel */}
+        {towType === 'custom' && (
+          <div style={{ marginBottom: 14, background: '#0a0a0a', border: '1px solid #1e1e1e', borderRadius: 2, padding: '10px 12px' }}>
+            <div style={{ fontSize: 7, color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 8 }}>Custom Pricing</div>
+
+            {/* Billing type checkboxes */}
+            <div style={{ display: 'flex', gap: 14, marginBottom: 10 }}>
+              {[['Accident', customAccident, setCustomAccident, RED], ['Trade', customTrade, setCustomTrade, ACC]].map(([label, val, set, col]) => (
+                <label key={label} style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={val} onChange={e => set(e.target.checked)}
+                    style={{ accentColor: col, cursor: 'pointer' }} />
+                  <span style={{ fontSize: 9, color: val ? col : MUT, fontFamily: "'IBM Plex Mono',monospace" }}>{label}</span>
+                </label>
+              ))}
+            </div>
+
+            {/* Per-variable modifiers */}
+            <div style={{ fontSize: 7, color: '#3a3a3a', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>Adjustments</div>
+            {[['Base / Callout', 'base'], ['Per km charge', 'km'], ['After hours', 'ah']].map(([label, key]) => {
+              const mod = customMods[key];
+              const isModified = mod.pct !== 100 || mod.x2;
+              return (
+                <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 7 }}>
+                  <span style={{ flex: 1, fontSize: 8, color: isModified ? TXT : MUT }}>{label}</span>
+                  <input type="number" min="0" max="999" value={mod.pct}
+                    onChange={e => setCustomMods(m => ({ ...m, [key]: { ...m[key], pct: parseFloat(e.target.value) || 0 } }))}
+                    style={{
+                      width: 52, fontSize: 9, padding: '3px 5px', textAlign: 'right',
+                      background: '#050505', borderRadius: 2, outline: 'none',
+                      fontFamily: "'IBM Plex Mono',monospace",
+                      border: `1px solid ${mod.pct !== 100 ? ACC + '88' : '#2a2a2a'}`,
+                      color: mod.pct !== 100 ? ACC : '#555',
+                    }} />
+                  <span style={{ fontSize: 8, color: '#444' }}>%</span>
+                  <button onClick={() => setCustomMods(m => ({ ...m, [key]: { ...m[key], x2: !m[key].x2 } }))}
+                    style={{
+                      fontSize: 8, padding: '3px 8px', borderRadius: 2, cursor: 'pointer',
+                      fontFamily: "'IBM Plex Mono',monospace", fontWeight: 700,
+                      background: mod.x2 ? ACC + '22' : 'transparent',
+                      border: `1px solid ${mod.x2 ? ACC + '88' : '#2a2a2a'}`,
+                      color: mod.x2 ? ACC : '#444',
+                    }}>×2</button>
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         <div style={{ borderTop: '1px solid #1a1a1a', margin: '14px 0' }} />
 
