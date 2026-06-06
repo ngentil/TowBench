@@ -737,7 +737,7 @@ export default function App() {
 
   const loadUserData = async (userId, userEmail, welcome = false) => {
     const [profileRes, truckRes] = await Promise.all([
-      supabase.from('user_profiles').select('*').eq('id', userId).single(),
+      supabase.from('user_profiles').select('*').eq('id', userId).maybeSingle(),
       supabase.from('tow_trucks').select('*').eq('auth_email', userEmail).maybeSingle(),
     ]);
     const prof = profileRes.data || null;
@@ -813,16 +813,11 @@ export default function App() {
     setProfile(null); setTruck(null);
   };
 
-  const role        = profile?.role || null;
-  const isAdmin     = role === 'admin' || role === 'super_admin';
-  const isDispatch  = role === 'dispatch' || isAdmin;
-  const displayName = truck?.first_name
-    ? `${truck.first_name} ${truck.last_name || ''}`.trim()
-    : session?.user?.user_metadata?.first_name
-      ? `${session.user.user_metadata.first_name} ${session.user.user_metadata.last_name || ''}`.trim()
-      : session?.user?.email?.split('@')[0] || '';
+  const role        = profile?.role || 'admin'; // everyone gets full access
+  const isAdmin     = true;
+  const isDispatch  = true;
+  const displayName = session?.user?.email?.split('@')[0] || '';
   const displayPlate = truck?.plate?.toUpperCase() || '';
-  const isPendingApproval = role === 'driver' && truck && !truck.approved;
 
   if (!authChecked) {
     return (
@@ -856,10 +851,6 @@ export default function App() {
         </div>
       </div>
     );
-  }
-
-  if (isPendingApproval) {
-    return <PendingApproval plate={displayPlate || session.user.email} onSignOut={signOut} />;
   }
 
   return (
