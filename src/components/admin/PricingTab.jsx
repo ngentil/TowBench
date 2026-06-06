@@ -265,8 +265,13 @@ export default function PricingTab({ companyConfig, setCompanyConfig, companyId 
             {saving ? 'Saving…' : 'Save Pricing & Storage'}
           </button>
           {saved && <span style={{ fontSize: 9, color: '#3d9e50' }}>✓ Saved</span>}
-          {err   && <span style={{ fontSize: 9, color: '#cc4444' }}>{err}</span>}
         </div>
+        {err && (
+          <div style={{ marginTop: 10, padding: '8px 10px', background: '#2a0a0a', border: '1px solid #663333',
+            borderRadius: 2, fontSize: 9, color: '#ff6666', lineHeight: 1.6, wordBreak: 'break-all' }}>
+            ✕ {err}
+          </div>
+        )}
       </div>
     </div>
   );
