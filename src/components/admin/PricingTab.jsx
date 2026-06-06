@@ -84,11 +84,12 @@ export default function PricingTab({ companyConfig, setCompanyConfig, companyId 
   const savePricing = async () => {
     let cid = companyId;
     if (!cid) {
-      // Race: effectiveCompanyId not yet resolved — fetch inline
-      const { data } = await supabase.from('companies').select('id').order('created_at').limit(1).maybeSingle();
+      const { data, error: cidErr } = await supabase.from('companies').select('id').order('created_at').limit(1).maybeSingle();
+      if (cidErr) console.error('companies lookup error:', cidErr);
       cid = data?.id;
     }
-    if (!cid) { setErr('No company found — check Supabase setup.'); return; }
+    console.log('savePricing: cid =', cid);
+    if (!cid) { setErr('No company found — run migration 57 in Supabase SQL Editor.'); return; }
     setSaving(true); setSaved(false); setErr('');
 
     // 1 — company_config upsert
@@ -111,7 +112,7 @@ export default function PricingTab({ companyConfig, setCompanyConfig, companyId 
       .from('company_config')
       .upsert(payload, { onConflict: 'company_id' })
       .select().single();
-    if (cfgErr) { setErr(cfgErr.message); setSaving(false); return; }
+    if (cfgErr) { console.error('company_config upsert error:', cfgErr); setErr(cfgErr.message); setSaving(false); return; }
     if (cfgData) setCompanyConfig(cfgData);
 
     // 2 — storage types: update existing rows, insert missing ones
@@ -264,8 +265,13 @@ export default function PricingTab({ companyConfig, setCompanyConfig, companyId 
             {saving ? 'Saving…' : 'Save Pricing & Storage'}
           </button>
           {saved && <span style={{ fontSize: 9, color: '#3d9e50' }}>✓ Saved</span>}
-          {err   && <span style={{ fontSize: 9, color: '#cc4444' }}>{err}</span>}
         </div>
+        {err && (
+          <div style={{ marginTop: 10, padding: '8px 10px', background: '#2a0a0a', border: '1px solid #663333',
+            borderRadius: 2, fontSize: 9, color: '#ff6666', lineHeight: 1.6, wordBreak: 'break-all' }}>
+            ✕ {err}
+          </div>
+        )}
       </div>
     </div>
   );
