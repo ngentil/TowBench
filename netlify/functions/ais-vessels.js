@@ -34,8 +34,8 @@ exports.handler = async function () {
 
     ws.on('open', () => {
       ws.send(JSON.stringify({
-        APIKey: KEY,
-        BoundingBoxes: [[[-38.5, 144.5], [-37.5, 145.2]]],
+        Apikey: KEY,
+        BoundingBoxes: [[-38.5, 144.5], [-37.5, 145.2]],
         FilterMessageTypes: ['PositionReport', 'ShipStaticData'],
       }));
     });
