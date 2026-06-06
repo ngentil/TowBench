@@ -88,8 +88,7 @@ export default function PricingTab({ companyConfig, setCompanyConfig, companyId 
       if (cidErr) console.error('companies lookup error:', cidErr);
       cid = data?.id;
     }
-    console.log('savePricing: cid =', cid);
-    if (!cid) { setErr('No company found — run migration 57 in Supabase SQL Editor.'); return; }
+    if (!cid) { setErr('No company found — run migration 59 in Supabase SQL Editor.'); return; }
     setSaving(true); setSaved(false); setErr('');
 
     // 1 — company_config upsert
