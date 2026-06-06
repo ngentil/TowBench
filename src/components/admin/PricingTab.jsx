@@ -43,6 +43,22 @@ export default function PricingTab({ companyConfig, setCompanyConfig, companyId 
   const [saved,  setSaved]  = useState(false);
   const [err,    setErr]    = useState('');
 
+  // Sync local inputs whenever the upstream companyConfig changes (async load)
+  useEffect(() => {
+    if (!companyConfig.company_id) return; // still the default stub
+    setTradeBaseFee(String(companyConfig.trade_base_fee          ?? '0'));
+    setAccidentBaseFee(String(companyConfig.accident_base_fee    ?? '0'));
+    setTradePerKm(String(companyConfig.trade_per_km_fee          ?? '0'));
+    setAccidentPerKm(String(companyConfig.accident_per_km_fee    ?? '0'));
+    setAhFeeWD(String(companyConfig.after_hours_fee_weekday      ?? '0'));
+    setAhFeeWE(String(companyConfig.after_hours_fee_weekend      ?? '0'));
+    setAhStartWD(companyConfig.after_hours_start_weekday ?? '18:00');
+    setAhEndWD(companyConfig.after_hours_end_weekday     ?? '06:00');
+    setAhStartWE(companyConfig.after_hours_start_weekend ?? '18:00');
+    setAhEndWE(companyConfig.after_hours_end_weekend     ?? '06:00');
+    setAllowAccidentTwoUp(companyConfig.allow_accident_twoup ?? false);
+  }, [companyConfig.company_id]); // re-run only when a real config row arrives
+
   // Load storage types on mount / companyId change
   useEffect(() => {
     const load = async (cid) => {
