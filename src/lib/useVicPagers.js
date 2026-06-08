@@ -89,16 +89,19 @@ export function useVicPagers({ towOnly = false, maxIncidents = 200 } = {}) {
       setConnected(false)
     })
 
-    socket.on('message:new', (msg) => {
-      if (!msg || msg.type === 'administrative') return
-
+    // onAny counts every server-emitted event so rawCount is accurate even if
+    // VicPagers uses a different event name or sends admin-only messages
+    socket.onAny((eventName) => {
       setRawCount(n => n + 1)
       setLastEvent(
-        new Date().toLocaleTimeString('en-AU', {
+        `${eventName} ${new Date().toLocaleTimeString('en-AU', {
           hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
-        })
+        })}`
       )
+    })
 
+    socket.on('message:new', (msg) => {
+      if (!msg || msg.type === 'administrative') return
       if (towOnlyRef.current && !isTowRelevant(msg) && msg.type !== 'emergency') return
       if (msg.id != null) logVicPagersMessage(msg)
       setIncidents(prev => mergeMessage(prev, msg))
