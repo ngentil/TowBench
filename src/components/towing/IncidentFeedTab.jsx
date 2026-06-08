@@ -157,7 +157,7 @@ export default function IncidentFeedTab() {
   const [historyState, setHistoryState] = useState('loading') // loading | ok | error
   const [incidents, dispatch] = useReducer(incidentsReducer, {})
 
-  const { incidents: liveIncidents, connected, error, rawCount, lastEvent, socketId, connectedAt } = useVicPagers({ towOnly: false })
+  const { incidents: liveIncidents, connected, error, rawCount, lastEvent, socketId, connectedAt, activeNs } = useVicPagers({ towOnly: false })
   const [connectedSecs, setConnectedSecs] = useState(0)
 
   useEffect(() => {
@@ -235,7 +235,9 @@ export default function IncidentFeedTab() {
         </span>
         {connected && (
           <span style={{ fontFamily: MONO, fontSize: 9, color: BRD, letterSpacing: '0.04em' }}>
-            {rawCount > 0 ? `${rawCount} rx · last: ${lastEvent}` : 'waiting for dispatch'}
+            {rawCount > 0
+              ? `${rawCount} rx · ${activeNs && activeNs !== '/' ? `ns:${activeNs} · ` : ''}last: ${lastEvent}`
+              : 'waiting for dispatch'}
             {connectedSecs > 0 && ` · ${connectedSecs < 60 ? `${connectedSecs}s` : `${Math.floor(connectedSecs/60)}m`} up`}
           </span>
         )}
