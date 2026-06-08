@@ -286,10 +286,20 @@ function IncidentCard({ incident }) {
           <span style={{ fontSize: 8, color: MUT }}>{open ? '▲' : '▼'}</span>
         </div>
 
-        {/* Row 2: address · cross street */}
-        <div style={{ marginTop: 3, fontSize: 11, fontWeight: 700, color: TXT }}>
-          {addr || '—'}
-          {incident.corner && <span style={{ fontWeight: 400, color: MUT, fontSize: 9 }}> @ {incident.corner}</span>}
+        {/* Row 2: address — tappable Maps + Street View icons */}
+        <div style={{ marginTop: 3, display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: TXT }}>
+            {addr || '—'}
+            {incident.corner && <span style={{ fontWeight: 400, color: MUT, fontSize: 9 }}> @ {incident.corner}</span>}
+          </span>
+          {mapsUrl && (
+            <a href={mapsUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+              style={{ fontSize: 9, color: '#5a7a9a', textDecoration: 'none', flexShrink: 0 }}>📍</a>
+          )}
+          {svUrl && (
+            <a href={svUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+              style={{ fontSize: 9, color: '#5a6a7a', textDecoration: 'none', flexShrink: 0 }}>🔭</a>
+          )}
         </div>
 
         {/* Row 3: dispatch summary — always visible */}
@@ -334,29 +344,44 @@ function IncidentCard({ incident }) {
             </div>
           )}
 
-          {/* Info grid */}
+          {/* Info grid — Address / Cross St / Street View tiles are tappable */}
           <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
             {[
-              ['What',        EVENT_LABELS[incident.event_type] || incident.event_type || '—'],
-              ['Alarm',       incident.alarm_level || '—'],
-              ['Agency',      incident.agency || '—'],
-              ['Incident #',  incident.incident_id || '—'],
-              ['Address',     addr || '—'],
-              ['Cross St',    incident.corner || '—'],
-              ['Melway',      incident.map_ref || '—'],
-              ['Grid Ref',    incident.six_figure ? `(${incident.six_figure})` : '—'],
-              ['Radio Ch.',   dispatch.radioLabel || '—'],
-              ['Appliances',  dispatch.appliances.length ? dispatch.appliances.map(labelAppliance).join(' · ') : '—'],
-              ['Station',     dispatch.stationLabel || '—'],
-              ['Dispatched',  fmt(incident.first_seen)],
-              ['Age',         ageMins != null ? (ageMins < 60 ? `${ageMins}m` : `${Math.floor(ageMins/60)}h ${ageMins%60}m`) : '—'],
-              ['Pages',       String(msgs.length)],
-            ].map(([lbl, val]) => (
-              <div key={lbl} style={{ background: SURF, border: `1px solid ${BRD}`, borderRadius: 2, padding: '6px 8px' }}>
-                <div style={{ fontSize: 7, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>{lbl}</div>
-                <div style={{ fontSize: 10, color: TXT, fontFamily: MONO, wordBreak: 'break-word' }}>{val}</div>
-              </div>
-            ))}
+              ['What',         EVENT_LABELS[incident.event_type] || incident.event_type || '—'],
+              ['Alarm',        incident.alarm_level || '—'],
+              ['Agency',       incident.agency || '—'],
+              ['Incident #',   incident.incident_id || '—'],
+              ['Address',      addr || '—',        mapsUrl],
+              ['Street View',  addr || '—',        svUrl],
+              ['Cross St',     incident.corner || '—', incident.corner
+                ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((incident.corner + (addr ? ', ' + addr : '')) + ' Victoria Australia')}`
+                : null],
+              ['Melway',       incident.map_ref || '—'],
+              ['Grid Ref',     incident.six_figure ? `(${incident.six_figure})` : '—'],
+              ['Radio Ch.',    dispatch.radioLabel || '—'],
+              ['Appliances',   dispatch.appliances.length ? dispatch.appliances.map(labelAppliance).join(' · ') : '—'],
+              ['Station',      dispatch.stationLabel || '—'],
+              ['Dispatched',   fmt(incident.first_seen)],
+              ['Age',          ageMins != null ? (ageMins < 60 ? `${ageMins}m` : `${Math.floor(ageMins/60)}h ${ageMins%60}m`) : '—'],
+              ['Pages',        String(msgs.length)],
+            ].map(([lbl, val, href]) => {
+              const isLink = href && val !== '—'
+              const Tag    = isLink ? 'a' : 'div'
+              const extra  = isLink ? { href, target: '_blank', rel: 'noopener noreferrer', onClick: e => e.stopPropagation() } : {}
+              return (
+                <Tag key={lbl} {...extra} style={{
+                  background: isLink ? '#0a1520' : SURF,
+                  border: `1px solid ${isLink ? '#1e2e3e' : BRD}`,
+                  borderRadius: 2, padding: '6px 8px',
+                  textDecoration: 'none', display: 'block',
+                }}>
+                  <div style={{ fontSize: 7, color: isLink ? '#5a7a9a' : MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>
+                    {lbl}{isLink ? ' ↗' : ''}
+                  </div>
+                  <div style={{ fontSize: 10, color: TXT, fontFamily: MONO, wordBreak: 'break-word' }}>{val}</div>
+                </Tag>
+              )
+            })}
           </div>
 
           {/* Appliance thumbnails */}
