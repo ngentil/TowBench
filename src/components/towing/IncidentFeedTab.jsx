@@ -31,8 +31,8 @@ const EVENT_LABELS = {
 
 const FILTERS = [
   { id: 'trapped',  label: 'TRAPPED',  colour: '#d04040', match: i => i.event_type?.startsWith('RESCC') },
-  { id: 'veh_fire', label: 'VEH FIRE', colour: '#c87020', match: i => ['NOSTC1','NOSTC2','NS'].includes(i.event_type) },
-  { id: 'veh_inc',  label: 'VEH INC',  colour: ACC,       match: i => ['NOSTC3','INCIC3','MVA'].includes(i.event_type) },
+  { id: 'veh_fire', label: 'FIRE',     colour: '#c87020', match: i => ['NOSTC1','NOSTC2','NS'].includes(i.event_type) },
+  { id: 'veh_inc',  label: 'INCIDENT', colour: ACC,       match: i => ['NOSTC3','INCIC3','MVA'].includes(i.event_type) },
   { id: 'struct',   label: 'STRUCT',   colour: '#e05020', match: i => i.event_type === 'SF' || i.event_type?.startsWith('STRUC') },
   { id: 'grass',    label: 'GRASS',    colour: '#40a040', match: i => i.event_type?.startsWith('G&SC') },
   { id: 'alarm',    label: 'ALARM',    colour: '#6090c0', match: i => i.event_type?.startsWith('ALARC') },
@@ -481,20 +481,19 @@ export default function IncidentFeedTab() {
           {historyState === 'error' && <span style={{ color: RED }}>history unavailable</span>}
         </span>
 
-        {lastDbTs && historyState === 'ok' && (
-          <span style={{ fontFamily: MONO, fontSize: 9, color: BRD, marginLeft: 'auto', whiteSpace: 'nowrap' }}>
-            db: {fmtAge(lastDbTs)}
-          </span>
-        )}
-
-        <div style={{ display: 'flex', gap: 4, marginLeft: lastDbTs ? 8 : 'auto' }}>
+        <div style={{ marginLeft: 'auto', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+          {lastDbTs && historyState === 'ok' && (
+            <span style={{ fontFamily: MONO, fontSize: 9, color: BRD, whiteSpace: 'nowrap' }}>
+              db: {fmtAge(lastDbTs)}
+            </span>
+          )}
           {active.size > 0 && (
             <button
               onClick={() => setActive(new Set())}
               style={{
                 fontFamily: MONO, fontSize: 9, color: MUT,
                 background: 'none', border: `1px solid ${BRD}`, cursor: 'pointer',
-                padding: '2px 8px', letterSpacing: '0.05em',
+                padding: '2px 8px', letterSpacing: '0.05em', whiteSpace: 'nowrap',
               }}
             >
               ALL
@@ -505,7 +504,7 @@ export default function IncidentFeedTab() {
             style={{
               fontFamily: MONO, fontSize: 9, color: MUT,
               background: 'none', border: `1px solid ${BRD}`, cursor: 'pointer',
-              padding: '2px 8px', letterSpacing: '0.05em',
+              padding: '2px 8px', letterSpacing: '0.05em', whiteSpace: 'nowrap',
             }}
           >
             RESET
