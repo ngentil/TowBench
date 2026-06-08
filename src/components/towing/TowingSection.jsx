@@ -370,7 +370,7 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, co
         {tab === 'bridges'    && <BridgesTab userPos={userPos} />}
         {tab === 'waze'       && <AlertsTab />}
         {tab === 'emergency'  && <EmergencyTab />}
-        {tab === 'incidents'  && <IncidentFeedTab userPos={userPos} />}
+        {tab === 'incidents'  && <IncidentFeedTab userPos={userPos} companyId={companyId} />}
         {tab === 'vessels'    && <VesselsTab />}
         {tab === 'aircraft'   && <AircraftTab />}
         {tab === 'mytows'     && <MyTowsTab userEmail={userEmail} />}

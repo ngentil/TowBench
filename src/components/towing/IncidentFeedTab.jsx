@@ -455,10 +455,31 @@ function incidentsReducer(state, action) {
   return state
 }
 
-export default function IncidentFeedTab({ userPos }) {
+export default function IncidentFeedTab({ userPos, companyId }) {
   const [active,       setActive]       = useState(DEFAULT_FILTERS)
   const [nearbyKm, setNearbyKm] = useState(() => Number(localStorage.getItem('towbench_nearby_km') ?? 0))
   const setRadius = km => { setNearbyKm(km); localStorage.setItem('towbench_nearby_km', km) }
+
+  // Depot fallback: fetch first geocoded depot for the company
+  const [depotPos, setDepotPos] = useState(null)
+  useEffect(() => {
+    if (!companyId) return
+    supabase
+      .from('depots')
+      .select('lat, lng, name')
+      .eq('company_id', companyId)
+      .not('lat', 'is', null)
+      .not('lng', 'is', null)
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.lat && data?.lng) setDepotPos({ lat: data.lat, lng: data.lng, name: data.name || 'Depot' })
+      })
+  }, [companyId])
+
+  // Effective position: live GPS first, then depot fallback
+  const effectivePos = userPos || depotPos
+  const usingDepot   = !userPos && !!depotPos
 
   // Geocode cache: address → { lat, lng } | null (null = failed / in-progress)
   const geocodeCache  = useRef(new Map())
@@ -528,7 +549,7 @@ export default function IncidentFeedTab({ userPos }) {
 
   // Geocode incident addresses when radius filter is active
   useEffect(() => {
-    if (!nearbyKm || !userPos || geocodingRef.current) return
+    if (!nearbyKm || !effectivePos || geocodingRef.current) return
     const pending = allIncidents.filter(i => i.address && !geocodeCache.current.has(i.address))
     if (!pending.length) return
 
@@ -557,18 +578,18 @@ export default function IncidentFeedTab({ userPos }) {
     })()
 
     return () => { cancelled = true; geocodingRef.current = false }
-  }, [allIncidents, nearbyKm, userPos])
+  }, [allIncidents, nearbyKm, effectivePos])
 
   // Apply nearby filter using geocoded coords
-  const withDistance = nearbyKm > 0 && userPos
+  const withDistance = nearbyKm > 0 && effectivePos
     ? allIncidents.map(i => {
         const coords = i.address ? geocodeCache.current.get(i.address) : undefined
-        const distKm = coords ? kmBetween(userPos.lat, userPos.lng, coords.lat, coords.lng) : null
+        const distKm = coords ? kmBetween(effectivePos.lat, effectivePos.lng, coords.lat, coords.lng) : null
         return { ...i, _distKm: distKm }
       })
     : allIncidents.map(i => ({ ...i, _distKm: null }))
 
-  const nearbyFiltered = nearbyKm > 0 && userPos
+  const nearbyFiltered = nearbyKm > 0 && effectivePos
     ? withDistance.filter(i => i._distKm === null || i._distKm <= nearbyKm)
     : withDistance
 
@@ -706,8 +727,13 @@ export default function IncidentFeedTab({ userPos }) {
             color: TXT, fontFamily: MONO, fontSize: 8, padding: '3px 5px',
             borderRadius: 2, outline: 'none', textAlign: 'center' }}
         />
-        {nearbyKm > 0 && !userPos && (
-          <span style={{ fontSize: 8, color: MUT, fontFamily: MONO }}>no GPS</span>
+        {nearbyKm > 0 && usingDepot && (
+          <span style={{ fontSize: 8, color: '#7a6a30', fontFamily: MONO, background: '#1a1500', border: '1px solid #3a3000', padding: '2px 6px', borderRadius: 2 }}>
+            📍 depot: {depotPos.name}
+          </span>
+        )}
+        {nearbyKm > 0 && !effectivePos && (
+          <span style={{ fontSize: 8, color: MUT, fontFamily: MONO }}>no GPS · no depot</span>
         )}
       </div>
 
