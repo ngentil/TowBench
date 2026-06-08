@@ -39,7 +39,11 @@ exports.handler = async function () {
       timeout: 10000,
     });
 
-    socket.on('connect',       () => { result.socketio = { connected: true, id: socket.id }; });
+    socket.on('connect', () => {
+      result.socketio = { connected: true, id: socket.id };
+      socket.emit('subscribe', { radio: [] });
+      socket.emit('subscribe', { agencies: ['CFA', 'FRV', 'SES'] });
+    });
     socket.on('connect_error', e  => { result.socketio = { connected: false, error: e.message }; });
 
     socket.onAny((ev, ...args) => {

@@ -65,7 +65,11 @@ exports.handler = async function () {
 
     setTimeout(finish, 55000);
 
-    socket.on('connect',       () => { connected = true; });
+    socket.on('connect', () => {
+      connected = true;
+      socket.emit('subscribe', { radio: [] });
+      socket.emit('subscribe', { agencies: ['CFA', 'FRV', 'SES'] });
+    });
     socket.on('connect_error', (e) => {
       socket.disconnect();
       resolve({ statusCode: 502, body: e.message });

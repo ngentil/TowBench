@@ -67,8 +67,8 @@ export function useVicPagers({ towOnly = false, maxIncidents = 200 } = {}) {
   useEffect(() => { towOnlyRef.current = towOnly }, [towOnly])
 
   useEffect(() => {
-    const socket = io('wss://vicpagers.net.au', {
-      transports: ['websocket'],
+    const socket = io('https://vicpagers.net.au', {
+      transports: ['polling', 'websocket'],
       reconnection: true,
     })
 
@@ -77,6 +77,8 @@ export function useVicPagers({ towOnly = false, maxIncidents = 200 } = {}) {
       setError(null)
       setSocketId(socket.id)
       setConnectedAt(Date.now())
+      socket.emit('subscribe', { radio: [] })
+      socket.emit('subscribe', { agencies: ['CFA', 'FRV', 'SES'] })
     })
 
     socket.on('disconnect', () => {
