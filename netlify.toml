@@ -12,4 +12,4 @@
   schedule = "*/5 * * * *"
 
 [functions."poll-vicpagers"]
-  schedule = "*/10 * * * *"
+  schedule = "*/1 * * * *"
