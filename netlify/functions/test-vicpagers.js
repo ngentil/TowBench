@@ -1,5 +1,5 @@
 // On-demand diagnostic — GET /.netlify/functions/test-vicpagers
-// Authenticates with session cookie, waits 60s, logs all events.
+// Authenticates with session cookie, waits 20s, logs all events.
 const { io } = require('socket.io-client');
 
 exports.handler = async function () {
@@ -51,7 +51,7 @@ exports.handler = async function () {
       socket.disconnect();
       if (!result.socketio) result.socketio = { connected: false, timeout: true };
       resolve();
-    }, 60000);
+    }, 20000);
   });
 
   return {

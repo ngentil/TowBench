@@ -8,6 +8,9 @@
 [functions."ais-vessels"]
   timeout_seconds = 15
 
+[functions."test-vicpagers"]
+  timeout_seconds = 26
+
 [functions."poll-vicemergency"]
   schedule = "*/5 * * * *"
 
