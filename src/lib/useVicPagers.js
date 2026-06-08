@@ -1,0 +1,85 @@
+import { useState, useEffect, useRef } from 'react'
+import { io } from 'socket.io-client'
+
+const TOW_KEYWORDS = [
+  'vehicle accident', 'person trapped', 'persons trapped', 'poss person trapped',
+  'car fire', 'vehicle fire', 'truck fire', 'motor vehicle', 'mva',
+  'road crash', 'collision', 'vehicle into structure', 'car vs',
+  'sparks issuing from vehicle', 'car smoking', 'result of accident',
+]
+
+function isTowRelevant(msg) {
+  const desc = (msg.parsed?.description || msg.message || '').toLowerCase()
+  return TOW_KEYWORDS.some(kw => desc.includes(kw))
+}
+
+function mergeMessage(incidents, msg) {
+  const key = msg.incident_id || `no-incident-${msg.id}`
+  const existing = incidents[key]
+
+  if (!existing) {
+    return {
+      ...incidents,
+      [key]: {
+        incident_id:      msg.incident_id,
+        first_seen:       msg.timestamp,
+        last_seen:        msg.timestamp,
+        agency:           msg.agency,
+        address:          msg.parsed?.address || null,
+        description:      msg.parsed?.description || null,
+        event_type:       msg.parsed?.eventType || null,
+        map_ref:          msg.parsed?.mapRef || null,
+        alarm_level:      msg.parsed?.alarmLevel || null,
+        is_cancelled:     msg.parsed?.isCancellation || false,
+        responding_units: msg.alias ? [msg.alias] : [],
+        messages:         [msg],
+        tow_relevant:     isTowRelevant(msg),
+      },
+    }
+  }
+
+  return {
+    ...incidents,
+    [key]: {
+      ...existing,
+      last_seen:        Math.max(existing.last_seen, msg.timestamp),
+      is_cancelled:     existing.is_cancelled || (msg.parsed?.isCancellation || false),
+      responding_units: msg.alias && !existing.responding_units.includes(msg.alias)
+        ? [...existing.responding_units, msg.alias]
+        : existing.responding_units,
+      messages:         [...existing.messages, msg],
+      tow_relevant:     existing.tow_relevant || isTowRelevant(msg),
+    },
+  }
+}
+
+export function useVicPagers({ towOnly = false, maxIncidents = 50 } = {}) {
+  const [connected, setConnected] = useState(false)
+  const [error,     setError]     = useState(null)
+  const [incidents, setIncidents] = useState({})
+  const socketRef = useRef(null)
+
+  useEffect(() => {
+    const socket = io('wss://vicpagers.net.au', { transports: ['websocket'] })
+    socketRef.current = socket
+
+    socket.on('connect',       () => { setConnected(true);  setError(null) })
+    socket.on('disconnect',    () =>   setConnected(false))
+    socket.on('connect_error', (e) => { setError(e.message); setConnected(false) })
+
+    socket.on('message:new', (msg) => {
+      if (msg.type === 'administrative') return
+      if (towOnly && !isTowRelevant(msg) && msg.type !== 'emergency') return
+      setIncidents(prev => mergeMessage(prev, msg))
+    })
+
+    return () => socket.disconnect()
+  }, [towOnly])
+
+  const incidentList = Object.values(incidents)
+    .filter(i => towOnly ? i.tow_relevant : true)
+    .sort((a, b) => b.first_seen - a.first_seen)
+    .slice(0, maxIncidents)
+
+  return { incidents: incidentList, connected, error }
+}
