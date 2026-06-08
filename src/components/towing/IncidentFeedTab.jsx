@@ -460,26 +460,30 @@ export default function IncidentFeedTab({ userPos, companyId }) {
   const [nearbyKm, setNearbyKm] = useState(() => Number(localStorage.getItem('towbench_nearby_km') ?? 0))
   const setRadius = km => { setNearbyKm(km); localStorage.setItem('towbench_nearby_km', km) }
 
-  // Depot fallback: fetch first geocoded depot for the company
-  const [depotPos, setDepotPos] = useState(null)
+  // Depots for source selector
+  const [depots, setDepots] = useState([])
   useEffect(() => {
     if (!companyId) return
     supabase
       .from('depots')
-      .select('lat, lng, name')
+      .select('id, name, suburb, lat, lng')
       .eq('company_id', companyId)
       .not('lat', 'is', null)
       .not('lng', 'is', null)
-      .limit(1)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data?.lat && data?.lng) setDepotPos({ lat: data.lat, lng: data.lng, name: data.name || 'Depot' })
-      })
+      .then(({ data }) => setDepots(data || []))
   }, [companyId])
 
-  // Effective position: live GPS first, then depot fallback
-  const effectivePos = userPos || depotPos
-  const usingDepot   = !userPos && !!depotPos
+  const [locationSource, setLocSrc] = useState(() => localStorage.getItem('towbench_location_source') || 'auto')
+  const setLocationSource = src => { setLocSrc(src); localStorage.setItem('towbench_location_source', src) }
+
+  const firstGeoDepot = depots.find(d => d.lat && d.lng) || null
+  const selectedDepot = locationSource !== 'gps' && locationSource !== 'auto'
+    ? (depots.find(d => String(d.id) === locationSource && d.lat && d.lng) || null)
+    : null
+  const effectivePos =
+    locationSource === 'auto' ? (userPos || (firstGeoDepot ? { lat: firstGeoDepot.lat, lng: firstGeoDepot.lng } : null))
+    : locationSource === 'gps' ? userPos
+    : (selectedDepot ? { lat: selectedDepot.lat, lng: selectedDepot.lng } : null)
 
   // Geocode cache: address → { lat, lng } | null (null = failed / in-progress)
   const geocodeCache  = useRef(new Map())
@@ -727,14 +731,42 @@ export default function IncidentFeedTab({ userPos, companyId }) {
             color: TXT, fontFamily: MONO, fontSize: 8, padding: '3px 5px',
             borderRadius: 2, outline: 'none', textAlign: 'center' }}
         />
-        {nearbyKm > 0 && usingDepot && (
-          <span style={{ fontSize: 8, color: '#7a6a30', fontFamily: MONO, background: '#1a1500', border: '1px solid #3a3000', padding: '2px 6px', borderRadius: 2 }}>
-            📍 depot: {depotPos.name}
-          </span>
-        )}
-        {nearbyKm > 0 && !effectivePos && (
-          <span style={{ fontSize: 8, color: MUT, fontFamily: MONO }}>no GPS · no depot</span>
-        )}
+      </div>
+
+      {/* Location source selector */}
+      <div style={{ marginBottom: 12, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 8, color: MUT, letterSpacing: '0.08em', textTransform: 'uppercase', flexShrink: 0 }}>📡 Source</span>
+        <button
+          onClick={() => setLocationSource('auto')}
+          style={{
+            fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', padding: '4px 7px', borderRadius: 2, cursor: 'pointer', fontFamily: MONO,
+            background: locationSource === 'auto' ? (effectivePos ? ACC + '11' : '#1a1a1a') : '#0d0d0d',
+            border: `1px solid ${locationSource === 'auto' ? (effectivePos ? ACC : '#333') : '#2a2a2a'}`,
+            color: locationSource === 'auto' ? (effectivePos ? ACC : '#555') : MUT,
+          }}>
+          ⚡ Auto{locationSource === 'auto' ? (userPos ? ' · GPS' : firstGeoDepot ? ` · ${firstGeoDepot.name || firstGeoDepot.suburb || 'depot'}` : ' · no source') : ''}
+        </button>
+        <button
+          onClick={() => setLocationSource('gps')}
+          style={{
+            fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', padding: '4px 7px', borderRadius: 2, cursor: 'pointer', fontFamily: MONO,
+            background: locationSource === 'gps' ? (userPos ? GRN + '11' : '#1a1a1a') : '#0d0d0d',
+            border: `1px solid ${locationSource === 'gps' ? (userPos ? GRN : '#333') : '#2a2a2a'}`,
+            color: locationSource === 'gps' ? (userPos ? GRN : '#555') : MUT,
+          }}>
+          📡 GPS{locationSource === 'gps' && !userPos ? ' — no signal' : ''}
+        </button>
+        {depots.map(d => (
+          <button key={d.id} onClick={() => setLocationSource(String(d.id))}
+            style={{
+              fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', padding: '4px 7px', borderRadius: 2, cursor: 'pointer', fontFamily: MONO,
+              background: locationSource === String(d.id) ? '#1a150022' : '#0d0d0d',
+              border: `1px solid ${locationSource === String(d.id) ? '#7a6a30' : '#2a2a2a'}`,
+              color: locationSource === String(d.id) ? '#c8a84b' : MUT,
+            }}>
+            🏢 {d.name || d.suburb || 'Depot'}
+          </button>
+        ))}
       </div>
 
       {/* Incident list */}

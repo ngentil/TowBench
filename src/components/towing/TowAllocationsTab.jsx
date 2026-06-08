@@ -565,6 +565,19 @@ export default function TowAllocationsTab({ allFeatures, liveIds, loading, err, 
 
   const setRadius = (km) => { setNearbyKm(km); localStorage.setItem('towbench_nearby_km', km); };
 
+  // Location source selector — persisted to localStorage
+  const [locationSource, setLocSrc] = useState(() => localStorage.getItem('towbench_location_source') || 'auto');
+  const setLocationSource = src => { setLocSrc(src); localStorage.setItem('towbench_location_source', src); };
+
+  const firstGeoDepot = depots.find(d => d.lat && d.lng) || null;
+  const selectedDepot = locationSource !== 'gps' && locationSource !== 'auto'
+    ? (depots.find(d => String(d.id) === locationSource && d.lat && d.lng) || null)
+    : null;
+  const effectivePos =
+    locationSource === 'auto' ? (userPos || (firstGeoDepot ? { lat: firstGeoDepot.lat, lng: firstGeoDepot.lng } : null))
+    : locationSource === 'gps' ? userPos
+    : (selectedDepot ? { lat: selectedDepot.lat, lng: selectedDepot.lng } : null);
+
   const handleExport = useCallback(async () => {
     setExporting(true);
     try {
@@ -831,6 +844,40 @@ export default function TowAllocationsTab({ allFeatures, liveIds, loading, err, 
                   borderRadius: 2, outline: 'none', textAlign: 'center' }}
               />
             </div>
+            <div style={{ marginBottom: 12, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 8, color: MUT, letterSpacing: '0.08em', textTransform: 'uppercase', flexShrink: 0 }}>📡 Source</span>
+              <button
+                onClick={() => setLocationSource('auto')}
+                style={{
+                  fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', padding: '4px 7px', borderRadius: 2, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace",
+                  background: locationSource === 'auto' ? (effectivePos ? ACC + '11' : '#1a1a1a') : '#0d0d0d',
+                  border: `1px solid ${locationSource === 'auto' ? (effectivePos ? ACC : '#333') : '#2a2a2a'}`,
+                  color: locationSource === 'auto' ? (effectivePos ? ACC : '#555') : MUT,
+                }}>
+                ⚡ Auto{locationSource === 'auto' ? (userPos ? ' · GPS' : firstGeoDepot ? ` · ${firstGeoDepot.name || firstGeoDepot.suburb || 'depot'}` : ' · no source') : ''}
+              </button>
+              <button
+                onClick={() => setLocationSource('gps')}
+                style={{
+                  fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', padding: '4px 7px', borderRadius: 2, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace",
+                  background: locationSource === 'gps' ? (userPos ? GRN + '11' : '#1a1a1a') : '#0d0d0d',
+                  border: `1px solid ${locationSource === 'gps' ? (userPos ? GRN : '#333') : '#2a2a2a'}`,
+                  color: locationSource === 'gps' ? (userPos ? GRN : '#555') : MUT,
+                }}>
+                📡 GPS{locationSource === 'gps' && !userPos ? ' — no signal' : ''}
+              </button>
+              {depots.filter(d => d.lat && d.lng).map(d => (
+                <button key={d.id} onClick={() => setLocationSource(String(d.id))}
+                  style={{
+                    fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', padding: '4px 7px', borderRadius: 2, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace",
+                    background: locationSource === String(d.id) ? '#1a150022' : '#0d0d0d',
+                    border: `1px solid ${locationSource === String(d.id) ? '#7a6a30' : '#2a2a2a'}`,
+                    color: locationSource === String(d.id) ? '#c8a84b' : MUT,
+                  }}>
+                  🏢 {d.name || d.suburb || 'Depot'}
+                </button>
+              ))}
+            </div>
           </>
         );
       })()}
@@ -866,7 +913,7 @@ export default function TowAllocationsTab({ allFeatures, liveIds, loading, err, 
             Active ({active.length})
           </div>
           {active.map((f, i) => (
-            <AllocationCard key={f.properties?.eventId || i} feature={f} fromLog={false} userPos={userPos} nearbyKm={nearbyKm}
+            <AllocationCard key={f.properties?.eventId || i} feature={f} fromLog={false} userPos={effectivePos} nearbyKm={nearbyKm}
               acceptedJob={acceptedJobs?.get(String(f.properties?.eventId))} userEmail={userEmail}
               role={role} isDispatch={isDispatch} companyId={companyId}
               onAccept={onAcceptJob} onUnassign={onUnassignJob} onAllocateToPlate={onAllocateToPlate}
@@ -885,7 +932,7 @@ export default function TowAllocationsTab({ allFeatures, liveIds, loading, err, 
             Cleared ({cleared.length})
           </div>
           {cleared.map((f, i) => (
-            <AllocationCard key={f.properties?.eventId || i} feature={f} fromLog={true} userPos={userPos} nearbyKm={nearbyKm}
+            <AllocationCard key={f.properties?.eventId || i} feature={f} fromLog={true} userPos={effectivePos} nearbyKm={nearbyKm}
               acceptedJob={null} userEmail={userEmail}
               role={role} isDispatch={isDispatch} companyId={companyId}
               onAccept={null} onUnassign={null} onAllocateToPlate={null}
