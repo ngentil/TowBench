@@ -601,9 +601,13 @@ export default function IncidentFeedTab({ userPos, companyId }) {
     })
   }
 
-  const allIncidents = Object.values(incidents)
-    .sort((a, b) => b.first_seen - a.first_seen)
-    .slice(0, 300)
+  // Memoized so the array reference is stable between renders.
+  // Without this, every setGeoRev() re-render creates a new array, re-fires
+  // the geocoding effect, runs cleanup, and cancels the in-progress geocoding loop.
+  const allIncidents = useMemo(
+    () => Object.values(incidents).sort((a, b) => b.first_seen - a.first_seen).slice(0, 300),
+    [incidents],
+  )
 
   // Geocode incident addresses whenever we have an effective position (for distance display + radius filter).
   // Uses address || corner as key so incidents with only a cross-street still get geocoded.
