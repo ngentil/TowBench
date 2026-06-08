@@ -116,6 +116,17 @@ function stationMapsUrl(unit) {
   return `https://www.google.com/maps/search/${encodeURIComponent(unit + ' Fire Station Victoria')}`
 }
 
+// Returns a cache key for a station-fallback geocode (used when incident has no address).
+// Only matches geographic station units — excludes specialist/coordination roles.
+function stationGeoKey(incident) {
+  if (incident.address || incident.corner) return null
+  const unit = (incident.responding_units || []).find(u =>
+    /^(FRV|CFA|SES)\s+[A-Z]/.test(u) &&
+    !/Director|Coordinator|District|Metro|Group|All Calls|Panel|Clinician/i.test(u)
+  )
+  return unit ? `~stn:${unit}` : null
+}
+
 // Broadcastify feed covering all FRV Melbourne Metro talkgroups (ESTA MMR network)
 const FGD_DEFAULT_FEED = 24820
 
@@ -284,13 +295,20 @@ function IncidentCard({ incident, nearbyKm }) {
             </span>
           )}
           {incident._distKm != null && (
-            <span style={{
-              fontSize: 7, fontWeight: 700, fontFamily: MONO,
-              color:  nearbyKm > 0 && incident._distKm <= nearbyKm ? '#cc2222' : MUT,
-              border: `1px solid ${nearbyKm > 0 && incident._distKm <= nearbyKm ? '#cc222255' : '#2a2a2a'}`,
-              borderRadius: 2, padding: '1px 4px',
-            }}>
-              📍 {incident._distKm.toFixed(1)}km
+            <span
+              title={incident._distFallback ? 'Approx. — distance to responding station, not exact incident location' : undefined}
+              style={{
+                fontSize: 7, fontWeight: 700, fontFamily: MONO,
+                color:  nearbyKm > 0 && incident._distKm <= nearbyKm ? '#cc2222'
+                      : incident._distFallback ? '#6a6a50' : MUT,
+                border: `1px solid ${
+                  nearbyKm > 0 && incident._distKm <= nearbyKm ? '#cc222255'
+                  : incident._distFallback ? '#3a3a28' : '#2a2a2a'
+                }`,
+                borderRadius: 2, padding: '1px 4px',
+                fontStyle: incident._distFallback ? 'italic' : 'normal',
+              }}>
+              {incident._distFallback ? '~' : ''}📍 {incident._distKm.toFixed(1)}km
             </span>
           )}
           <span style={{ fontSize: 8, color: MUT }}>{open ? '▲' : '▼'}</span>
@@ -610,11 +628,11 @@ export default function IncidentFeedTab({ userPos, companyId }) {
   )
 
   // Geocode incident addresses whenever we have an effective position (for distance display + radius filter).
-  // Uses address || corner as key so incidents with only a cross-street still get geocoded.
+  // Primary key: address || corner. Fallback key: first recognisable station unit (~stn:…).
   useEffect(() => {
     if (!effectivePos || geocodingRef.current) return
-    const geoKey = i => i.address || i.corner
-    const pending = allIncidents.filter(i => geoKey(i) && !geocodeCache.current.has(geoKey(i)))
+    const cacheKey = i => i.address || i.corner || stationGeoKey(i)
+    const pending = allIncidents.filter(i => { const k = cacheKey(i); return k && !geocodeCache.current.has(k) })
     if (!pending.length) return
 
     geocodingRef.current = true
@@ -623,12 +641,16 @@ export default function IncidentFeedTab({ userPos, companyId }) {
     (async () => {
       for (const inc of pending) {
         if (cancelled) break
-        const key = inc.address || inc.corner
-        if (geocodeCache.current.has(key)) continue
+        const key = cacheKey(inc)
+        if (!key || geocodeCache.current.has(key)) continue
         geocodeCache.current.set(key, null)
         try {
           await new Promise(r => setTimeout(r, 250))
-          const q   = encodeURIComponent(key + ', Victoria, Australia')
+          // Station fallback: search for the station by name rather than a street address
+          const searchTerm = key.startsWith('~stn:')
+            ? key.replace('~stn:', '') + ' fire station, Victoria, Australia'
+            : key + ', Victoria, Australia'
+          const q   = encodeURIComponent(searchTerm)
           const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1`, {
             headers: { 'User-Agent': 'TowBench/1.0' },
             signal: AbortSignal.timeout(5000),
@@ -647,12 +669,14 @@ export default function IncidentFeedTab({ userPos, companyId }) {
   // Always compute distance when we have a position (used for badges + radius filter)
   const withDistance = effectivePos
     ? allIncidents.map(i => {
-        const key    = i.address || i.corner
-        const coords = key ? geocodeCache.current.get(key) : undefined
-        const distKm = coords ? kmBetween(effectivePos.lat, effectivePos.lng, coords.lat, coords.lng) : null
-        return { ...i, _distKm: distKm }
+        const realKey = i.address || i.corner
+        const stnKey  = stationGeoKey(i)
+        const key     = realKey || stnKey
+        const coords  = key ? geocodeCache.current.get(key) : undefined
+        const distKm  = coords ? kmBetween(effectivePos.lat, effectivePos.lng, coords.lat, coords.lng) : null
+        return { ...i, _distKm: distKm, _distFallback: !realKey && !!stnKey && distKm != null }
       })
-    : allIncidents.map(i => ({ ...i, _distKm: null }))
+    : allIncidents.map(i => ({ ...i, _distKm: null, _distFallback: false }))
 
   const nearbyFiltered = nearbyKm > 0 && effectivePos
     ? withDistance.filter(i => i._distKm === null || i._distKm <= nearbyKm)
