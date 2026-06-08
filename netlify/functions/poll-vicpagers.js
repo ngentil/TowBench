@@ -1,6 +1,6 @@
-// Netlify scheduled function — runs every 10 minutes.
-// Opens Socket.IO connection to VicPagers, collects messages for 8s, upserts to Supabase.
-// Complements the browser-side writer — covers periods when no browser session is open.
+// Netlify scheduled function — runs every 1 minute.
+// Opens Socket.IO connection to VicPagers (polling transport — confirmed working from
+// Netlify IPs), collects messages for 55s, upserts to Supabase vicpagers_messages.
 // Env: SUPABASE_URL, SUPABASE_SERVICE_KEY
 const { createClient } = require('@supabase/supabase-js');
 const { io }           = require('socket.io-client');
@@ -13,11 +13,16 @@ exports.handler = async function () {
 
   return new Promise((resolve) => {
     const messages = [];
-    const socket   = io('wss://vicpagers.net.au', { transports: ['websocket'] });
+    let connected  = false;
+
+    // Use polling transport — Netlify IPs confirmed not blocked for polling
+    const socket = io('https://vicpagers.net.au', {
+      transports: ['polling', 'websocket'],
+    });
 
     const finish = async () => {
       socket.disconnect();
-      if (!messages.length) return resolve({ statusCode: 200, body: 'quiet' });
+      if (!messages.length) return resolve({ statusCode: 200, body: `quiet (connected=${connected})` });
 
       const rows = messages.map(msg => ({
         id:                      msg.id,
@@ -51,7 +56,10 @@ exports.handler = async function () {
       });
     };
 
-    setTimeout(finish, 8000);
+    // 55s window — scheduled functions are background functions (up to 15 min)
+    setTimeout(finish, 55000);
+
+    socket.on('connect', () => { connected = true; });
 
     socket.on('connect_error', (e) => {
       socket.disconnect();

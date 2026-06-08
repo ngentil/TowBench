@@ -32,11 +32,21 @@ const REAL_FILTERS = FILTERS.filter(f => f.id !== 'sep')
 function eventColour(type, cancelled) {
   if (cancelled) return MUT
   if (!type) return MUT
-  if (type.startsWith('RESCC'))                     return '#d04040'
+  if (type.startsWith('RESCC'))                          return '#d04040'
   if (type === 'NOSTC1' || type === 'NS' || type === 'SF') return '#c87020'
   if (type.startsWith('NOSTC') || type.startsWith('INCIC')) return ACC
-  if (type.startsWith('ALARC'))                     return '#6090c0'
+  if (type.startsWith('ALARC'))                          return '#6090c0'
   return MUT
+}
+
+function fmtAge(epochMs) {
+  if (!epochMs) return null
+  const mins = Math.floor((Date.now() - epochMs) / 60000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  return `${Math.floor(hrs / 24)}d ago`
 }
 
 function fmt(epochMs) {
@@ -139,10 +149,9 @@ function IncidentCard({ incident }) {
 // incidents state is a plain map { key → incident }; reduce new messages into it
 function incidentsReducer(state, action) {
   if (action.type === 'SEED') {
-    // Bulk-seed from DB rows without overwriting any live data already present
     return action.messages.reduce((acc, msg) => {
       const key = msg.incident_id || `no-incident-${msg.id}`
-      if (acc[key]) return acc            // live version wins
+      if (acc[key]) return acc
       return mergeMessage(acc, msg)
     }, state)
   }
@@ -154,10 +163,11 @@ function incidentsReducer(state, action) {
 
 export default function IncidentFeedTab() {
   const [active,       setActive]       = useState(new Set())
-  const [historyState, setHistoryState] = useState('loading') // loading | ok | error
+  const [historyState, setHistoryState] = useState('loading')
+  const [lastDbTs,     setLastDbTs]     = useState(null)  // most recent message timestamp from Supabase
   const [incidents, dispatch] = useReducer(incidentsReducer, {})
 
-  const { incidents: liveIncidents, connected, error, rawCount, lastEvent, socketId, connectedAt, activeNs } = useVicPagers({ towOnly: false })
+  const { incidents: liveIncidents, connected, error, rawCount, lastEvent, connectedAt } = useVicPagers({ towOnly: false })
   const [connectedSecs, setConnectedSecs] = useState(0)
 
   useEffect(() => {
@@ -173,6 +183,11 @@ export default function IncidentFeedTab() {
       .then(rows => {
         const messages = rows.map(dbRowToMessage)
         dispatch({ type: 'SEED', messages })
+        // Track the most recent Supabase message for status display
+        if (rows.length > 0) {
+          const latest = rows[0]
+          setLastDbTs(latest.timestamp ?? Date.parse(latest.received_at))
+        }
         setHistoryState('ok')
       })
       .catch(() => setHistoryState('error'))
@@ -185,12 +200,14 @@ export default function IncidentFeedTab() {
     })
   }, [liveIncidents])
 
-  // Supabase realtime — catches messages written by other sessions / mini-PC listener
+  // Supabase realtime — catches messages written by other sessions
   useEffect(() => {
     const channel = supabase
       .channel('vicpagers_live')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'vicpagers_messages' }, ({ new: row }) => {
-        dispatch({ type: 'MERGE', msg: dbRowToMessage(row) })
+        const msg = dbRowToMessage(row)
+        dispatch({ type: 'MERGE', msg })
+        setLastDbTs(msg.timestamp ?? Date.now())
       })
       .subscribe()
     return () => supabase.removeChannel(channel)
@@ -212,10 +229,14 @@ export default function IncidentFeedTab() {
     ? allIncidents
     : allIncidents.filter(i => REAL_FILTERS.filter(f => active.has(f.id)).some(f => f.match(i)))
 
-  const totalCount    = allIncidents.length
-  const hiddenCount   = totalCount - filtered.length
-  const activeCount   = filtered.filter(i => !i.is_cancelled).length
-  const cancelCount   = filtered.filter(i =>  i.is_cancelled).length
+  const totalCount   = allIncidents.length
+  const hiddenCount  = totalCount - filtered.length
+  const activeCount  = filtered.filter(i => !i.is_cancelled).length
+  const cancelCount  = filtered.filter(i =>  i.is_cancelled).length
+
+  const uptime = connectedSecs > 0
+    ? (connectedSecs < 60 ? `${connectedSecs}s` : `${Math.floor(connectedSecs / 60)}m`)
+    : null
 
   return (
     <div style={{ background: BG, minHeight: '100%', padding: 16, boxSizing: 'border-box' }}>
@@ -233,26 +254,41 @@ export default function IncidentFeedTab() {
         <span style={{ fontFamily: MONO, fontSize: 10, color: connected ? GRN : MUT, letterSpacing: '0.05em' }}>
           {connected ? 'LIVE · VICPAGERS' : error ? `OFFLINE — ${error.toUpperCase()}` : 'CONNECTING…'}
         </span>
+
         {connected && (
           <span style={{ fontFamily: MONO, fontSize: 9, color: BRD, letterSpacing: '0.04em' }}>
             {rawCount > 0
-              ? `${rawCount} rx · ${activeNs && activeNs !== '/' ? `ns:${activeNs} · ` : ''}last: ${lastEvent}`
-              : 'waiting for dispatch'}
-            {connectedSecs > 0 && ` · ${connectedSecs < 60 ? `${connectedSecs}s` : `${Math.floor(connectedSecs/60)}m`} up`}
+              ? `${rawCount} rx · last: ${lastEvent}`
+              : 'awaiting dispatch'}
+            {uptime && ` · ${uptime} up`}
           </span>
         )}
 
         <span style={{ fontFamily: MONO, fontSize: 9, color: MUT }}>
           {historyState === 'loading' && <span style={{ color: BRD }}>loading history…</span>}
-          {historyState === 'ok'      && <>{activeCount} active{cancelCount > 0 && ` · ${cancelCount} cancelled`}{hiddenCount > 0 && ` · ${hiddenCount} hidden`}{totalCount === 0 && ' · waiting for dispatch'}</>}
-          {historyState === 'error'   && <span style={{ color: RED }}>history unavailable</span>}
+          {historyState === 'ok' && (
+            <>
+              {activeCount} active
+              {cancelCount > 0 && ` · ${cancelCount} cancelled`}
+              {hiddenCount > 0 && ` · ${hiddenCount} hidden`}
+              {totalCount === 0 && ' · no history'}
+            </>
+          )}
+          {historyState === 'error' && <span style={{ color: RED }}>history unavailable</span>}
         </span>
+
+        {lastDbTs && historyState === 'ok' && (
+          <span style={{ fontFamily: MONO, fontSize: 9, color: BRD, marginLeft: 'auto', whiteSpace: 'nowrap' }}>
+            db: {fmtAge(lastDbTs)}
+          </span>
+        )}
 
         {active.size > 0 && (
           <button
             onClick={() => setActive(new Set())}
             style={{
-              marginLeft: 'auto', fontFamily: MONO, fontSize: 9, color: MUT,
+              marginLeft: lastDbTs ? 8 : 'auto',
+              fontFamily: MONO, fontSize: 9, color: MUT,
               background: 'none', border: `1px solid ${BRD}`, cursor: 'pointer',
               padding: '2px 8px', letterSpacing: '0.05em',
             }}
