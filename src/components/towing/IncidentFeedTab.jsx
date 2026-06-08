@@ -157,7 +157,15 @@ export default function IncidentFeedTab() {
   const [historyState, setHistoryState] = useState('loading') // loading | ok | error
   const [incidents, dispatch] = useReducer(incidentsReducer, {})
 
-  const { incidents: liveIncidents, connected, error, rawCount, lastEvent } = useVicPagers({ towOnly: false })
+  const { incidents: liveIncidents, connected, error, rawCount, lastEvent, socketId, connectedAt, activeNs } = useVicPagers({ towOnly: false })
+  const [connectedSecs, setConnectedSecs] = useState(0)
+
+  useEffect(() => {
+    if (!connectedAt) { setConnectedSecs(0); return }
+    const t = setInterval(() => setConnectedSecs(Math.floor((Date.now() - connectedAt) / 1000)), 5000)
+    setConnectedSecs(Math.floor((Date.now() - connectedAt) / 1000))
+    return () => clearInterval(t)
+  }, [connectedAt])
 
   // Seed history from Supabase on mount
   useEffect(() => {
@@ -225,13 +233,13 @@ export default function IncidentFeedTab() {
         <span style={{ fontFamily: MONO, fontSize: 10, color: connected ? GRN : MUT, letterSpacing: '0.05em' }}>
           {connected ? 'LIVE · VICPAGERS' : error ? `OFFLINE — ${error.toUpperCase()}` : 'CONNECTING…'}
         </span>
-        {connected && rawCount > 0 && (
+        {connected && (
           <span style={{ fontFamily: MONO, fontSize: 9, color: BRD, letterSpacing: '0.04em' }}>
-            {rawCount} rx · last: {lastEvent}
+            {rawCount > 0
+              ? `${rawCount} rx · ${activeNs && activeNs !== '/' ? `ns:${activeNs} · ` : ''}last: ${lastEvent}`
+              : 'waiting for dispatch'}
+            {connectedSecs > 0 && ` · ${connectedSecs < 60 ? `${connectedSecs}s` : `${Math.floor(connectedSecs/60)}m`} up`}
           </span>
-        )}
-        {connected && rawCount === 0 && (
-          <span style={{ fontFamily: MONO, fontSize: 9, color: BRD }}>no events yet</span>
         )}
 
         <span style={{ fontFamily: MONO, fontSize: 9, color: MUT }}>
