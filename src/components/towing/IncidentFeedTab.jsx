@@ -89,6 +89,75 @@ function fmt(epochMs) {
   })
 }
 
+// ── Raw pager message parser ──────────────────────────────────────────────────
+
+const APPLIANCE_TYPES = {
+  P: 'Pumper', PT: 'Pump/Tanker', TB: 'Tanker', TL: 'Aerial Ladder',
+  TA: 'Tanker', SU: 'Support', CB: 'Command', FA: 'Field Appliance',
+  FIP: 'Fire Panel', QRV: 'Quick Response',
+}
+
+function labelAppliance(code) {
+  const m = code.match(/^(PT|TB|TL|TA|SU|CB|FA|QRV|P)(\d+)([A-Z]?)$/)
+  if (!m) return code
+  const [, t, n, s] = m
+  const name = APPLIANCE_TYPES[t] || t
+  return `${name} ${n}${s}`
+}
+
+function parsePageMsg(raw) {
+  if (!raw) return {}
+
+  // Station code at end:  [FS35_]  [C44]  [BMSH5]
+  const stationRaw  = raw.match(/\[([A-Z0-9_]+)\]/)?.[1] ?? null
+  const stationNum  = stationRaw?.match(/(\d+)/)?.[1] ?? null
+  const stationLabel = stationNum ? `Stn ${stationNum}` : stationRaw ?? null
+
+  if (!raw.startsWith('@@ALERT')) return { stationLabel }
+
+  // Capcode: first token after @@ALERT
+  const capcode = raw.match(/^@@ALERT\s+(\S+)/)?.[1] ?? null
+
+  // Everything between the six-figure ref (...) and the [station] bracket
+  const resourceStr = raw.match(/\(\d+\)\s*(.*?)(?:\s*\[|$)/)?.[1] ?? ''
+  const tokens = resourceStr.split(/\s+/).filter(Boolean)
+
+  const fgds = []
+  const appliances = []
+  for (const t of tokens) {
+    if (/^FGD\d+$/.test(t) && !fgds.includes(t)) fgds.push(t)
+    else if (/^(PT|TB|TL|TA|SU|CB|FA|QRV|P)\d+[A-Z]?$/.test(t))  appliances.push(t)
+  }
+
+  return { capcode, fgds, appliances, stationLabel }
+}
+
+// Aggregate parsed data across all messages in an incident
+function buildDispatch(msgs) {
+  const fgds       = []
+  const appliances = []
+  const stations   = []
+  const capcodes   = []
+
+  for (const m of msgs) {
+    const p = parsePageMsg(m.message)
+    if (p.capcode   && !capcodes.includes(p.capcode))     capcodes.push(p.capcode)
+    if (p.stationLabel && !stations.includes(p.stationLabel)) stations.push(p.stationLabel)
+    for (const f of (p.fgds || []))       if (!fgds.includes(f))       fgds.push(f)
+    for (const a of (p.appliances || [])) if (!appliances.includes(a)) appliances.push(a)
+  }
+
+  return {
+    fgds,
+    appliances,
+    stations,
+    capcodes,
+    radioLabel:    fgds.length       ? fgds.map(f => f.replace('FGD', 'Ch.')).join(', ')             : null,
+    applianceLabel: appliances.length ? appliances.map(labelAppliance).join(' · ')                    : null,
+    stationLabel:  stations.length   ? stations.join(' · ')                                           : null,
+  }
+}
+
 function IncidentCard({ incident }) {
   const [open, setOpen] = useState(false)
   const colour  = eventColour(incident.event_type, incident.is_cancelled)
@@ -96,144 +165,182 @@ function IncidentCard({ incident }) {
   const units   = incident.responding_units || []
   const msgs    = incident.messages || []
   const ageMins = incident.first_seen ? Math.floor((Date.now() - incident.first_seen) / 60000) : null
+  const dispatch = buildDispatch(msgs)
 
   const addr    = incident.address
   const query   = addr ? encodeURIComponent(addr + ' Victoria Australia') : null
   const mapsUrl = query ? `https://www.google.com/maps/search/?api=1&query=${query}` : null
   const svUrl   = query ? `https://maps.google.com/maps?q=${query}&layer=c` : null
 
-  const borderLeft = `3px solid ${colour}`
   const border     = `1px solid ${incident.is_cancelled ? BRD : colour + '55'}`
+  const borderLeft = `3px solid ${colour}`
 
   return (
     <div style={{ background: '#0d0d0d', border, borderLeft, borderRadius: 2, marginBottom: 6, overflow: 'hidden' }}>
 
-      {/* Collapsed header */}
+      {/* ── Collapsed header ── */}
       <div onClick={() => setOpen(o => !o)}
-        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', cursor: 'pointer', userSelect: 'none', opacity: incident.is_cancelled ? 0.45 : 1 }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
+        style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none', opacity: incident.is_cancelled ? 0.45 : 1 }}>
 
-          {/* Row 1: type label + alarm level + age */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 10, fontWeight: 700, color: colour, fontFamily: MONO, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-              {incident.is_cancelled ? '✓ ' : ''}{label}
+        {/* Row 1: type · alarm · age · toggle */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 10, fontWeight: 700, color: colour, fontFamily: MONO, letterSpacing: '0.06em', textTransform: 'uppercase', flex: 1 }}>
+            {incident.is_cancelled ? '✓ ' : ''}{label}
+          </span>
+          {incident.alarm_level && (
+            <span style={{ fontSize: 7, fontWeight: 700, color: '#c87020', background: '#1a1000', border: '1px solid #3a2a00', padding: '1px 5px', fontFamily: MONO }}>
+              {incident.alarm_level}
             </span>
-            {incident.alarm_level && (
-              <span style={{ fontSize: 7, fontWeight: 700, color: '#c87020', background: '#1a1000', border: '1px solid #3a2a00', padding: '1px 5px', fontFamily: MONO }}>
-                {incident.alarm_level}
-              </span>
-            )}
-            {ageMins != null && ageMins > 0 && (
-              <span style={{ fontSize: 7, color: ageMins > 60 ? MUT : ACC, border: `1px solid ${ageMins > 60 ? BRD : ACC + '44'}`, borderRadius: 2, padding: '1px 4px', fontFamily: MONO, fontWeight: 700 }}>
-                ⏱ {ageMins < 60 ? `${ageMins}m` : `${Math.floor(ageMins/60)}h`}
-              </span>
-            )}
-          </div>
-
-          {/* Row 2: address + cross street */}
-          <div style={{ display: 'flex', gap: 5, alignItems: 'baseline', marginTop: 3, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: TXT }}>{addr || '—'}</span>
-            {incident.corner && <span style={{ fontSize: 8, color: MUT }}>@ {incident.corner}</span>}
-          </div>
-
-          {/* Row 3: agency + incident ID (collapsed only) */}
-          {!open && (
-            <div style={{ marginTop: 2, display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
-              {incident.agency && <span style={{ fontSize: 7, color: MUT, border: `1px solid ${BRD}`, borderRadius: 2, padding: '1px 4px' }}>{incident.agency}</span>}
-              {incident.incident_id && <span style={{ fontSize: 7, color: ACC, fontFamily: MONO }}># {incident.incident_id}</span>}
-              {fmt(incident.first_seen) !== '—' && <span style={{ fontSize: 7, color: MUT }}>{fmt(incident.first_seen)}</span>}
-            </div>
           )}
+          {ageMins != null && ageMins > 0 && (
+            <span style={{ fontSize: 7, color: ageMins > 60 ? MUT : ACC, border: `1px solid ${ageMins > 60 ? BRD : ACC + '44'}`, borderRadius: 2, padding: '1px 4px', fontFamily: MONO, fontWeight: 700 }}>
+              ⏱ {ageMins < 60 ? `${ageMins}m` : `${Math.floor(ageMins/60)}h`}
+            </span>
+          )}
+          <span style={{ fontSize: 8, color: MUT }}>{open ? '▲' : '▼'}</span>
         </div>
 
-        <span style={{ fontSize: 8, color: MUT, flexShrink: 0 }}>{open ? '▲' : '▼'}</span>
+        {/* Row 2: address · cross street */}
+        <div style={{ marginTop: 3, fontSize: 11, fontWeight: 700, color: TXT }}>
+          {addr || '—'}
+          {incident.corner && <span style={{ fontWeight: 400, color: MUT, fontSize: 9 }}> @ {incident.corner}</span>}
+        </div>
+
+        {/* Row 3: dispatch summary — always visible */}
+        <div style={{ marginTop: 4, display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
+          {incident.agency && (
+            <span style={{ fontSize: 7, fontWeight: 700, color: MUT, border: `1px solid ${BRD}`, borderRadius: 2, padding: '1px 5px', fontFamily: MONO }}>
+              {incident.agency}
+            </span>
+          )}
+          {units.slice(0, 3).map(u => (
+            <span key={u} style={{ fontSize: 7, color: '#6090c0', fontFamily: MONO, border: '1px solid #1a2a3a', borderRadius: 2, padding: '1px 5px' }}>
+              {u}
+            </span>
+          ))}
+          {units.length > 3 && (
+            <span style={{ fontSize: 7, color: MUT, fontFamily: MONO }}>+{units.length - 3} more</span>
+          )}
+          {dispatch.radioLabel && (
+            <span style={{ fontSize: 7, color: '#5a8a5a', border: '1px solid #1a3a1a', borderRadius: 2, padding: '1px 5px', fontFamily: MONO }}>
+              📻 {dispatch.radioLabel}
+            </span>
+          )}
+          {dispatch.applianceLabel && (
+            <span style={{ fontSize: 7, color: MUT, fontFamily: MONO }}>
+              🚒 {dispatch.applianceLabel}
+            </span>
+          )}
+        </div>
       </div>
 
+      {/* ── Expanded detail ── */}
       {open && (
-        <div style={{ padding: '0 12px 12px', borderTop: '1px solid #1a1a1a', opacity: incident.is_cancelled ? 0.6 : 1 }}>
+        <div style={{ borderTop: '1px solid #1a1a1a', padding: '0 12px 12px', opacity: incident.is_cancelled ? 0.6 : 1 }}>
 
           {/* Description */}
           {incident.description && (
-            <div style={{ marginTop: 10, fontSize: 10, color: MUT, lineHeight: 1.6, background: '#0a0a0a', padding: '6px 8px', borderRadius: 2, border: '1px solid #1a1a1a' }}>
+            <div style={{ marginTop: 10, fontSize: 10, color: TXT, lineHeight: 1.6, background: '#0a0a0a', padding: '8px 10px', borderRadius: 2, border: '1px solid #1a1a1a', fontFamily: MONO }}>
               {incident.description}
             </div>
           )}
 
           {/* Info grid */}
-          <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
             {[
-              ['Event Type',   incident.event_type || '—'],
-              ['Alarm Level',  incident.alarm_level || '—'],
-              ['Agency',       incident.agency || '—'],
-              ['Incident ID',  incident.incident_id || '—'],
-              ['Cross Street', incident.corner || '—'],
-              ['Melway',       incident.map_ref || '—'],
-              ['Six-Figure',   incident.six_figure || '—'],
-              ['Time',         fmt(incident.first_seen)],
-              ['Pages',        String(msgs.length)],
-              ...(ageMins != null ? [['Age', ageMins < 60 ? `${ageMins}m` : `${Math.floor(ageMins/60)}h ${ageMins%60}m`]] : []),
+              ['What',        EVENT_LABELS[incident.event_type] || incident.event_type || '—'],
+              ['Alarm',       incident.alarm_level || '—'],
+              ['Agency',      incident.agency || '—'],
+              ['Incident #',  incident.incident_id || '—'],
+              ['Address',     addr || '—'],
+              ['Cross St',    incident.corner || '—'],
+              ['Melway',      incident.map_ref || '—'],
+              ['Grid Ref',    incident.six_figure ? `(${incident.six_figure})` : '—'],
+              ['Radio Ch.',   dispatch.radioLabel || '—'],
+              ['Appliances',  dispatch.applianceLabel || '—'],
+              ['Station',     dispatch.stationLabel || '—'],
+              ['Dispatched',  fmt(incident.first_seen)],
+              ['Age',         ageMins != null ? (ageMins < 60 ? `${ageMins}m` : `${Math.floor(ageMins/60)}h ${ageMins%60}m`) : '—'],
+              ['Pages',       String(msgs.length)],
             ].map(([lbl, val]) => (
               <div key={lbl} style={{ background: SURF, border: `1px solid ${BRD}`, borderRadius: 2, padding: '6px 8px' }}>
                 <div style={{ fontSize: 7, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>{lbl}</div>
-                <div style={{ fontSize: 10, color: TXT, fontFamily: MONO, wordBreak: 'break-all' }}>{val}</div>
+                <div style={{ fontSize: 10, color: TXT, fontFamily: MONO, wordBreak: 'break-word' }}>{val}</div>
               </div>
             ))}
           </div>
 
-          {/* Responding units */}
+          {/* Responding units — full list */}
           {units.length > 0 && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 8 }}>
-              {units.map(u => (
-                <span key={u} style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, color: '#6090c0', background: '#0a0f18', border: '1px solid #1a2a3a', padding: '2px 6px' }}>
-                  {u}
-                </span>
-              ))}
+            <div style={{ marginTop: 8 }}>
+              <div style={{ fontSize: 7, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}>Responding Units</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                {units.map(u => (
+                  <span key={u} style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, color: '#6090c0', background: '#0a0f18', border: '1px solid #1a2a3a', padding: '2px 8px' }}>
+                    {u}
+                  </span>
+                ))}
+              </div>
             </div>
           )}
 
           {/* Maps + Street View */}
-          <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <div style={{ marginTop: 10, display: 'flex', gap: 6 }}>
             {mapsUrl && (
               <a href={mapsUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 8, color: '#5a7a9a', border: '1px solid #1e2e3e', borderRadius: 2, padding: '4px 8px', textDecoration: 'none', background: '#0a1520' }}>
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 8, color: '#5a7a9a', border: '1px solid #1e2e3e', borderRadius: 2, padding: '5px 10px', textDecoration: 'none', background: '#0a1520' }}>
                 📍 Maps
               </a>
             )}
             {svUrl && (
               <a href={svUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 8, color: '#5a6a7a', border: '1px solid #1e2a3a', borderRadius: 2, padding: '4px 8px', textDecoration: 'none', background: '#0a1018' }}>
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 8, color: '#5a6a7a', border: '1px solid #1e2a3a', borderRadius: 2, padding: '5px 10px', textDecoration: 'none', background: '#0a1018' }}>
                 🔭 Street View
               </a>
             )}
           </div>
 
-          {/* Raw pages */}
+          {/* Pages list — decoded */}
           {msgs.length > 0 && (
             <div style={{ marginTop: 10, border: `1px solid ${BRD}`, borderRadius: 2 }}>
-              <div style={{ fontSize: 7, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700, padding: '5px 8px', borderBottom: `1px solid ${BRD}` }}>
-                Pages ({msgs.length})
+              <div style={{ fontSize: 7, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700, padding: '5px 8px', borderBottom: `1px solid ${BRD}`, display: 'flex', justifyContent: 'space-between' }}>
+                <span>Dispatch Pages</span>
+                <span>{msgs.length} total</span>
               </div>
-              {msgs.map((m, i) => (
-                <div key={m.id ?? i} style={{
-                  padding: '6px 8px',
-                  borderBottom: i < msgs.length - 1 ? `1px solid ${BRD2}` : 'none',
-                  display: 'flex', gap: 8, alignItems: 'flex-start',
-                }}>
-                  <span style={{ fontFamily: MONO, fontSize: 8, color: BRD, flexShrink: 0, paddingTop: 1 }}>
-                    {fmtTime(m.timestamp)}
-                  </span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    {m.alias && (
-                      <span style={{ fontFamily: MONO, fontSize: 8, fontWeight: 700, color: '#6090c0', marginRight: 6 }}>
-                        {m.alias}
-                      </span>
-                    )}
-                    <span style={{ fontFamily: MONO, fontSize: 9, color: MUT, wordBreak: 'break-word', lineHeight: 1.4 }}>
-                      {m.message || m.parsed?.description || '—'}
-                    </span>
+              {msgs.map((m, i) => {
+                const p = parsePageMsg(m.message)
+                return (
+                  <div key={m.id ?? i} style={{
+                    padding: '7px 8px',
+                    borderBottom: i < msgs.length - 1 ? `1px solid ${BRD2}` : 'none',
+                  }}>
+                    {/* Page header: time · unit · radio · appliances */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 3 }}>
+                      <span style={{ fontFamily: MONO, fontSize: 8, color: MUT, flexShrink: 0 }}>{fmtTime(m.timestamp)}</span>
+                      {m.alias && (
+                        <span style={{ fontFamily: MONO, fontSize: 8, fontWeight: 700, color: '#6090c0' }}>{m.alias}</span>
+                      )}
+                      {p.fgds?.map(f => (
+                        <span key={f} style={{ fontFamily: MONO, fontSize: 7, color: '#5a8a5a', border: '1px solid #1a3a1a', borderRadius: 2, padding: '0 4px' }}>
+                          📻 {f.replace('FGD', 'Ch.')}
+                        </span>
+                      ))}
+                      {p.appliances?.map(a => (
+                        <span key={a} style={{ fontFamily: MONO, fontSize: 7, color: MUT, border: `1px solid ${BRD}`, borderRadius: 2, padding: '0 4px' }}>
+                          🚒 {labelAppliance(a)}
+                        </span>
+                      ))}
+                      {p.stationLabel && (
+                        <span style={{ fontFamily: MONO, fontSize: 7, color: MUT }}>📍 {p.stationLabel}</span>
+                      )}
+                    </div>
+                    {/* Raw message */}
+                    <div style={{ fontFamily: MONO, fontSize: 8, color: BRD, lineHeight: 1.5, wordBreak: 'break-word' }}>
+                      {m.message || '—'}
+                    </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
 
