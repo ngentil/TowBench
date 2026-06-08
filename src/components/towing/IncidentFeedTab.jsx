@@ -244,7 +244,7 @@ function buildDispatch(msgs) {
   }
 }
 
-function IncidentCard({ incident }) {
+function IncidentCard({ incident, nearbyKm }) {
   const [open, setOpen] = useState(false)
   const colour  = eventColour(incident.event_type, incident.is_cancelled)
   const label   = EVENT_LABELS[incident.event_type] || incident.event_type || 'INCIDENT'
@@ -281,6 +281,16 @@ function IncidentCard({ incident }) {
           {ageMins != null && ageMins > 0 && (
             <span style={{ fontSize: 7, color: ageMins > 60 ? MUT : ACC, border: `1px solid ${ageMins > 60 ? BRD : ACC + '44'}`, borderRadius: 2, padding: '1px 4px', fontFamily: MONO, fontWeight: 700 }}>
               ⏱ {ageMins < 60 ? `${ageMins}m` : `${Math.floor(ageMins/60)}h`}
+            </span>
+          )}
+          {incident._distKm != null && (
+            <span style={{
+              fontSize: 7, fontWeight: 700, fontFamily: MONO,
+              color:  nearbyKm > 0 && incident._distKm <= nearbyKm ? '#cc2222' : MUT,
+              border: `1px solid ${nearbyKm > 0 && incident._distKm <= nearbyKm ? '#cc222255' : '#2a2a2a'}`,
+              borderRadius: 2, padding: '1px 4px',
+            }}>
+              📍 {incident._distKm.toFixed(1)}km
             </span>
           )}
           <span style={{ fontSize: 8, color: MUT }}>{open ? '▲' : '▼'}</span>
@@ -588,9 +598,9 @@ export default function IncidentFeedTab({ userPos, companyId }) {
     .sort((a, b) => b.first_seen - a.first_seen)
     .slice(0, 300)
 
-  // Geocode incident addresses when radius filter is active
+  // Geocode incident addresses whenever we have an effective position (for distance display + radius filter)
   useEffect(() => {
-    if (!nearbyKm || !effectivePos || geocodingRef.current) return
+    if (!effectivePos || geocodingRef.current) return
     const pending = allIncidents.filter(i => i.address && !geocodeCache.current.has(i.address))
     if (!pending.length) return
 
@@ -619,10 +629,10 @@ export default function IncidentFeedTab({ userPos, companyId }) {
     })()
 
     return () => { cancelled = true; geocodingRef.current = false }
-  }, [allIncidents, nearbyKm, effectivePos])
+  }, [allIncidents, effectivePos])
 
-  // Apply nearby filter using geocoded coords
-  const withDistance = nearbyKm > 0 && effectivePos
+  // Always compute distance when we have a position (used for badges + radius filter)
+  const withDistance = effectivePos
     ? allIncidents.map(i => {
         const coords = i.address ? geocodeCache.current.get(i.address) : undefined
         const distKm = coords ? kmBetween(effectivePos.lat, effectivePos.lng, coords.lat, coords.lng) : null
@@ -825,6 +835,7 @@ export default function IncidentFeedTab({ userPos, companyId }) {
         <IncidentCard
           key={incident.incident_id || incident.messages?.[0]?.id}
           incident={incident}
+          nearbyKm={nearbyKm}
         />
       ))}
     </div>
