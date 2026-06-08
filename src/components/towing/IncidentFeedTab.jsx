@@ -101,6 +101,51 @@ function vehicleSearchUrl(name) {
   return `https://www.google.com/search?q=site:emergencyvehiclesapp.com+"${encodeURIComponent(name)}"`
 }
 
+function stationMapsUrl(unit) {
+  return `https://www.google.com/maps/search/${encodeURIComponent(unit + ' Fire Station Victoria')}`
+}
+
+// Thumbnail card — fetches photo via vehicle-lookup Netlify function on mount
+function ApplianceBadge({ code }) {
+  const name = labelAppliance(code)
+  const [data,   setData]   = useState(null)
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    fetch(`/.netlify/functions/vehicle-lookup?name=${encodeURIComponent(name)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { setData(d); setLoaded(true) })
+      .catch(() => setLoaded(true))
+  }, [name])
+
+  const href = data?.vehicleUrl || vehicleSearchUrl(name)
+  const img  = data?.imageUrl
+
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer"
+      onClick={e => e.stopPropagation()} title={name}
+      style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center',
+               textDecoration: 'none', border: `1px solid ${BRD}`, borderRadius: 2,
+               overflow: 'hidden', background: '#0a0a0a', width: 80, flexShrink: 0 }}>
+      <div style={{ width: 80, height: 50, background: '#111', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+        {!loaded
+          ? <span style={{ fontSize: 8, color: BRD }}>…</span>
+          : img
+            ? <img src={img} alt={name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.target.style.display='none'; e.target.nextSibling.style.display='flex' }} />
+            : null}
+        {(!loaded || !img) && loaded && (
+          <span style={{ fontSize: 20, position: img ? 'absolute' : 'static', display: img ? 'none' : 'flex' }}>🚒</span>
+        )}
+      </div>
+      <div style={{ fontFamily: MONO, fontSize: 7, color: MUT, padding: '2px 4px',
+                    width: '100%', boxSizing: 'border-box', textAlign: 'center',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {name}
+      </div>
+    </a>
+  )
+}
+
 function labelAppliance(code) {
   const m = code.match(/^(PT|TB|TL|TA|SU|CB|FA|QRV|P)(\d+)([A-Z]?)$/)
   if (!m) return code
@@ -218,9 +263,11 @@ function IncidentCard({ incident }) {
             </span>
           )}
           {units.slice(0, 3).map(u => (
-            <span key={u} style={{ fontSize: 7, color: '#6090c0', fontFamily: MONO, border: '1px solid #1a2a3a', borderRadius: 2, padding: '1px 5px' }}>
+            <a key={u} href={stationMapsUrl(u)} target="_blank" rel="noopener noreferrer"
+              onClick={e => e.stopPropagation()}
+              style={{ fontSize: 7, color: '#6090c0', fontFamily: MONO, border: '1px solid #1a2a3a', borderRadius: 2, padding: '1px 5px', textDecoration: 'none' }}>
               {u}
-            </span>
+            </a>
           ))}
           {units.length > 3 && (
             <span style={{ fontSize: 7, color: MUT, fontFamily: MONO }}>+{units.length - 3} more</span>
@@ -266,13 +313,7 @@ function IncidentCard({ incident }) {
               ['Melway',      incident.map_ref || '—'],
               ['Grid Ref',    incident.six_figure ? `(${incident.six_figure})` : '—'],
               ['Radio Ch.',   dispatch.radioLabel || '—'],
-              ['Appliances',  dispatch.appliances.length
-                ? dispatch.appliances.map(a => {
-                    const name = labelAppliance(a)
-                    return <a key={a} href={vehicleSearchUrl(name)} target="_blank" rel="noopener noreferrer"
-                      style={{ color: '#5a7aaa', textDecoration: 'none', marginRight: 6 }}>{name}</a>
-                  })
-                : '—'],
+              ['Appliances',  dispatch.appliances.length ? dispatch.appliances.map(labelAppliance).join(' · ') : '—'],
               ['Station',     dispatch.stationLabel || '—'],
               ['Dispatched',  fmt(incident.first_seen)],
               ['Age',         ageMins != null ? (ageMins < 60 ? `${ageMins}m` : `${Math.floor(ageMins/60)}h ${ageMins%60}m`) : '—'],
@@ -285,15 +326,27 @@ function IncidentCard({ incident }) {
             ))}
           </div>
 
+          {/* Appliance thumbnails */}
+          {dispatch.appliances.length > 0 && (
+            <div style={{ marginTop: 10 }}>
+              <div style={{ fontSize: 7, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 6 }}>Appliances</div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {dispatch.appliances.map(a => <ApplianceBadge key={a} code={a} />)}
+              </div>
+            </div>
+          )}
+
           {/* Responding units — full list */}
           {units.length > 0 && (
             <div style={{ marginTop: 8 }}>
               <div style={{ fontSize: 7, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}>Responding Units</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                 {units.map(u => (
-                  <span key={u} style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, color: '#6090c0', background: '#0a0f18', border: '1px solid #1a2a3a', padding: '2px 8px' }}>
+                  <a key={u} href={stationMapsUrl(u)} target="_blank" rel="noopener noreferrer"
+                    onClick={e => e.stopPropagation()}
+                    style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, color: '#6090c0', background: '#0a0f18', border: '1px solid #1a2a3a', padding: '2px 8px', textDecoration: 'none' }}>
                     {u}
-                  </span>
+                  </a>
                 ))}
               </div>
             </div>
