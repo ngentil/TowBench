@@ -92,7 +92,7 @@ function fmt(epochMs) {
 // ── Raw pager message parser ──────────────────────────────────────────────────
 
 const APPLIANCE_TYPES = {
-  P: 'Pumper', PT: 'Pump/Tanker', TB: 'Tanker', TL: 'Aerial Ladder',
+  P: 'Pumper', PT: 'Pumper Tanker', TB: 'Tanker', TL: 'Aerial Ladder',
   TA: 'Tanker', SU: 'Support', CB: 'Command', FA: 'Field Appliance',
   FIP: 'Fire Panel', QRV: 'Quick Response',
 }
