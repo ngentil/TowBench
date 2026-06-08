@@ -74,18 +74,18 @@ function fmtAge(epochMs) {
   return `${Math.floor(hrs / 24)}d ago`
 }
 
+function fmtTime(epochMs) {
+  if (!epochMs) return '—'
+  return new Date(epochMs).toLocaleTimeString('en-AU', {
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  })
+}
+
 function fmt(epochMs) {
   if (!epochMs) return '—'
   return new Date(epochMs).toLocaleTimeString('en-AU', {
     day: '2-digit', month: 'short',
     hour: '2-digit', minute: '2-digit', hour12: false,
-  })
-}
-
-function fmtTime(epochMs) {
-  if (!epochMs) return '—'
-  return new Date(epochMs).toLocaleTimeString('en-AU', {
-    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
   })
 }
 
@@ -97,98 +97,125 @@ function IncidentCard({ incident }) {
   const msgs    = incident.messages || []
   const ageMins = incident.first_seen ? Math.floor((Date.now() - incident.first_seen) / 60000) : null
 
+  const addr    = incident.address
+  const query   = addr ? encodeURIComponent(addr + ' Victoria Australia') : null
+  const mapsUrl = query ? `https://www.google.com/maps/search/?api=1&query=${query}` : null
+  const svUrl   = query ? `https://maps.google.com/maps?q=${query}&layer=c` : null
+
+  const borderLeft = `3px solid ${colour}`
+  const border     = `1px solid ${incident.is_cancelled ? BRD : colour + '55'}`
+
   return (
-    <div
-      onClick={() => setOpen(o => !o)}
-      style={{
-        border:      `1px solid ${incident.is_cancelled ? BRD : colour}`,
-        borderLeft:  `3px solid ${colour}`,
-        background:   SURF,
-        marginBottom: 5,
-        cursor:      'pointer',
-        userSelect:  'none',
-        opacity:     incident.is_cancelled ? 0.45 : 1,
-      }}
-    >
-      {/* Header row: type · alarm · time · toggle */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 12px 2px' }}>
-        <span style={{
-          fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em',
-          color: colour, textTransform: 'uppercase', flexShrink: 0,
-        }}>
-          {incident.is_cancelled ? '✓ ' : ''}{label}
-        </span>
+    <div style={{ background: '#0d0d0d', border, borderLeft, borderRadius: 2, marginBottom: 6, overflow: 'hidden' }}>
 
-        {incident.alarm_level && (
-          <span style={{
-            fontFamily: MONO, fontSize: 8, fontWeight: 700,
-            color: '#c87020', background: '#1a1000', border: '1px solid #3a2a00',
-            padding: '1px 5px', flexShrink: 0,
-          }}>
-            {incident.alarm_level}
-          </span>
-        )}
+      {/* Collapsed header */}
+      <div onClick={() => setOpen(o => !o)}
+        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', cursor: 'pointer', userSelect: 'none', opacity: incident.is_cancelled ? 0.45 : 1 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
 
-        <span style={{ flex: 1 }} />
+          {/* Row 1: type label + alarm level + age */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color: colour, fontFamily: MONO, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+              {incident.is_cancelled ? '✓ ' : ''}{label}
+            </span>
+            {incident.alarm_level && (
+              <span style={{ fontSize: 7, fontWeight: 700, color: '#c87020', background: '#1a1000', border: '1px solid #3a2a00', padding: '1px 5px', fontFamily: MONO }}>
+                {incident.alarm_level}
+              </span>
+            )}
+            {ageMins != null && ageMins > 0 && (
+              <span style={{ fontSize: 7, color: ageMins > 60 ? MUT : ACC, border: `1px solid ${ageMins > 60 ? BRD : ACC + '44'}`, borderRadius: 2, padding: '1px 4px', fontFamily: MONO, fontWeight: 700 }}>
+                ⏱ {ageMins < 60 ? `${ageMins}m` : `${Math.floor(ageMins/60)}h`}
+              </span>
+            )}
+          </div>
 
-        <span style={{ fontFamily: MONO, fontSize: 9, color: MUT, whiteSpace: 'nowrap', flexShrink: 0 }}>
-          {fmt(incident.first_seen)}
-          {ageMins != null && ageMins > 0 && (
-            <span style={{ color: ageMins > 60 ? BRD2 : MUT }}> +{ageMins < 60 ? `${ageMins}m` : `${Math.floor(ageMins/60)}h`}</span>
+          {/* Row 2: address + cross street */}
+          <div style={{ display: 'flex', gap: 5, alignItems: 'baseline', marginTop: 3, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: TXT }}>{addr || '—'}</span>
+            {incident.corner && <span style={{ fontSize: 8, color: MUT }}>@ {incident.corner}</span>}
+          </div>
+
+          {/* Row 3: agency + incident ID (collapsed only) */}
+          {!open && (
+            <div style={{ marginTop: 2, display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
+              {incident.agency && <span style={{ fontSize: 7, color: MUT, border: `1px solid ${BRD}`, borderRadius: 2, padding: '1px 4px' }}>{incident.agency}</span>}
+              {incident.incident_id && <span style={{ fontSize: 7, color: ACC, fontFamily: MONO }}># {incident.incident_id}</span>}
+              {fmt(incident.first_seen) !== '—' && <span style={{ fontSize: 7, color: MUT }}>{fmt(incident.first_seen)}</span>}
+            </div>
           )}
-        </span>
+        </div>
 
-        <span style={{ fontFamily: MONO, fontSize: 9, color: BRD, flexShrink: 0 }}>{open ? '▲' : '▼'}</span>
-      </div>
-
-      {/* Address row — full width, wraps */}
-      <div style={{ padding: '0 12px 7px', fontFamily: MONO, fontSize: 12, color: TXT, lineHeight: 1.4 }}>
-        {incident.address || '—'}
-        {incident.corner && (
-          <span style={{ color: MUT }}> · {incident.corner}</span>
-        )}
+        <span style={{ fontSize: 8, color: MUT, flexShrink: 0 }}>{open ? '▲' : '▼'}</span>
       </div>
 
       {open && (
-        <div style={{ borderTop: `1px solid ${BRD2}` }}>
+        <div style={{ padding: '0 12px 12px', borderTop: '1px solid #1a1a1a', opacity: incident.is_cancelled ? 0.6 : 1 }}>
 
           {/* Description */}
           {incident.description && (
-            <div style={{ padding: '8px 12px 4px', fontFamily: MONO, fontSize: 11, color: TXT, lineHeight: 1.5 }}>
+            <div style={{ marginTop: 10, fontSize: 10, color: MUT, lineHeight: 1.6, background: '#0a0a0a', padding: '6px 8px', borderRadius: 2, border: '1px solid #1a1a1a' }}>
               {incident.description}
             </div>
           )}
 
+          {/* Info grid */}
+          <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            {[
+              ['Event Type',   incident.event_type || '—'],
+              ['Alarm Level',  incident.alarm_level || '—'],
+              ['Agency',       incident.agency || '—'],
+              ['Incident ID',  incident.incident_id || '—'],
+              ['Cross Street', incident.corner || '—'],
+              ['Melway',       incident.map_ref || '—'],
+              ['Six-Figure',   incident.six_figure || '—'],
+              ['Time',         fmt(incident.first_seen)],
+              ['Pages',        String(msgs.length)],
+              ...(ageMins != null ? [['Age', ageMins < 60 ? `${ageMins}m` : `${Math.floor(ageMins/60)}h ${ageMins%60}m`]] : []),
+            ].map(([lbl, val]) => (
+              <div key={lbl} style={{ background: SURF, border: `1px solid ${BRD}`, borderRadius: 2, padding: '6px 8px' }}>
+                <div style={{ fontSize: 7, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>{lbl}</div>
+                <div style={{ fontSize: 10, color: TXT, fontFamily: MONO, wordBreak: 'break-all' }}>{val}</div>
+              </div>
+            ))}
+          </div>
+
           {/* Responding units */}
           {units.length > 0 && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, padding: '6px 12px 4px' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 8 }}>
               {units.map(u => (
-                <span key={u} style={{
-                  fontFamily: MONO, fontSize: 9, fontWeight: 700,
-                  color: '#6090c0', background: '#0a0f18',
-                  border: '1px solid #1a2a3a', padding: '2px 6px',
-                }}>
+                <span key={u} style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, color: '#6090c0', background: '#0a0f18', border: '1px solid #1a2a3a', padding: '2px 6px' }}>
                   {u}
                 </span>
               ))}
             </div>
           )}
 
-          {/* Meta row */}
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', padding: '6px 12px 8px' }}>
-            {incident.map_ref    && <span style={{ fontFamily: MONO, fontSize: 9, color: MUT }}>Melway {incident.map_ref}</span>}
-            {incident.six_figure && <span style={{ fontFamily: MONO, fontSize: 9, color: MUT }}>({incident.six_figure})</span>}
-            {incident.agency     && <span style={{ fontFamily: MONO, fontSize: 9, color: MUT }}>{incident.agency}</span>}
-            {incident.incident_id && <span style={{ fontFamily: MONO, fontSize: 9, color: MUT }}>{incident.incident_id}</span>}
-            {msgs.length > 0     && <span style={{ fontFamily: MONO, fontSize: 9, color: MUT }}>{msgs.length} {msgs.length === 1 ? 'page' : 'pages'}</span>}
+          {/* Maps + Street View */}
+          <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {mapsUrl && (
+              <a href={mapsUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 8, color: '#5a7a9a', border: '1px solid #1e2e3e', borderRadius: 2, padding: '4px 8px', textDecoration: 'none', background: '#0a1520' }}>
+                📍 Maps
+              </a>
+            )}
+            {svUrl && (
+              <a href={svUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 8, color: '#5a6a7a', border: '1px solid #1e2a3a', borderRadius: 2, padding: '4px 8px', textDecoration: 'none', background: '#0a1018' }}>
+                🔭 Street View
+              </a>
+            )}
           </div>
 
-          {/* Raw pages list */}
+          {/* Raw pages */}
           {msgs.length > 0 && (
-            <div style={{ borderTop: `1px solid ${BRD2}` }}>
+            <div style={{ marginTop: 10, border: `1px solid ${BRD}`, borderRadius: 2 }}>
+              <div style={{ fontSize: 7, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700, padding: '5px 8px', borderBottom: `1px solid ${BRD}` }}>
+                Pages ({msgs.length})
+              </div>
               {msgs.map((m, i) => (
                 <div key={m.id ?? i} style={{
-                  padding: '5px 12px',
+                  padding: '6px 8px',
                   borderBottom: i < msgs.length - 1 ? `1px solid ${BRD2}` : 'none',
                   display: 'flex', gap: 8, alignItems: 'flex-start',
                 }}>
@@ -197,17 +224,11 @@ function IncidentCard({ incident }) {
                   </span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     {m.alias && (
-                      <span style={{
-                        fontFamily: MONO, fontSize: 8, fontWeight: 700,
-                        color: '#6090c0', marginRight: 6,
-                      }}>
+                      <span style={{ fontFamily: MONO, fontSize: 8, fontWeight: 700, color: '#6090c0', marginRight: 6 }}>
                         {m.alias}
                       </span>
                     )}
-                    <span style={{
-                      fontFamily: MONO, fontSize: 9, color: MUT,
-                      wordBreak: 'break-word', lineHeight: 1.4,
-                    }}>
+                    <span style={{ fontFamily: MONO, fontSize: 9, color: MUT, wordBreak: 'break-word', lineHeight: 1.4 }}>
                       {m.message || m.parsed?.description || '—'}
                     </span>
                   </div>
