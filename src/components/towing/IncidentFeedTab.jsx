@@ -110,6 +110,7 @@ function ApplianceBadge({ code }) {
   const name = labelAppliance(code)
   const [data,   setData]   = useState(null)
   const [loaded, setLoaded] = useState(false)
+  const [imgErr, setImgErr] = useState(false)
 
   useEffect(() => {
     fetch(`/.netlify/functions/vehicle-lookup?name=${encodeURIComponent(name)}`)
@@ -118,24 +119,34 @@ function ApplianceBadge({ code }) {
       .catch(() => setLoaded(true))
   }, [name])
 
-  const href = data?.vehicleUrl || vehicleSearchUrl(name)
-  const img  = data?.imageUrl
+  const href    = data?.vehicleUrl || vehicleSearchUrl(name)
+  const img     = (!imgErr && data?.imageUrl) ? data.imageUrl : null
+  const showImg = loaded && img
 
   return (
     <a href={href} target="_blank" rel="noopener noreferrer"
-      onClick={e => e.stopPropagation()} title={name}
+      onClick={e => e.stopPropagation()}
       style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center',
                textDecoration: 'none', border: `1px solid ${BRD}`, borderRadius: 2,
-               overflow: 'hidden', background: '#0a0a0a', width: 80, flexShrink: 0 }}>
-      <div style={{ width: 80, height: 50, background: '#111', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-        {!loaded
-          ? <span style={{ fontSize: 8, color: BRD }}>…</span>
-          : img
-            ? <img src={img} alt={name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.target.style.display='none'; e.target.nextSibling.style.display='flex' }} />
-            : null}
-        {(!loaded || !img) && loaded && (
-          <span style={{ fontSize: 20, position: img ? 'absolute' : 'static', display: img ? 'none' : 'flex' }}>🚒</span>
+               overflow: 'hidden', background: '#0a0a0a', width: 88, flexShrink: 0 }}>
+
+      {/* Photo area */}
+      <div style={{ width: 88, height: 56, background: '#111', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', position: 'relative' }}>
+        {!loaded && <span style={{ fontSize: 8, color: BRD }}>…</span>}
+        {showImg && (
+          <img src={img} alt={name}
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            onError={() => setImgErr(true)} />
         )}
+        {loaded && !showImg && <span style={{ fontSize: 22 }}>🚒</span>}
+      </div>
+
+      {/* Name label */}
+      <div style={{ fontFamily: MONO, fontSize: 7, color: MUT, padding: '3px 4px',
+                    width: '100%', boxSizing: 'border-box', textAlign: 'center',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    borderTop: `1px solid ${BRD}` }}>
+        {name}
       </div>
     </a>
   )
