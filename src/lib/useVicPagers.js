@@ -46,6 +46,13 @@ export function mergeMessage(incidents, msg) {
     [key]: {
       ...existing,
       last_seen:        Math.max(existing.last_seen, msg.timestamp ?? 0),
+      // Backfill fields that may have been absent on the first message
+      address:          existing.address     || msg.parsed?.address     || null,
+      description:      existing.description || msg.parsed?.description || null,
+      event_type:       existing.event_type  || msg.parsed?.eventType   || null,
+      map_ref:          existing.map_ref     || msg.parsed?.mapRef      || null,
+      alarm_level:      existing.alarm_level || msg.parsed?.alarmLevel  || null,
+      agency:           existing.agency      || msg.agency              || null,
       is_cancelled:     existing.is_cancelled || (msg.parsed?.isCancellation || false),
       six_figure:       existing.six_figure || msg.parsed?.sixFigure || null,
       corner:           existing.corner     || msg.parsed?.corner     || null,
