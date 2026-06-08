@@ -196,6 +196,8 @@ export default function IncidentFeedTab() {
     ? incidents
     : incidents.filter(i => REAL_FILTERS.filter(f => active.has(f.id)).some(f => f.match(i)))
 
+  const totalCount     = incidents.length
+  const hiddenCount    = totalCount - filtered.length
   const activeCount    = filtered.filter(i => !i.is_cancelled).length
   const cancelledCount = filtered.filter(i =>  i.is_cancelled).length
 
@@ -219,6 +221,8 @@ export default function IncidentFeedTab() {
           <span style={{ fontFamily: MONO, fontSize: 9, color: MUT }}>
             {activeCount} active
             {cancelledCount > 0 && <span style={{ color: BRD }}> · {cancelledCount} cancelled</span>}
+            {hiddenCount > 0 && <span style={{ color: BRD }}> · {hiddenCount} hidden</span>}
+            {totalCount === 0 && <span style={{ color: BRD }}> · waiting for dispatch</span>}
           </span>
         )}
         {active.size > 0 && (
@@ -271,7 +275,9 @@ export default function IncidentFeedTab() {
           fontFamily: MONO, fontSize: 11, color: MUT,
           border: `1px dashed ${BRD}`,
         }}>
-          {active.size > 0 ? 'NO INCIDENTS MATCHING FILTER' : 'MONITORING — NO INCIDENTS'}
+          {active.size > 0 && hiddenCount > 0
+            ? `FILTERS ACTIVE — ${hiddenCount} INCIDENT${hiddenCount !== 1 ? 'S' : ''} HIDDEN · CLEAR TO SHOW ALL`
+            : 'MONITORING — WAITING FOR DISPATCH'}
         </div>
       )}
 
