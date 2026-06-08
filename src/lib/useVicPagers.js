@@ -48,7 +48,9 @@ export function mergeMessage(incidents, msg) {
       responding_units: msg.alias && !existing.responding_units.includes(msg.alias)
         ? [...existing.responding_units, msg.alias]
         : existing.responding_units,
-      messages:         [...existing.messages, msg],
+      messages:         existing.messages.some(m => m.id != null && m.id === msg.id)
+        ? existing.messages
+        : [...existing.messages, msg],
       tow_relevant:     existing.tow_relevant || isTowRelevant(msg),
     },
   }
