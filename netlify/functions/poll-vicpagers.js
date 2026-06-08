@@ -15,10 +15,10 @@ exports.handler = async function () {
     const messages = [];
     let connected  = false;
 
-    // Use polling transport with the correct Origin so the server delivers events.
-    // VicPagers only emits message:new to connections from its own origin.
+    // Match the vicpagers.net.au website exactly: direct WebSocket (upgrades:[])
+    // + correct Origin so the server puts this connection in the broadcast pool.
     const socket = io('https://vicpagers.net.au', {
-      transports: ['polling', 'websocket'],
+      transports: ['websocket'],
       extraHeaders: { Origin: 'https://vicpagers.net.au' },
     });
 

@@ -27,7 +27,7 @@ exports.handler = async function () {
 
   await new Promise(resolve => {
     const socket = io('https://vicpagers.net.au', {
-      transports: ['polling', 'websocket'],
+      transports: ['websocket'],
       extraHeaders: { Origin: 'https://vicpagers.net.au' },
       timeout: 10000,
     });
