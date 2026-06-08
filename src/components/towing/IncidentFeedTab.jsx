@@ -119,57 +119,20 @@ function stationMapsUrl(unit) {
 // Broadcastify feed covering all FRV Melbourne Metro talkgroups (ESTA MMR network)
 const FGD_DEFAULT_FEED = 24820
 
-// Radio channel badge — tapping opens a dark scanner panel linking to Broadcastify
+// Radio channel badge — links directly to Broadcastify scanner feed
 function ChannelBadge({ fgd }) {
-  const [open, setOpen] = useState(false)
-  const num      = fgd.replace('FGD', '')
-  const label    = `Ch. ${num}`
-  const feedUrl  = `https://www.broadcastify.com/listen/feed/${FGD_DEFAULT_FEED}`
-
+  const href = `https://www.broadcastify.com/listen/feed/${FGD_DEFAULT_FEED}`
   return (
-    <div style={{ position: 'relative', display: 'inline-block' }}
-      onClick={e => e.stopPropagation()}>
-      <button
-        onClick={() => setOpen(o => !o)}
-        style={{
-          fontFamily: MONO, fontSize: 7, fontWeight: 700,
-          color: open ? '#6ab06a' : '#5a8a5a',
-          background: open ? '#0a1a0a' : 'transparent',
-          border: `1px solid ${open ? '#2a5a2a' : '#1a3a1a'}`,
-          borderRadius: open ? '2px 2px 0 0' : 2,
-          padding: '1px 6px', cursor: 'pointer',
-          display: 'inline-flex', alignItems: 'center', gap: 3,
-        }}>
-        📻 {label}
-      </button>
-      {open && (
-        <div style={{
-          position: 'absolute', top: '100%', left: 0, zIndex: 30,
-          background: '#070d07', border: '1px solid #2a5a2a',
-          borderRadius: '0 2px 2px 2px',
-          boxShadow: '0 6px 20px #000d', padding: '10px 12px', minWidth: 210,
-        }}>
-          <div style={{ fontSize: 6, color: '#3a5a3a', fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 8 }}>
-            FRV METRO · ESTA MMR · {fgd}
-          </div>
-          <a
-            href={feedUrl} target="_blank" rel="noopener noreferrer"
-            onClick={() => setOpen(false)}
-            style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
-              background: '#0f2a0f', border: '1px solid #3a6a3a', borderRadius: 2,
-              padding: '9px 14px', textDecoration: 'none',
-              color: '#7ad07a', fontFamily: MONO, fontSize: 10, fontWeight: 700,
-              letterSpacing: '0.06em',
-            }}>
-            ▶ Open Scanner
-          </a>
-          <div style={{ marginTop: 6, fontSize: 6, color: '#2a4a2a', fontFamily: MONO, textAlign: 'center' }}>
-            opens Broadcastify in browser
-          </div>
-        </div>
-      )}
-    </div>
+    <a href={href} target="_blank" rel="noopener noreferrer"
+      onClick={e => e.stopPropagation()}
+      style={{
+        fontFamily: MONO, fontSize: 7, fontWeight: 700,
+        color: '#5a8a5a', border: '1px solid #1a3a1a', borderRadius: 2,
+        padding: '1px 5px', textDecoration: 'none',
+        display: 'inline-flex', alignItems: 'center', gap: 3,
+      }}>
+      📻 Ch. {fgd.replace('FGD', '')}
+    </a>
   )
 }
 
