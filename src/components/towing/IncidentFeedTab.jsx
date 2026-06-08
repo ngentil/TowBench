@@ -116,6 +116,63 @@ function stationMapsUrl(unit) {
   return `https://www.google.com/maps/search/${encodeURIComponent(unit + ' Fire Station Victoria')}`
 }
 
+// Broadcastify feed covering all FRV Melbourne Metro talkgroups (ESTA MMR network)
+const FGD_DEFAULT_FEED = 24820
+
+// Mini inline Broadcastify scanner player — drops down from the Ch. badge
+function ChannelBadge({ fgd }) {
+  const [open, setOpen] = useState(false)
+  const label     = `Ch. ${fgd.replace('FGD', '')}`
+  const listenUrl = `https://www.broadcastify.com/listen/feed/${FGD_DEFAULT_FEED}`
+
+  return (
+    <div style={{ display: 'inline-flex', flexDirection: 'column', position: 'relative', zIndex: open ? 10 : 'auto' }}
+      onClick={e => e.stopPropagation()}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          fontFamily: MONO, fontSize: 7, color: open ? '#6ab06a' : '#5a8a5a',
+          background: open ? '#0d1a0d' : 'transparent',
+          border: `1px solid ${open ? '#2a5a2a' : '#1a3a1a'}`,
+          borderRadius: open ? '2px 2px 0 0' : 2,
+          padding: '1px 5px', cursor: 'pointer',
+          display: 'flex', alignItems: 'center', gap: 3,
+        }}>
+        📻 {label} <span style={{ fontSize: 5, opacity: 0.6 }}>{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0,
+          border: '1px solid #2a5a2a', borderRadius: '0 2px 2px 2px',
+          overflow: 'hidden', background: '#070d07',
+          zIndex: 20, boxShadow: '0 4px 16px #000c',
+        }}>
+          <iframe
+            src={`https://www.broadcastify.com/webPlayer/${FGD_DEFAULT_FEED}`}
+            width="320" height="80"
+            frameBorder="0" scrolling="no"
+            title={`FRV ${label}`}
+            allow="autoplay; encrypted-media"
+            style={{ display: 'block' }}
+          />
+          <div style={{
+            padding: '3px 8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            borderTop: '1px solid #1a3a1a',
+          }}>
+            <span style={{ fontSize: 6, color: '#3a5a3a', fontFamily: MONO, letterSpacing: '0.06em' }}>
+              FRV METRO · ESTA MMR · {fgd}
+            </span>
+            <a href={listenUrl} target="_blank" rel="noopener noreferrer"
+              style={{ fontSize: 6, color: '#5a8a5a', fontFamily: MONO, textDecoration: 'none' }}>
+              ↗ broadcastify
+            </a>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // Thumbnail card — fetches photo via vehicle-lookup Netlify function on mount
 function ApplianceBadge({ code }) {
   const name = labelAppliance(code)
@@ -289,11 +346,7 @@ function IncidentCard({ incident }) {
           {units.length > 3 && (
             <span style={{ fontSize: 7, color: MUT, fontFamily: MONO }}>+{units.length - 3} more</span>
           )}
-          {dispatch.radioLabel && (
-            <span style={{ fontSize: 7, color: '#5a8a5a', border: '1px solid #1a3a1a', borderRadius: 2, padding: '1px 5px', fontFamily: MONO }}>
-              📻 {dispatch.radioLabel}
-            </span>
-          )}
+          {dispatch.fgds.map(f => <ChannelBadge key={f} fgd={f} />)}
           {dispatch.appliances.map(a => {
             const name = labelAppliance(a)
             return (
@@ -405,11 +458,7 @@ function IncidentCard({ incident }) {
                       {m.alias && (
                         <span style={{ fontFamily: MONO, fontSize: 8, fontWeight: 700, color: '#6090c0' }}>{m.alias}</span>
                       )}
-                      {p.fgds?.map(f => (
-                        <span key={f} style={{ fontFamily: MONO, fontSize: 7, color: '#5a8a5a', border: '1px solid #1a3a1a', borderRadius: 2, padding: '0 4px' }}>
-                          📻 {f.replace('FGD', 'Ch.')}
-                        </span>
-                      ))}
+                      {p.fgds?.map(f => <ChannelBadge key={f} fgd={f} />)}
                       {p.appliances?.map(a => {
                         const name = labelAppliance(a)
                         return (
