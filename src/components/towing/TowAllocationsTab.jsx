@@ -565,10 +565,16 @@ export default function TowAllocationsTab({ allFeatures, liveIds, loading, err, 
 
   const setRadius = (km) => { setNearbyKm(km); localStorage.setItem('towbench_nearby_km', km); };
 
-  // Depot fallback for radius filter — reuse already-fetched depots list
-  const firstDepot   = depots.find(d => d.lat && d.lng) || null;
-  const effectivePos = userPos || (firstDepot ? { lat: firstDepot.lat, lng: firstDepot.lng } : null);
-  const usingDepot   = !userPos && !!firstDepot;
+  // Location source selector — persisted to localStorage
+  const [locationSource, setLocSrc] = useState(() => localStorage.getItem('towbench_location_source') || 'gps');
+  const setLocationSource = src => { setLocSrc(src); localStorage.setItem('towbench_location_source', src); };
+
+  const selectedDepot = locationSource !== 'gps'
+    ? (depots.find(d => String(d.id) === locationSource && d.lat && d.lng) || null)
+    : null;
+  const effectivePos = locationSource === 'gps'
+    ? userPos
+    : (selectedDepot ? { lat: selectedDepot.lat, lng: selectedDepot.lng } : userPos);
 
   const handleExport = useCallback(async () => {
     setExporting(true);
@@ -835,14 +841,30 @@ export default function TowAllocationsTab({ allFeatures, liveIds, loading, err, 
                   color: TXT, fontFamily: "'IBM Plex Mono',monospace", fontSize: 8, padding: '3px 5px',
                   borderRadius: 2, outline: 'none', textAlign: 'center' }}
               />
-              {nearbyKm > 0 && usingDepot && (
-                <span style={{ fontSize: 8, color: '#7a6a30', fontFamily: "'IBM Plex Mono',monospace", background: '#1a1500', border: '1px solid #3a3000', padding: '2px 6px', borderRadius: 2 }}>
-                  📍 depot: {firstDepot.name || firstDepot.suburb || 'Depot'}
-                </span>
-              )}
-              {nearbyKm > 0 && !effectivePos && (
-                <span style={{ fontSize: 8, color: MUT, fontFamily: "'IBM Plex Mono',monospace" }}>no GPS · no depot</span>
-              )}
+            </div>
+            <div style={{ marginBottom: 12, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 8, color: MUT, letterSpacing: '0.08em', textTransform: 'uppercase', flexShrink: 0 }}>📡 Source</span>
+              <button
+                onClick={() => setLocationSource('gps')}
+                style={{
+                  fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', padding: '4px 7px', borderRadius: 2, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace",
+                  background: locationSource === 'gps' ? (userPos ? GRN + '11' : '#1a1a1a') : '#0d0d0d',
+                  border: `1px solid ${locationSource === 'gps' ? (userPos ? GRN : '#333') : '#2a2a2a'}`,
+                  color: locationSource === 'gps' ? (userPos ? GRN : '#555') : MUT,
+                }}>
+                📡 GPS{locationSource === 'gps' && !userPos ? ' — no signal' : ''}
+              </button>
+              {depots.filter(d => d.lat && d.lng).map(d => (
+                <button key={d.id} onClick={() => setLocationSource(String(d.id))}
+                  style={{
+                    fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', padding: '4px 7px', borderRadius: 2, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace",
+                    background: locationSource === String(d.id) ? '#1a150022' : '#0d0d0d',
+                    border: `1px solid ${locationSource === String(d.id) ? '#7a6a30' : '#2a2a2a'}`,
+                    color: locationSource === String(d.id) ? '#c8a84b' : MUT,
+                  }}>
+                  🏢 {d.name || d.suburb || 'Depot'}
+                </button>
+              ))}
             </div>
           </>
         );
