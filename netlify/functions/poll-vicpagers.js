@@ -15,9 +15,11 @@ exports.handler = async function () {
     const messages = [];
     let connected  = false;
 
-    // Use polling transport — Netlify IPs confirmed not blocked for polling
+    // Use polling transport with the correct Origin so the server delivers events.
+    // VicPagers only emits message:new to connections from its own origin.
     const socket = io('https://vicpagers.net.au', {
       transports: ['polling', 'websocket'],
+      extraHeaders: { Origin: 'https://vicpagers.net.au' },
     });
 
     const finish = async () => {
