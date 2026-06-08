@@ -565,6 +565,11 @@ export default function TowAllocationsTab({ allFeatures, liveIds, loading, err, 
 
   const setRadius = (km) => { setNearbyKm(km); localStorage.setItem('towbench_nearby_km', km); };
 
+  // Depot fallback for radius filter — reuse already-fetched depots list
+  const firstDepot   = depots.find(d => d.lat && d.lng) || null;
+  const effectivePos = userPos || (firstDepot ? { lat: firstDepot.lat, lng: firstDepot.lng } : null);
+  const usingDepot   = !userPos && !!firstDepot;
+
   const handleExport = useCallback(async () => {
     setExporting(true);
     try {
@@ -830,6 +835,14 @@ export default function TowAllocationsTab({ allFeatures, liveIds, loading, err, 
                   color: TXT, fontFamily: "'IBM Plex Mono',monospace", fontSize: 8, padding: '3px 5px',
                   borderRadius: 2, outline: 'none', textAlign: 'center' }}
               />
+              {nearbyKm > 0 && usingDepot && (
+                <span style={{ fontSize: 8, color: '#7a6a30', fontFamily: "'IBM Plex Mono',monospace", background: '#1a1500', border: '1px solid #3a3000', padding: '2px 6px', borderRadius: 2 }}>
+                  📍 depot: {firstDepot.name || firstDepot.suburb || 'Depot'}
+                </span>
+              )}
+              {nearbyKm > 0 && !effectivePos && (
+                <span style={{ fontSize: 8, color: MUT, fontFamily: "'IBM Plex Mono',monospace" }}>no GPS · no depot</span>
+              )}
             </div>
           </>
         );
@@ -866,7 +879,7 @@ export default function TowAllocationsTab({ allFeatures, liveIds, loading, err, 
             Active ({active.length})
           </div>
           {active.map((f, i) => (
-            <AllocationCard key={f.properties?.eventId || i} feature={f} fromLog={false} userPos={userPos} nearbyKm={nearbyKm}
+            <AllocationCard key={f.properties?.eventId || i} feature={f} fromLog={false} userPos={effectivePos} nearbyKm={nearbyKm}
               acceptedJob={acceptedJobs?.get(String(f.properties?.eventId))} userEmail={userEmail}
               role={role} isDispatch={isDispatch} companyId={companyId}
               onAccept={onAcceptJob} onUnassign={onUnassignJob} onAllocateToPlate={onAllocateToPlate}
@@ -885,7 +898,7 @@ export default function TowAllocationsTab({ allFeatures, liveIds, loading, err, 
             Cleared ({cleared.length})
           </div>
           {cleared.map((f, i) => (
-            <AllocationCard key={f.properties?.eventId || i} feature={f} fromLog={true} userPos={userPos} nearbyKm={nearbyKm}
+            <AllocationCard key={f.properties?.eventId || i} feature={f} fromLog={true} userPos={effectivePos} nearbyKm={nearbyKm}
               acceptedJob={null} userEmail={userEmail}
               role={role} isDispatch={isDispatch} companyId={companyId}
               onAccept={null} onUnassign={null} onAllocateToPlate={null}
