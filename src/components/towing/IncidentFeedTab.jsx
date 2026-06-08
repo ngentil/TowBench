@@ -157,7 +157,7 @@ export default function IncidentFeedTab() {
   const [historyState, setHistoryState] = useState('loading') // loading | ok | error
   const [incidents, dispatch] = useReducer(incidentsReducer, {})
 
-  const { incidents: liveIncidents, connected, error } = useVicPagers({ towOnly: false })
+  const { incidents: liveIncidents, connected, error, rawCount } = useVicPagers({ towOnly: false })
 
   // Seed history from Supabase on mount
   useEffect(() => {
@@ -225,6 +225,11 @@ export default function IncidentFeedTab() {
         <span style={{ fontFamily: MONO, fontSize: 10, color: connected ? GRN : MUT, letterSpacing: '0.05em' }}>
           {connected ? 'LIVE · VICPAGERS' : error ? `OFFLINE — ${error.toUpperCase()}` : 'CONNECTING…'}
         </span>
+        {connected && rawCount > 0 && (
+          <span style={{ fontFamily: MONO, fontSize: 9, color: BRD, letterSpacing: '0.04em' }}>
+            {rawCount} rx
+          </span>
+        )}
 
         <span style={{ fontFamily: MONO, fontSize: 9, color: MUT }}>
           {historyState === 'loading' && <span style={{ color: BRD }}>loading history…</span>}
