@@ -1,4 +1,4 @@
-import { useState, useEffect, useReducer, useRef } from 'react'
+import { useState, useEffect, useReducer, useRef, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useVicPagers, mergeMessage } from '../../lib/useVicPagers'
 import { getRecentVicPagers, dbRowToMessage } from '../../lib/db/incidents'
@@ -524,13 +524,20 @@ export default function IncidentFeedTab({ userPos, companyId }) {
   const setLocationSource = src => { setLocSrc(src); localStorage.setItem('towbench_location_source', src) }
 
   const firstGeoDepot = depots.find(d => d.lat && d.lng) || null
-  const selectedDepot = locationSource !== 'gps' && locationSource !== 'auto'
-    ? (depots.find(d => String(d.id) === locationSource && d.lat && d.lng) || null)
-    : null
-  const effectivePos =
-    locationSource === 'auto' ? (userPos || (firstGeoDepot ? { lat: firstGeoDepot.lat, lng: firstGeoDepot.lng } : null))
-    : locationSource === 'gps' ? userPos
-    : (selectedDepot ? { lat: selectedDepot.lat, lng: selectedDepot.lng } : null)
+
+  // Stable reference — only changes when lat/lng values actually change,
+  // preventing the geocoding effect from being cancelled on every render.
+  const effectivePos = useMemo(() => {
+    if (locationSource === 'auto') {
+      if (userPos) return userPos
+      const d = depots.find(dep => dep.lat && dep.lng)
+      return d ? { lat: d.lat, lng: d.lng } : null
+    }
+    if (locationSource === 'gps') return userPos
+    const d = depots.find(dep => String(dep.id) === locationSource && dep.lat && dep.lng)
+    return d ? { lat: d.lat, lng: d.lng } : null
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locationSource, userPos?.lat, userPos?.lng, depots])
 
   // Geocode cache: address → { lat, lng } | null (null = failed / in-progress)
   const geocodeCache  = useRef(new Map())
@@ -598,10 +605,12 @@ export default function IncidentFeedTab({ userPos, companyId }) {
     .sort((a, b) => b.first_seen - a.first_seen)
     .slice(0, 300)
 
-  // Geocode incident addresses whenever we have an effective position (for distance display + radius filter)
+  // Geocode incident addresses whenever we have an effective position (for distance display + radius filter).
+  // Uses address || corner as key so incidents with only a cross-street still get geocoded.
   useEffect(() => {
     if (!effectivePos || geocodingRef.current) return
-    const pending = allIncidents.filter(i => i.address && !geocodeCache.current.has(i.address))
+    const geoKey = i => i.address || i.corner
+    const pending = allIncidents.filter(i => geoKey(i) && !geocodeCache.current.has(geoKey(i)))
     if (!pending.length) return
 
     geocodingRef.current = true
@@ -610,18 +619,18 @@ export default function IncidentFeedTab({ userPos, companyId }) {
     (async () => {
       for (const inc of pending) {
         if (cancelled) break
-        const addr = inc.address
-        if (geocodeCache.current.has(addr)) continue
-        geocodeCache.current.set(addr, null)
+        const key = inc.address || inc.corner
+        if (geocodeCache.current.has(key)) continue
+        geocodeCache.current.set(key, null)
         try {
           await new Promise(r => setTimeout(r, 250))
-          const q   = encodeURIComponent(addr + ', Victoria, Australia')
+          const q   = encodeURIComponent(key + ', Victoria, Australia')
           const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1`, {
             headers: { 'User-Agent': 'TowBench/1.0' },
             signal: AbortSignal.timeout(5000),
           })
           const data = await res.json()
-          if (data[0]) geocodeCache.current.set(addr, { lat: +data[0].lat, lng: +data[0].lon })
+          if (data[0]) geocodeCache.current.set(key, { lat: +data[0].lat, lng: +data[0].lon })
         } catch { /* leave as null */ }
         setGeoRev(v => v + 1)
       }
@@ -634,7 +643,8 @@ export default function IncidentFeedTab({ userPos, companyId }) {
   // Always compute distance when we have a position (used for badges + radius filter)
   const withDistance = effectivePos
     ? allIncidents.map(i => {
-        const coords = i.address ? geocodeCache.current.get(i.address) : undefined
+        const key    = i.address || i.corner
+        const coords = key ? geocodeCache.current.get(key) : undefined
         const distKm = coords ? kmBetween(effectivePos.lat, effectivePos.lng, coords.lat, coords.lng) : null
         return { ...i, _distKm: distKm }
       })
