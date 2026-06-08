@@ -48,7 +48,7 @@ const FILTERS = [
 ]
 const REAL_FILTERS = FILTERS.filter(f => f.id !== 'sep')
 
-const DEFAULT_FILTERS = new Set(['veh_fire', 'veh_inc'])
+const DEFAULT_FILTERS = new Set()
 
 function eventColour(type, cancelled) {
   if (cancelled) return MUT

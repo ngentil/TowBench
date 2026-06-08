@@ -59,6 +59,7 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, co
   //   super_admin:         All tabs
   const ALL_TABS = [
     { id: 'allocations',   label: '🚦 Tow Allocations',  roles: ['driver','dispatch','admin','super_admin'] },
+    { id: 'incidents',     label: '📟 Pager',             roles: ['dispatch','admin','super_admin'] },
     { id: 'dispatch',      label: '🚨 Dispatch',          roles: ['dispatch','admin','super_admin'] },
     { id: 'activetows',    label: '🚛 Active Tows',       roles: ['dispatch','admin','super_admin'] },
     { id: 'completedtows', label: '✅ Completed Tows',     roles: ['dispatch','admin','super_admin'] },
@@ -70,7 +71,6 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, co
     { id: 'bridges',       label: '🌉 Bridges',           roles: ['driver','dispatch','admin','super_admin'] },
     { id: 'waze',          label: '🧭 Waze',              roles: ['dispatch','admin','super_admin'] },
     { id: 'emergency',     label: '🚨 Emergency',         roles: ['dispatch','admin','super_admin'] },
-    { id: 'incidents',     label: '📟 Pager',             roles: ['dispatch','admin','super_admin'] },
     { id: 'vessels',       label: '⛵ Vessels',            roles: ['dispatch','admin','super_admin'] },
     { id: 'aircraft',      label: '✈ Aircraft',            roles: ['dispatch','admin','super_admin'] },
     { id: 'mytows',        label: '📋 My Tows',           roles: ['driver'], standaloneOnly: true },
