@@ -58,10 +58,13 @@ export function useVicPagers({ towOnly = false, maxIncidents = 200 } = {}) {
   const [connected, setConnected] = useState(false)
   const [error,     setError]     = useState(null)
   const [incidents, setIncidents] = useState({})
+  const [rawCount,  setRawCount]  = useState(0)   // total events received before any filtering
   const socketRef = useRef(null)
 
   useEffect(() => {
-    const socket = io('wss://vicpagers.net.au', { transports: ['websocket'] })
+    // Use https:// (not wss://) so Socket.IO can do polling→WebSocket upgrade normally.
+    // Forcing transports:['websocket'] skips the polling handshake and drops events.
+    const socket = io('https://vicpagers.net.au')
     socketRef.current = socket
 
     socket.on('connect',       () => { setConnected(true);  setError(null) })
@@ -69,6 +72,8 @@ export function useVicPagers({ towOnly = false, maxIncidents = 200 } = {}) {
     socket.on('connect_error', (e) => { setError(e.message); setConnected(false) })
 
     socket.on('message:new', (msg) => {
+      setRawCount(n => n + 1)
+
       if (msg.type === 'administrative') return
       if (towOnly && !isTowRelevant(msg) && msg.type !== 'emergency') return
 
@@ -86,5 +91,5 @@ export function useVicPagers({ towOnly = false, maxIncidents = 200 } = {}) {
     .sort((a, b) => b.first_seen - a.first_seen)
     .slice(0, maxIncidents)
 
-  return { incidents: incidentList, connected, error }
+  return { incidents: incidentList, connected, error, rawCount }
 }
