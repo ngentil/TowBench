@@ -55,11 +55,13 @@ export function mergeMessage(incidents, msg) {
 }
 
 export function useVicPagers({ towOnly = false, maxIncidents = 200 } = {}) {
-  const [connected,  setConnected]  = useState(false)
-  const [error,      setError]      = useState(null)
-  const [incidents,  setIncidents]  = useState({})
-  const [rawCount,   setRawCount]   = useState(0)
-  const [lastEvent,  setLastEvent]  = useState(null)  // debug: last event name seen
+  const [connected,    setConnected]    = useState(false)
+  const [error,        setError]        = useState(null)
+  const [incidents,    setIncidents]    = useState({})
+  const [rawCount,     setRawCount]     = useState(0)
+  const [lastEvent,    setLastEvent]    = useState(null)
+  const [socketId,     setSocketId]     = useState(null)
+  const [connectedAt,  setConnectedAt]  = useState(null)
   const socketRef = useRef(null)
 
   useEffect(() => {
@@ -69,16 +71,20 @@ export function useVicPagers({ towOnly = false, maxIncidents = 200 } = {}) {
     socket.on('connect', () => {
       setConnected(true)
       setError(null)
+      setSocketId(socket.id)
+      setConnectedAt(Date.now())
     })
-    socket.on('disconnect',    () =>   setConnected(false))
+    socket.on('disconnect', () => {
+      setConnected(false)
+      setSocketId(null)
+    })
     socket.on('connect_error', (e) => { setError(e.message); setConnected(false) })
 
-    // Catch every event so we can see what the server actually sends
     socket.onAny((eventName, ...args) => {
       setRawCount(n => n + 1)
       setLastEvent(eventName)
 
-      if (eventName !== 'message:new') return   // not the messages event — ignore for now
+      if (eventName !== 'message:new') return
       const msg = args[0]
       if (!msg || msg.type === 'administrative') return
       if (towOnly && !isTowRelevant(msg) && msg.type !== 'emergency') return
@@ -94,5 +100,5 @@ export function useVicPagers({ towOnly = false, maxIncidents = 200 } = {}) {
     .sort((a, b) => b.first_seen - a.first_seen)
     .slice(0, maxIncidents)
 
-  return { incidents: incidentList, connected, error, rawCount, lastEvent }
+  return { incidents: incidentList, connected, error, rawCount, lastEvent, socketId, connectedAt }
 }
