@@ -97,6 +97,10 @@ const APPLIANCE_TYPES = {
   FIP: 'Fire Panel', QRV: 'Quick Response',
 }
 
+function vehicleSearchUrl(name) {
+  return `https://www.google.com/search?q=site:emergencyvehiclesapp.com+"${encodeURIComponent(name)}"`
+}
+
 function labelAppliance(code) {
   const m = code.match(/^(PT|TB|TL|TA|SU|CB|FA|QRV|P)(\d+)([A-Z]?)$/)
   if (!m) return code
@@ -226,11 +230,16 @@ function IncidentCard({ incident }) {
               📻 {dispatch.radioLabel}
             </span>
           )}
-          {dispatch.applianceLabel && (
-            <span style={{ fontSize: 7, color: MUT, fontFamily: MONO }}>
-              🚒 {dispatch.applianceLabel}
-            </span>
-          )}
+          {dispatch.appliances.map(a => {
+            const name = labelAppliance(a)
+            return (
+              <a key={a} href={vehicleSearchUrl(name)} target="_blank" rel="noopener noreferrer"
+                onClick={e => e.stopPropagation()}
+                style={{ fontSize: 7, color: MUT, fontFamily: MONO, border: `1px solid ${BRD}`, borderRadius: 2, padding: '1px 5px', textDecoration: 'none' }}>
+                🚒 {name}
+              </a>
+            )
+          })}
         </div>
       </div>
 
@@ -257,7 +266,13 @@ function IncidentCard({ incident }) {
               ['Melway',      incident.map_ref || '—'],
               ['Grid Ref',    incident.six_figure ? `(${incident.six_figure})` : '—'],
               ['Radio Ch.',   dispatch.radioLabel || '—'],
-              ['Appliances',  dispatch.applianceLabel || '—'],
+              ['Appliances',  dispatch.appliances.length
+                ? dispatch.appliances.map(a => {
+                    const name = labelAppliance(a)
+                    return <a key={a} href={vehicleSearchUrl(name)} target="_blank" rel="noopener noreferrer"
+                      style={{ color: '#5a7aaa', textDecoration: 'none', marginRight: 6 }}>{name}</a>
+                  })
+                : '—'],
               ['Station',     dispatch.stationLabel || '—'],
               ['Dispatched',  fmt(incident.first_seen)],
               ['Age',         ageMins != null ? (ageMins < 60 ? `${ageMins}m` : `${Math.floor(ageMins/60)}h ${ageMins%60}m`) : '—'],
@@ -325,11 +340,16 @@ function IncidentCard({ incident }) {
                           📻 {f.replace('FGD', 'Ch.')}
                         </span>
                       ))}
-                      {p.appliances?.map(a => (
-                        <span key={a} style={{ fontFamily: MONO, fontSize: 7, color: MUT, border: `1px solid ${BRD}`, borderRadius: 2, padding: '0 4px' }}>
-                          🚒 {labelAppliance(a)}
-                        </span>
-                      ))}
+                      {p.appliances?.map(a => {
+                        const name = labelAppliance(a)
+                        return (
+                          <a key={a} href={vehicleSearchUrl(name)} target="_blank" rel="noopener noreferrer"
+                            onClick={e => e.stopPropagation()}
+                            style={{ fontFamily: MONO, fontSize: 7, color: MUT, border: `1px solid ${BRD}`, borderRadius: 2, padding: '0 4px', textDecoration: 'none' }}>
+                            🚒 {name}
+                          </a>
+                        )
+                      })}
                       {p.stationLabel && (
                         <span style={{ fontFamily: MONO, fontSize: 7, color: MUT }}>📍 {p.stationLabel}</span>
                       )}
