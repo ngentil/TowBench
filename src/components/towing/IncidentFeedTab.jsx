@@ -1,5 +1,7 @@
-import { useState } from 'react'
-import { useVicPagers } from '../../lib/useVicPagers'
+import { useState, useEffect, useReducer } from 'react'
+import { supabase } from '../../lib/supabase'
+import { useVicPagers, mergeMessage } from '../../lib/useVicPagers'
+import { getRecentVicPagers, dbRowToMessage } from '../../lib/db/incidents'
 import { BG, SURF, BRD, BRD2, TXT, MUT, ACC, GRN, RED } from '../../lib/styles'
 
 const MONO = "'IBM Plex Mono', monospace"
@@ -16,71 +18,33 @@ const EVENT_LABELS = {
 }
 
 const FILTERS = [
-  {
-    id: 'trapped',
-    label: 'TRAPPED',
-    colour: '#d04040',
-    match: i => i.event_type?.startsWith('RESCC'),
-  },
-  {
-    id: 'veh_fire',
-    label: 'VEH FIRE',
-    colour: '#c87020',
-    match: i => i.event_type === 'NOSTC1' || i.event_type === 'NS' || i.event_type === 'SF',
-  },
-  {
-    id: 'veh_inc',
-    label: 'VEH INC',
-    colour: ACC,
-    match: i => ['NOSTC3', 'INCIC1', 'INCIC3'].includes(i.event_type),
-  },
-  {
-    id: 'alarm',
-    label: 'ALARM',
-    colour: '#6090c0',
-    match: i => i.event_type?.startsWith('ALARC'),
-  },
-  { id: 'sep', label: null, colour: null, match: null }, // visual separator
-  {
-    id: 'cfa',
-    label: 'CFA',
-    colour: '#e05020',
-    match: i => i.agency === 'CFA',
-  },
-  {
-    id: 'frv',
-    label: 'FRV',
-    colour: '#c03030',
-    match: i => i.agency === 'FRV',
-  },
-  {
-    id: 'ses',
-    label: 'SES',
-    colour: '#b09020',
-    match: i => i.agency === 'SES',
-  },
+  { id: 'trapped',  label: 'TRAPPED',  colour: '#d04040', match: i => i.event_type?.startsWith('RESCC') },
+  { id: 'veh_fire', label: 'VEH FIRE', colour: '#c87020', match: i => ['NOSTC1','NS','SF'].includes(i.event_type) },
+  { id: 'veh_inc',  label: 'VEH INC',  colour: ACC,       match: i => ['NOSTC3','INCIC1','INCIC3'].includes(i.event_type) },
+  { id: 'alarm',    label: 'ALARM',    colour: '#6090c0', match: i => i.event_type?.startsWith('ALARC') },
+  { id: 'sep' },
+  { id: 'cfa',      label: 'CFA',      colour: '#e05020', match: i => i.agency === 'CFA' },
+  { id: 'frv',      label: 'FRV',      colour: '#c03030', match: i => i.agency === 'FRV' },
+  { id: 'ses',      label: 'SES',      colour: '#b09020', match: i => i.agency === 'SES' },
 ]
-
 const REAL_FILTERS = FILTERS.filter(f => f.id !== 'sep')
 
 function eventColour(type, cancelled) {
   if (cancelled) return MUT
   if (!type) return MUT
-  if (type.startsWith('RESCC')) return '#d04040'
+  if (type.startsWith('RESCC'))                     return '#d04040'
   if (type === 'NOSTC1' || type === 'NS' || type === 'SF') return '#c87020'
   if (type.startsWith('NOSTC') || type.startsWith('INCIC')) return ACC
-  if (type.startsWith('ALARC')) return '#6090c0'
+  if (type.startsWith('ALARC'))                     return '#6090c0'
   return MUT
 }
 
 function fmt(epochMs) {
+  if (!epochMs) return '—'
   return new Date(epochMs).toLocaleTimeString('en-AU', {
-    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+    day: '2-digit', month: 'short',
+    hour: '2-digit', minute: '2-digit', hour12: false,
   })
-}
-
-function ageMins(epochMs) {
-  return Math.floor((Date.now() - epochMs) / 60000)
 }
 
 function IncidentCard({ incident }) {
@@ -88,19 +52,19 @@ function IncidentCard({ incident }) {
   const colour = eventColour(incident.event_type, incident.is_cancelled)
   const label  = EVENT_LABELS[incident.event_type] || incident.event_type || 'INCIDENT'
   const units  = incident.responding_units || []
-  const age    = ageMins(incident.first_seen)
+  const ageMins = incident.first_seen ? Math.floor((Date.now() - incident.first_seen) / 60000) : null
 
   return (
     <div
       onClick={() => setOpen(o => !o)}
       style={{
-        border:       `1px solid ${incident.is_cancelled ? BRD : colour}`,
-        borderLeft:   `3px solid ${colour}`,
+        border:      `1px solid ${incident.is_cancelled ? BRD : colour}`,
+        borderLeft:  `3px solid ${colour}`,
         background:   SURF,
-        marginBottom:  5,
-        cursor:       'pointer',
-        userSelect:   'none',
-        opacity:      incident.is_cancelled ? 0.5 : 1,
+        marginBottom: 5,
+        cursor:      'pointer',
+        userSelect:  'none',
+        opacity:     incident.is_cancelled ? 0.45 : 1,
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px' }}>
@@ -130,8 +94,8 @@ function IncidentCard({ incident }) {
 
         <span style={{ fontFamily: MONO, fontSize: 9, color: MUT, whiteSpace: 'nowrap', flexShrink: 0 }}>
           {fmt(incident.first_seen)}
-          {age > 0 && (
-            <span style={{ color: age > 30 ? BRD2 : MUT }}> +{age}m</span>
+          {ageMins != null && ageMins > 0 && (
+            <span style={{ color: ageMins > 60 ? BRD2 : MUT }}> +{ageMins < 60 ? `${ageMins}m` : `${Math.floor(ageMins/60)}h`}</span>
           )}
         </span>
 
@@ -161,18 +125,10 @@ function IncidentCard({ incident }) {
           )}
 
           <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-            {incident.map_ref && (
-              <span style={{ fontFamily: MONO, fontSize: 9, color: MUT }}>Melway {incident.map_ref}</span>
-            )}
-            {incident.agency && (
-              <span style={{ fontFamily: MONO, fontSize: 9, color: MUT }}>{incident.agency}</span>
-            )}
-            {incident.incident_id && (
-              <span style={{ fontFamily: MONO, fontSize: 9, color: MUT }}>{incident.incident_id}</span>
-            )}
-            {incident.messages?.length > 1 && (
-              <span style={{ fontFamily: MONO, fontSize: 9, color: MUT }}>{incident.messages.length} pages</span>
-            )}
+            {incident.map_ref    && <span style={{ fontFamily: MONO, fontSize: 9, color: MUT }}>Melway {incident.map_ref}</span>}
+            {incident.agency     && <span style={{ fontFamily: MONO, fontSize: 9, color: MUT }}>{incident.agency}</span>}
+            {incident.incident_id && <span style={{ fontFamily: MONO, fontSize: 9, color: MUT }}>{incident.incident_id}</span>}
+            {incident.messages?.length > 1 && <span style={{ fontFamily: MONO, fontSize: 9, color: MUT }}>{incident.messages.length} pages</span>}
           </div>
         </div>
       )}
@@ -180,9 +136,57 @@ function IncidentCard({ incident }) {
   )
 }
 
+// incidents state is a plain map { key → incident }; reduce new messages into it
+function incidentsReducer(state, action) {
+  if (action.type === 'SEED') {
+    // Bulk-seed from DB rows without overwriting any live data already present
+    return action.messages.reduce((acc, msg) => {
+      const key = msg.incident_id || `no-incident-${msg.id}`
+      if (acc[key]) return acc            // live version wins
+      return mergeMessage(acc, msg)
+    }, state)
+  }
+  if (action.type === 'MERGE') {
+    return mergeMessage(state, action.msg)
+  }
+  return state
+}
+
 export default function IncidentFeedTab() {
-  const [active, setActive] = useState(new Set())
-  const { incidents, connected, error } = useVicPagers({ towOnly: false })
+  const [active,       setActive]       = useState(new Set())
+  const [historyState, setHistoryState] = useState('loading') // loading | ok | error
+  const [incidents, dispatch] = useReducer(incidentsReducer, {})
+
+  const { incidents: liveIncidents, connected, error } = useVicPagers({ towOnly: false })
+
+  // Seed history from Supabase on mount
+  useEffect(() => {
+    getRecentVicPagers(31)
+      .then(rows => {
+        const messages = rows.map(dbRowToMessage)
+        dispatch({ type: 'SEED', messages })
+        setHistoryState('ok')
+      })
+      .catch(() => setHistoryState('error'))
+  }, [])
+
+  // Merge live Socket.IO incidents into the reducer
+  useEffect(() => {
+    liveIncidents.forEach(incident => {
+      incident.messages?.forEach(msg => dispatch({ type: 'MERGE', msg }))
+    })
+  }, [liveIncidents])
+
+  // Supabase realtime — catches messages written by other sessions / mini-PC listener
+  useEffect(() => {
+    const channel = supabase
+      .channel('vicpagers_live')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'vicpagers_messages' }, ({ new: row }) => {
+        dispatch({ type: 'MERGE', msg: dbRowToMessage(row) })
+      })
+      .subscribe()
+    return () => supabase.removeChannel(channel)
+  }, [])
 
   function toggle(id) {
     setActive(prev => {
@@ -192,14 +196,18 @@ export default function IncidentFeedTab() {
     })
   }
 
-  const filtered = active.size === 0
-    ? incidents
-    : incidents.filter(i => REAL_FILTERS.filter(f => active.has(f.id)).some(f => f.match(i)))
+  const allIncidents = Object.values(incidents)
+    .sort((a, b) => b.first_seen - a.first_seen)
+    .slice(0, 300)
 
-  const totalCount     = incidents.length
-  const hiddenCount    = totalCount - filtered.length
-  const activeCount    = filtered.filter(i => !i.is_cancelled).length
-  const cancelledCount = filtered.filter(i =>  i.is_cancelled).length
+  const filtered = active.size === 0
+    ? allIncidents
+    : allIncidents.filter(i => REAL_FILTERS.filter(f => active.has(f.id)).some(f => f.match(i)))
+
+  const totalCount    = allIncidents.length
+  const hiddenCount   = totalCount - filtered.length
+  const activeCount   = filtered.filter(i => !i.is_cancelled).length
+  const cancelCount   = filtered.filter(i =>  i.is_cancelled).length
 
   return (
     <div style={{ background: BG, minHeight: '100%', padding: 16, boxSizing: 'border-box' }}>
@@ -217,14 +225,13 @@ export default function IncidentFeedTab() {
         <span style={{ fontFamily: MONO, fontSize: 10, color: connected ? GRN : MUT, letterSpacing: '0.05em' }}>
           {connected ? 'LIVE · VICPAGERS' : error ? `OFFLINE — ${error.toUpperCase()}` : 'CONNECTING…'}
         </span>
-        {connected && (
-          <span style={{ fontFamily: MONO, fontSize: 9, color: MUT }}>
-            {activeCount} active
-            {cancelledCount > 0 && <span style={{ color: BRD }}> · {cancelledCount} cancelled</span>}
-            {hiddenCount > 0 && <span style={{ color: BRD }}> · {hiddenCount} hidden</span>}
-            {totalCount === 0 && <span style={{ color: BRD }}> · waiting for dispatch</span>}
-          </span>
-        )}
+
+        <span style={{ fontFamily: MONO, fontSize: 9, color: MUT }}>
+          {historyState === 'loading' && <span style={{ color: BRD }}>loading history…</span>}
+          {historyState === 'ok'      && <>{activeCount} active{cancelCount > 0 && ` · ${cancelCount} cancelled`}{hiddenCount > 0 && ` · ${hiddenCount} hidden`}{totalCount === 0 && ' · waiting for dispatch'}</>}
+          {historyState === 'error'   && <span style={{ color: RED }}>history unavailable</span>}
+        </span>
+
         {active.size > 0 && (
           <button
             onClick={() => setActive(new Set())}
@@ -269,15 +276,17 @@ export default function IncidentFeedTab() {
       </div>
 
       {/* Incident list */}
-      {filtered.length === 0 && connected && (
+      {filtered.length === 0 && (
         <div style={{
           textAlign: 'center', padding: '48px 0',
           fontFamily: MONO, fontSize: 11, color: MUT,
           border: `1px dashed ${BRD}`,
         }}>
-          {active.size > 0 && hiddenCount > 0
-            ? `FILTERS ACTIVE — ${hiddenCount} INCIDENT${hiddenCount !== 1 ? 'S' : ''} HIDDEN · CLEAR TO SHOW ALL`
-            : 'MONITORING — WAITING FOR DISPATCH'}
+          {historyState === 'loading'
+            ? 'LOADING 31-DAY HISTORY…'
+            : active.size > 0 && hiddenCount > 0
+              ? `FILTERS ACTIVE — ${hiddenCount} INCIDENT${hiddenCount !== 1 ? 'S' : ''} HIDDEN · CLEAR TO SHOW ALL`
+              : 'MONITORING — WAITING FOR DISPATCH'}
         </div>
       )}
 

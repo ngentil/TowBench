@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { io } from 'socket.io-client'
+import { logVicPagersMessage } from './db/incidents'
 
 const TOW_KEYWORDS = [
   'vehicle accident', 'person trapped', 'persons trapped', 'poss person trapped',
@@ -8,12 +9,12 @@ const TOW_KEYWORDS = [
   'sparks issuing from vehicle', 'car smoking', 'result of accident',
 ]
 
-function isTowRelevant(msg) {
+export function isTowRelevant(msg) {
   const desc = (msg.parsed?.description || msg.message || '').toLowerCase()
   return TOW_KEYWORDS.some(kw => desc.includes(kw))
 }
 
-function mergeMessage(incidents, msg) {
+export function mergeMessage(incidents, msg) {
   const key = msg.incident_id || `no-incident-${msg.id}`
   const existing = incidents[key]
 
@@ -22,8 +23,8 @@ function mergeMessage(incidents, msg) {
       ...incidents,
       [key]: {
         incident_id:      msg.incident_id,
-        first_seen:       msg.timestamp,
-        last_seen:        msg.timestamp,
+        first_seen:       msg.timestamp ?? Date.now(),
+        last_seen:        msg.timestamp ?? Date.now(),
         agency:           msg.agency,
         address:          msg.parsed?.address || null,
         description:      msg.parsed?.description || null,
@@ -42,7 +43,7 @@ function mergeMessage(incidents, msg) {
     ...incidents,
     [key]: {
       ...existing,
-      last_seen:        Math.max(existing.last_seen, msg.timestamp),
+      last_seen:        Math.max(existing.last_seen, msg.timestamp ?? 0),
       is_cancelled:     existing.is_cancelled || (msg.parsed?.isCancellation || false),
       responding_units: msg.alias && !existing.responding_units.includes(msg.alias)
         ? [...existing.responding_units, msg.alias]
@@ -53,7 +54,7 @@ function mergeMessage(incidents, msg) {
   }
 }
 
-export function useVicPagers({ towOnly = false, maxIncidents = 50 } = {}) {
+export function useVicPagers({ towOnly = false, maxIncidents = 200 } = {}) {
   const [connected, setConnected] = useState(false)
   const [error,     setError]     = useState(null)
   const [incidents, setIncidents] = useState({})
@@ -70,6 +71,10 @@ export function useVicPagers({ towOnly = false, maxIncidents = 50 } = {}) {
     socket.on('message:new', (msg) => {
       if (msg.type === 'administrative') return
       if (towOnly && !isTowRelevant(msg) && msg.type !== 'emergency') return
+
+      // Write to Supabase for history (fire-and-forget, won't block UI)
+      if (msg.id != null) logVicPagersMessage(msg)
+
       setIncidents(prev => mergeMessage(prev, msg))
     })
 

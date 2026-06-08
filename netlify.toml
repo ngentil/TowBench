@@ -7,3 +7,6 @@
 
 [functions."ais-vessels"]
   timeout_seconds = 15
+
+[functions."poll-vicemergency"]
+  schedule = "*/5 * * * *"
