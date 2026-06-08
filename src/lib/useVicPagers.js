@@ -55,31 +55,37 @@ export function mergeMessage(incidents, msg) {
 }
 
 export function useVicPagers({ towOnly = false, maxIncidents = 200 } = {}) {
-  const [connected, setConnected] = useState(false)
-  const [error,     setError]     = useState(null)
-  const [incidents, setIncidents] = useState({})
-  const [rawCount,  setRawCount]  = useState(0)   // total events received before any filtering
+  const [connected,  setConnected]  = useState(false)
+  const [error,      setError]      = useState(null)
+  const [incidents,  setIncidents]  = useState({})
+  const [rawCount,   setRawCount]   = useState(0)
+  const [lastEvent,  setLastEvent]  = useState(null)  // debug: last event name seen
   const socketRef = useRef(null)
 
   useEffect(() => {
-    // Use https:// (not wss://) so Socket.IO can do polling→WebSocket upgrade normally.
-    // Forcing transports:['websocket'] skips the polling handshake and drops events.
     const socket = io('https://vicpagers.net.au')
     socketRef.current = socket
 
-    socket.on('connect',       () => { setConnected(true);  setError(null) })
+    socket.on('connect', () => {
+      setConnected(true)
+      setError(null)
+      // Try joining common room names in case the server requires it
+      socket.emit('join', 'messages')
+      socket.emit('subscribe', {})
+    })
     socket.on('disconnect',    () =>   setConnected(false))
     socket.on('connect_error', (e) => { setError(e.message); setConnected(false) })
 
-    socket.on('message:new', (msg) => {
+    // Catch every event so we can see what the server actually sends
+    socket.onAny((eventName, ...args) => {
       setRawCount(n => n + 1)
+      setLastEvent(eventName)
 
-      if (msg.type === 'administrative') return
+      if (eventName !== 'message:new') return   // not the messages event — ignore for now
+      const msg = args[0]
+      if (!msg || msg.type === 'administrative') return
       if (towOnly && !isTowRelevant(msg) && msg.type !== 'emergency') return
-
-      // Write to Supabase for history (fire-and-forget, won't block UI)
       if (msg.id != null) logVicPagersMessage(msg)
-
       setIncidents(prev => mergeMessage(prev, msg))
     })
 
@@ -91,5 +97,5 @@ export function useVicPagers({ towOnly = false, maxIncidents = 200 } = {}) {
     .sort((a, b) => b.first_seen - a.first_seen)
     .slice(0, maxIncidents)
 
-  return { incidents: incidentList, connected, error, rawCount }
+  return { incidents: incidentList, connected, error, rawCount, lastEvent }
 }
