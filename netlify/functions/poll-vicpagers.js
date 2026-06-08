@@ -1,7 +1,8 @@
 // Netlify scheduled function — runs every 1 minute.
-// Opens Socket.IO connection to VicPagers (polling transport — confirmed working from
-// Netlify IPs), collects messages for 55s, upserts to Supabase vicpagers_messages.
-// Env: SUPABASE_URL, SUPABASE_SERVICE_KEY
+// Authenticates with VicPagers session cookie (polling+upgrade transport,
+// same as the vicpagers.net.au website), collects 55s of messages,
+// upserts to Supabase vicpagers_messages.
+// Env: SUPABASE_URL, SUPABASE_SERVICE_KEY, VICPAGERS_COOKIE
 const { createClient } = require('@supabase/supabase-js');
 const { io }           = require('socket.io-client');
 
@@ -15,11 +16,15 @@ exports.handler = async function () {
     const messages = [];
     let connected  = false;
 
-    // Match the vicpagers.net.au website exactly: direct WebSocket (upgrades:[])
-    // + correct Origin so the server puts this connection in the broadcast pool.
+    // Match vicpagers.net.au exactly: polling first (establishes session),
+    // then upgrades to WebSocket. Cookie is sent in every HTTP request.
     const socket = io('https://vicpagers.net.au', {
-      transports: ['websocket'],
-      extraHeaders: { Origin: 'https://vicpagers.net.au' },
+      transports: ['polling', 'websocket'],
+      extraHeaders: {
+        Origin:       'https://vicpagers.net.au',
+        Cookie:       process.env.VICPAGERS_COOKIE || '',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+      },
     });
 
     const finish = async () => {
@@ -58,16 +63,13 @@ exports.handler = async function () {
       });
     };
 
-    // 55s window — scheduled functions are background functions (up to 15 min)
     setTimeout(finish, 55000);
 
-    socket.on('connect', () => { connected = true; });
-
+    socket.on('connect',       () => { connected = true; });
     socket.on('connect_error', (e) => {
       socket.disconnect();
       resolve({ statusCode: 502, body: e.message });
     });
-
     socket.on('message:new', (msg) => {
       if (msg.type !== 'administrative' && msg.id != null) messages.push(msg);
     });
