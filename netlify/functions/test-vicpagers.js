@@ -1,11 +1,11 @@
 // On-demand diagnostic — GET /.netlify/functions/test-vicpagers
-// Authenticates with session cookie, waits 20s, logs all events.
+// Connects without a session cookie — subscribe events alone unlock the feed.
+// Waits 20s and logs all received events.
 const { io } = require('socket.io-client');
 
 exports.handler = async function () {
   const result = {
     timestamp:   new Date().toISOString(),
-    cookieSet:   !!process.env.VICPAGERS_COOKIE,
     polling:     null,
     socketio:    null,
     allEvents:   [],
@@ -15,11 +15,7 @@ exports.handler = async function () {
   // Confirm polling endpoint is reachable
   try {
     const r = await fetch('https://vicpagers.net.au/socket.io/?EIO=4&transport=polling', {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-        Cookie: process.env.VICPAGERS_COOKIE || '',
-        Origin: 'https://vicpagers.net.au',
-      },
+      headers: { 'User-Agent': 'Mozilla/5.0' },
       signal: AbortSignal.timeout(5000),
     });
     result.polling = { status: r.status, body: (await r.text()).slice(0, 200) };
@@ -27,15 +23,10 @@ exports.handler = async function () {
     result.polling = { error: e.message };
   }
 
-  // Socket.IO — polling first then WebSocket, with session cookie
+  // No cookie needed — CFA/FRV/SES subscribe events are sufficient
   await new Promise(resolve => {
     const socket = io('https://vicpagers.net.au', {
       transports: ['polling', 'websocket'],
-      extraHeaders: {
-        Origin:       'https://vicpagers.net.au',
-        Cookie:       process.env.VICPAGERS_COOKIE || '',
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-      },
       timeout: 10000,
     });
 
