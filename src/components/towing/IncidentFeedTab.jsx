@@ -137,11 +137,6 @@ function ApplianceBadge({ code }) {
           <span style={{ fontSize: 20, position: img ? 'absolute' : 'static', display: img ? 'none' : 'flex' }}>🚒</span>
         )}
       </div>
-      <div style={{ fontFamily: MONO, fontSize: 7, color: MUT, padding: '2px 4px',
-                    width: '100%', boxSizing: 'border-box', textAlign: 'center',
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {name}
-      </div>
     </a>
   )
 }
