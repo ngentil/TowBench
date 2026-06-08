@@ -11,7 +11,10 @@
 [functions."test-vicpagers"]
   timeout_seconds = 26
 
-[functions."poll-vicemergency"]
+[functions."vehicle-lookup"]
+  timeout_seconds = 26
+
+
   schedule = "*/5 * * * *"
 
 [functions."poll-vicpagers"]

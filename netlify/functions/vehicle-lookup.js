@@ -2,12 +2,10 @@
 // Returns { vehicleUrl, imageUrl } for an emergency vehicle callsign.
 //
 // Resolution order:
-//   1. Supabase cache
-//   2. Direct fetch of emergencyvehiclesapp.com/search page (browser UA)
-//   3. Google Custom Search API (fallback — needs GOOGLE_CSE_KEY + GOOGLE_CSE_ID)
-//
-// Results are cached in Supabase vehicle_cache so each callsign costs at most
-// one external call.
+//   1. Supabase cache (free, instant after first lookup)
+//   2. Static ID table → emergencyvehiclesapp.com/vehicle/{id}
+//      + microlink.io   → headless-browser og:image fetch (free, no key)
+//   3. Google Custom Search fallback (optional — needs GOOGLE_CSE_KEY + GOOGLE_CSE_ID)
 
 const { createClient } = require('@supabase/supabase-js');
 
@@ -17,63 +15,51 @@ const CORS = {
   'Cache-Control': 'public, s-maxage=86400',
 };
 
-const BROWSER_HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1',
-  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-  'Accept-Language': 'en-AU,en;q=0.9',
-  'Accept-Encoding': 'gzip, deflate, br',
-  'Referer': 'https://www.google.com/',
-  'sec-fetch-dest': 'document',
-  'sec-fetch-mode': 'navigate',
-  'sec-fetch-site': 'cross-site',
+// ── Static vehicle ID table ───────────────────────────────────────────────────
+// Maps labelAppliance() output → emergencyvehiclesapp.com vehicle ID
+const STATIC_IDS = {
+  // Pumpers
+  'Pumper 2B':  253,  'Pumper 3':   235,  'Pumper 12':  233,
+  'Pumper 35A': 10990,'Pumper 35B': 290,  'Pumper 42':  225,
+  'Pumper 44':  9104, 'Pumper 47':  306,  'Pumper 50':  310,
+  'Pumper 55':  357,  'Pumper 76':  1621, 'Pumper 77':  877,
+  'Pumper 80':  959,  'Pumper 88':  703,  'Pumper 89':  740,
+  'Pumper 93':  860,  'Pumper 95':  2120,
+  // Pumper Tankers
+  'Pumper Tanker 16':  257,  'Pumper Tanker 26':  272,
+  'Pumper Tanker 28':  7165, 'Pumper Tanker 30':  277,
+  'Pumper Tanker 44':  302,  'Pumper Tanker 59A': 7532,
+  'Pumper Tanker 59B': 7166,
+  // Aerials
+  'Aerial Pumper 91':      729,
+  'Reserve Aerial Pumper': 715,
+  'Ladder Platform 87':    463,
 };
 
-// Try to scrape og:image directly from an emergencyvehiclesapp.com vehicle page
-async function scrapeVehiclePage(url) {
+// ── microlink.io — headless browser og:image extraction (free, no key) ────────
+async function microlinkImage(vehicleUrl) {
   try {
-    const res = await fetch(url, {
-      headers: BROWSER_HEADERS,
-      signal: AbortSignal.timeout(7000),
-      redirect: 'follow',
-    });
+    const res = await fetch(
+      `https://api.microlink.io/?url=${encodeURIComponent(vehicleUrl)}&screenshot=false`,
+      { signal: AbortSignal.timeout(20000) },
+    );
     if (!res.ok) return null;
-    const html = await res.text();
-    const ogImage = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)?.[1]
-                 || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)?.[1];
-    return ogImage || null;
-  } catch {
+    const data = await res.json();
+    return data.data?.image?.url || null;
+  } catch (e) {
+    console.warn('microlink failed:', e.message);
     return null;
   }
 }
 
-// Search emergencyvehiclesapp.com for the callsign, return first matching vehicle URL
-async function searchSite(name) {
-  try {
-    const url = `https://emergencyvehiclesapp.com/search?q=${encodeURIComponent(name)}`;
-    const res = await fetch(url, {
-      headers: BROWSER_HEADERS,
-      signal: AbortSignal.timeout(7000),
-    });
-    if (!res.ok) return null;
-    const html = await res.text();
-    // Find first /vehicle/{id} link in the response
-    const match = html.match(/href=["'](\/vehicle\/\d+)["']/i);
-    return match ? `https://emergencyvehiclesapp.com${match[1]}` : null;
-  } catch {
-    return null;
-  }
-}
-
-// Google Custom Search fallback
+// ── Google CSE fallback (optional) ───────────────────────────────────────────
 async function googleCSE(name) {
   const key = process.env.GOOGLE_CSE_KEY;
   const cx  = process.env.GOOGLE_CSE_ID;
   if (!key || !cx) return { vehicleUrl: null, imageUrl: null };
-
   try {
-    const q   = encodeURIComponent(`"${name}"`);
     const res = await fetch(
-      `https://www.googleapis.com/customsearch/v1?key=${key}&cx=${cx}&q=${q}&num=1`,
+      `https://www.googleapis.com/customsearch/v1?key=${key}&cx=${cx}&q=${encodeURIComponent(`"${name}"`)}&num=1`,
       { signal: AbortSignal.timeout(6000) },
     );
     if (!res.ok) return { vehicleUrl: null, imageUrl: null };
@@ -87,11 +73,12 @@ async function googleCSE(name) {
                || null,
     };
   } catch (e) {
-    console.warn('vehicle-lookup CSE error:', e.message);
+    console.warn('CSE failed:', e.message);
     return { vehicleUrl: null, imageUrl: null };
   }
 }
 
+// ── Handler ───────────────────────────────────────────────────────────────────
 exports.handler = async function (event) {
   const name = (event.queryStringParameters?.name || '').trim();
   if (!name) return { statusCode: 400, body: 'name required' };
@@ -112,11 +99,12 @@ exports.handler = async function (event) {
     return { statusCode: 200, headers: CORS, body: JSON.stringify({ vehicleUrl: cached.vehicle_url, imageUrl: cached.image_url }) };
   }
 
-  // 2. Try direct site access
-  let vehicleUrl = await searchSite(name);
-  let imageUrl   = vehicleUrl ? await scrapeVehiclePage(vehicleUrl) : null;
+  // 2. Static ID → direct vehicle URL, then microlink to get its og:image
+  const staticId = STATIC_IDS[name];
+  let vehicleUrl = staticId ? `https://emergencyvehiclesapp.com/vehicle/${staticId}` : null;
+  let imageUrl   = vehicleUrl ? await microlinkImage(vehicleUrl) : null;
 
-  // 3. Fall back to Google CSE if direct access failed
+  // 3. Google CSE for callsigns not in static table, or if microlink failed
   if (!vehicleUrl || !imageUrl) {
     const cse = await googleCSE(name);
     vehicleUrl = vehicleUrl || cse.vehicleUrl;
