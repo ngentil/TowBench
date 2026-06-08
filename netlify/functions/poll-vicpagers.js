@@ -1,8 +1,8 @@
 // Netlify scheduled function — runs every 1 minute.
-// Authenticates with VicPagers session cookie (polling+upgrade transport,
-// same as the vicpagers.net.au website), collects 55s of messages,
-// upserts to Supabase vicpagers_messages.
-// Env: SUPABASE_URL, SUPABASE_SERVICE_KEY, VICPAGERS_COOKIE
+// Connects to VicPagers Socket.IO, emits subscribe events, collects 55s of
+// messages, upserts to Supabase vicpagers_messages.
+// No session cookie required — subscribe events alone unlock the feed.
+// Env: SUPABASE_URL, SUPABASE_SERVICE_KEY
 const { createClient } = require('@supabase/supabase-js');
 const { io }           = require('socket.io-client');
 
@@ -16,15 +16,8 @@ exports.handler = async function () {
     const messages = [];
     let connected  = false;
 
-    // Match vicpagers.net.au exactly: polling first (establishes session),
-    // then upgrades to WebSocket. Cookie is sent in every HTTP request.
     const socket = io('https://vicpagers.net.au', {
       transports: ['polling', 'websocket'],
-      extraHeaders: {
-        Origin:       'https://vicpagers.net.au',
-        Cookie:       process.env.VICPAGERS_COOKIE || '',
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-      },
     });
 
     const finish = async () => {
