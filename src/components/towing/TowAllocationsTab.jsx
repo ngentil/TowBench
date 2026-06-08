@@ -566,15 +566,17 @@ export default function TowAllocationsTab({ allFeatures, liveIds, loading, err, 
   const setRadius = (km) => { setNearbyKm(km); localStorage.setItem('towbench_nearby_km', km); };
 
   // Location source selector — persisted to localStorage
-  const [locationSource, setLocSrc] = useState(() => localStorage.getItem('towbench_location_source') || 'gps');
+  const [locationSource, setLocSrc] = useState(() => localStorage.getItem('towbench_location_source') || 'auto');
   const setLocationSource = src => { setLocSrc(src); localStorage.setItem('towbench_location_source', src); };
 
-  const selectedDepot = locationSource !== 'gps'
+  const firstGeoDepot = depots.find(d => d.lat && d.lng) || null;
+  const selectedDepot = locationSource !== 'gps' && locationSource !== 'auto'
     ? (depots.find(d => String(d.id) === locationSource && d.lat && d.lng) || null)
     : null;
-  const effectivePos = locationSource === 'gps'
-    ? userPos
-    : (selectedDepot ? { lat: selectedDepot.lat, lng: selectedDepot.lng } : userPos);
+  const effectivePos =
+    locationSource === 'auto' ? (userPos || (firstGeoDepot ? { lat: firstGeoDepot.lat, lng: firstGeoDepot.lng } : null))
+    : locationSource === 'gps' ? userPos
+    : (selectedDepot ? { lat: selectedDepot.lat, lng: selectedDepot.lng } : null);
 
   const handleExport = useCallback(async () => {
     setExporting(true);
@@ -844,6 +846,16 @@ export default function TowAllocationsTab({ allFeatures, liveIds, loading, err, 
             </div>
             <div style={{ marginBottom: 12, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
               <span style={{ fontSize: 8, color: MUT, letterSpacing: '0.08em', textTransform: 'uppercase', flexShrink: 0 }}>📡 Source</span>
+              <button
+                onClick={() => setLocationSource('auto')}
+                style={{
+                  fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', padding: '4px 7px', borderRadius: 2, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace",
+                  background: locationSource === 'auto' ? (effectivePos ? ACC + '11' : '#1a1a1a') : '#0d0d0d',
+                  border: `1px solid ${locationSource === 'auto' ? (effectivePos ? ACC : '#333') : '#2a2a2a'}`,
+                  color: locationSource === 'auto' ? (effectivePos ? ACC : '#555') : MUT,
+                }}>
+                ⚡ Auto{locationSource === 'auto' ? (userPos ? ' · GPS' : firstGeoDepot ? ` · ${firstGeoDepot.name || firstGeoDepot.suburb || 'depot'}` : ' · no source') : ''}
+              </button>
               <button
                 onClick={() => setLocationSource('gps')}
                 style={{
