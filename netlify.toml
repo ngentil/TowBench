@@ -10,3 +10,6 @@
 
 [functions."poll-vicemergency"]
   schedule = "*/5 * * * *"
+
+[functions."poll-vicpagers"]
+  schedule = "*/10 * * * *"
