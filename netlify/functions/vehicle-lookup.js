@@ -2,14 +2,10 @@
 // Returns { vehicleUrl, imageUrl } for an emergency vehicle callsign.
 //
 // Resolution order:
-//   1. Supabase cache
-//   2. Static ID table  → direct emergencyvehiclesapp.com/vehicle/{id} link
-//   3. Flickr photo search → real photo of that appliance (needs FLICKR_API_KEY)
-//   4. Google Custom Search fallback (needs GOOGLE_CSE_KEY + GOOGLE_CSE_ID)
-//
-// Flickr setup (free, ~2 min):
-//   flickr.com/services/apps/create → apply for non-commercial key
-//   Set Netlify env var: FLICKR_API_KEY
+//   1. Supabase cache (free, instant after first lookup)
+//   2. Static ID table → emergencyvehiclesapp.com/vehicle/{id}
+//      + microlink.io   → headless-browser og:image fetch (free, no key)
+//   3. Google Custom Search fallback (optional — needs GOOGLE_CSE_KEY + GOOGLE_CSE_ID)
 
 const { createClient } = require('@supabase/supabase-js');
 
@@ -40,41 +36,23 @@ const STATIC_IDS = {
   'Ladder Platform 87':    463,
 };
 
-function vehiclePageUrl(id) {
-  return `https://emergencyvehiclesapp.com/vehicle/${id}`;
-}
-
-// ── Flickr photo search ───────────────────────────────────────────────────────
-async function flickrSearch(name) {
-  const key = process.env.FLICKR_API_KEY;
-  if (!key) return null;
+// ── microlink.io — headless browser og:image extraction (free, no key) ────────
+async function microlinkImage(vehicleUrl) {
   try {
-    // Search with callsign + FRV context for best results
-    const text = `"${name}" FRV OR "Fire Rescue Victoria"`;
-    const url  = 'https://www.flickr.com/services/rest/?' + new URLSearchParams({
-      method:        'flickr.photos.search',
-      api_key:       key,
-      text:          text,
-      sort:          'relevance',
-      format:        'json',
-      nojsoncallback: '1',
-      extras:        'url_m,url_s',
-      per_page:      '1',
-      content_type:  '1',  // photos only
-      safe_search:   '1',
-    });
-    const res  = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    const res = await fetch(
+      `https://api.microlink.io/?url=${encodeURIComponent(vehicleUrl)}&screenshot=false`,
+      { signal: AbortSignal.timeout(10000) },
+    );
     if (!res.ok) return null;
     const data = await res.json();
-    const photo = data.photos?.photo?.[0];
-    return photo?.url_m || photo?.url_s || null;
+    return data.data?.image?.url || null;
   } catch (e) {
-    console.warn('flickr search failed:', e.message);
+    console.warn('microlink failed:', e.message);
     return null;
   }
 }
 
-// ── Google CSE fallback ───────────────────────────────────────────────────────
+// ── Google CSE fallback (optional) ───────────────────────────────────────────
 async function googleCSE(name) {
   const key = process.env.GOOGLE_CSE_KEY;
   const cx  = process.env.GOOGLE_CSE_ID;
@@ -121,22 +99,19 @@ exports.handler = async function (event) {
     return { statusCode: 200, headers: CORS, body: JSON.stringify({ vehicleUrl: cached.vehicle_url, imageUrl: cached.image_url }) };
   }
 
-  // 2. Static ID table
-  const staticId  = STATIC_IDS[name];
-  let vehicleUrl  = staticId ? vehiclePageUrl(staticId) : null;
-  let imageUrl    = null;
+  // 2. Static ID → direct vehicle URL, then microlink to get its og:image
+  const staticId = STATIC_IDS[name];
+  let vehicleUrl = staticId ? `https://emergencyvehiclesapp.com/vehicle/${staticId}` : null;
+  let imageUrl   = vehicleUrl ? await microlinkImage(vehicleUrl) : null;
 
-  // 3. Flickr image search
-  imageUrl = await flickrSearch(name);
-
-  // 4. Google CSE fallback (fills vehicleUrl if not in static table, or imageUrl if Flickr failed)
+  // 3. Google CSE for callsigns not in static table, or if microlink failed
   if (!vehicleUrl || !imageUrl) {
     const cse = await googleCSE(name);
     vehicleUrl = vehicleUrl || cse.vehicleUrl;
     imageUrl   = imageUrl   || cse.imageUrl;
   }
 
-  // 5. Cache result
+  // 4. Cache result
   await supabase.from('vehicle_cache').upsert(
     { callsign: name, vehicle_url: vehicleUrl, image_url: imageUrl, cached_at: new Date().toISOString() },
     { onConflict: 'callsign' },
