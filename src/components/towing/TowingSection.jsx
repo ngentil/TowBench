@@ -19,6 +19,7 @@ import AlertsTab from './AlertsTab';
 import EmergencyTab from './EmergencyTab';
 import VesselsTab from './VesselsTab';
 import AircraftTab from './AircraftTab';
+import IncidentFeedTab from './IncidentFeedTab';
 import TabOrderSettings from '../settings/TabOrderSettings';
 import { applyTabOrder } from '../../lib/tabOrder';
 const VICROADS_PROXY = '/.netlify/functions/vicroads-allocations';
@@ -69,6 +70,7 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, co
     { id: 'bridges',       label: '🌉 Bridges',           roles: ['driver','dispatch','admin','super_admin'] },
     { id: 'waze',          label: '🧭 Waze',              roles: ['dispatch','admin','super_admin'] },
     { id: 'emergency',     label: '🚨 Emergency',         roles: ['dispatch','admin','super_admin'] },
+    { id: 'incidents',     label: '📟 Pager',             roles: ['dispatch','admin','super_admin'] },
     { id: 'vessels',       label: '⛵ Vessels',            roles: ['dispatch','admin','super_admin'] },
     { id: 'aircraft',      label: '✈ Aircraft',            roles: ['dispatch','admin','super_admin'] },
     { id: 'mytows',        label: '📋 My Tows',           roles: ['driver'], standaloneOnly: true },
@@ -368,6 +370,7 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, co
         {tab === 'bridges'    && <BridgesTab userPos={userPos} />}
         {tab === 'waze'       && <AlertsTab />}
         {tab === 'emergency'  && <EmergencyTab />}
+        {tab === 'incidents'  && <IncidentFeedTab />}
         {tab === 'vessels'    && <VesselsTab />}
         {tab === 'aircraft'   && <AircraftTab />}
         {tab === 'mytows'     && <MyTowsTab userEmail={userEmail} />}
