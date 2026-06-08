@@ -41,7 +41,7 @@ async function microlinkImage(vehicleUrl) {
   try {
     const res = await fetch(
       `https://api.microlink.io/?url=${encodeURIComponent(vehicleUrl)}&screenshot=false`,
-      { signal: AbortSignal.timeout(10000) },
+      { signal: AbortSignal.timeout(20000) },
     );
     if (!res.ok) return null;
     const data = await res.json();
