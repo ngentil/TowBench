@@ -63,15 +63,12 @@ export function useVicPagers({ towOnly = false, maxIncidents = 200 } = {}) {
   const socketRef = useRef(null)
 
   useEffect(() => {
-    const socket = io('https://vicpagers.net.au')
+    const socket = io('wss://vicpagers.net.au', { transports: ['websocket'] })
     socketRef.current = socket
 
     socket.on('connect', () => {
       setConnected(true)
       setError(null)
-      // Try joining common room names in case the server requires it
-      socket.emit('join', 'messages')
-      socket.emit('subscribe', {})
     })
     socket.on('disconnect',    () =>   setConnected(false))
     socket.on('connect_error', (e) => { setError(e.message); setConnected(false) })
