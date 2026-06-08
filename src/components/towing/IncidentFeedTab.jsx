@@ -82,11 +82,19 @@ function fmt(epochMs) {
   })
 }
 
+function fmtTime(epochMs) {
+  if (!epochMs) return '—'
+  return new Date(epochMs).toLocaleTimeString('en-AU', {
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  })
+}
+
 function IncidentCard({ incident }) {
   const [open, setOpen] = useState(false)
-  const colour = eventColour(incident.event_type, incident.is_cancelled)
-  const label  = EVENT_LABELS[incident.event_type] || incident.event_type || 'INCIDENT'
-  const units  = incident.responding_units || []
+  const colour  = eventColour(incident.event_type, incident.is_cancelled)
+  const label   = EVENT_LABELS[incident.event_type] || incident.event_type || 'INCIDENT'
+  const units   = incident.responding_units || []
+  const msgs    = incident.messages || []
   const ageMins = incident.first_seen ? Math.floor((Date.now() - incident.first_seen) / 60000) : null
 
   return (
@@ -102,10 +110,11 @@ function IncidentCard({ incident }) {
         opacity:     incident.is_cancelled ? 0.45 : 1,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px' }}>
+      {/* Header row: type · alarm · time · toggle */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 12px 2px' }}>
         <span style={{
           fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em',
-          color: colour, textTransform: 'uppercase', minWidth: 140, flexShrink: 0,
+          color: colour, textTransform: 'uppercase', flexShrink: 0,
         }}>
           {incident.is_cancelled ? '✓ ' : ''}{label}
         </span>
@@ -120,12 +129,7 @@ function IncidentCard({ incident }) {
           </span>
         )}
 
-        <span style={{
-          flex: 1, fontFamily: MONO, fontSize: 11, color: TXT,
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        }}>
-          {incident.address || '—'}
-        </span>
+        <span style={{ flex: 1 }} />
 
         <span style={{ fontFamily: MONO, fontSize: 9, color: MUT, whiteSpace: 'nowrap', flexShrink: 0 }}>
           {fmt(incident.first_seen)}
@@ -137,16 +141,27 @@ function IncidentCard({ incident }) {
         <span style={{ fontFamily: MONO, fontSize: 9, color: BRD, flexShrink: 0 }}>{open ? '▲' : '▼'}</span>
       </div>
 
+      {/* Address row — full width, wraps */}
+      <div style={{ padding: '0 12px 7px', fontFamily: MONO, fontSize: 12, color: TXT, lineHeight: 1.4 }}>
+        {incident.address || '—'}
+        {incident.corner && (
+          <span style={{ color: MUT }}> · {incident.corner}</span>
+        )}
+      </div>
+
       {open && (
-        <div style={{ padding: '8px 12px 10px', borderTop: `1px solid ${BRD2}` }}>
+        <div style={{ borderTop: `1px solid ${BRD2}` }}>
+
+          {/* Description */}
           {incident.description && (
-            <div style={{ fontFamily: MONO, fontSize: 11, color: TXT, marginBottom: 8 }}>
+            <div style={{ padding: '8px 12px 4px', fontFamily: MONO, fontSize: 11, color: TXT, lineHeight: 1.5 }}>
               {incident.description}
             </div>
           )}
 
+          {/* Responding units */}
           {units.length > 0 && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, padding: '6px 12px 4px' }}>
               {units.map(u => (
                 <span key={u} style={{
                   fontFamily: MONO, fontSize: 9, fontWeight: 700,
@@ -159,12 +174,48 @@ function IncidentCard({ incident }) {
             </div>
           )}
 
-          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+          {/* Meta row */}
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', padding: '6px 12px 8px' }}>
             {incident.map_ref    && <span style={{ fontFamily: MONO, fontSize: 9, color: MUT }}>Melway {incident.map_ref}</span>}
+            {incident.six_figure && <span style={{ fontFamily: MONO, fontSize: 9, color: MUT }}>({incident.six_figure})</span>}
             {incident.agency     && <span style={{ fontFamily: MONO, fontSize: 9, color: MUT }}>{incident.agency}</span>}
             {incident.incident_id && <span style={{ fontFamily: MONO, fontSize: 9, color: MUT }}>{incident.incident_id}</span>}
-            {incident.messages?.length > 1 && <span style={{ fontFamily: MONO, fontSize: 9, color: MUT }}>{incident.messages.length} pages</span>}
+            {msgs.length > 0     && <span style={{ fontFamily: MONO, fontSize: 9, color: MUT }}>{msgs.length} {msgs.length === 1 ? 'page' : 'pages'}</span>}
           </div>
+
+          {/* Raw pages list */}
+          {msgs.length > 0 && (
+            <div style={{ borderTop: `1px solid ${BRD2}` }}>
+              {msgs.map((m, i) => (
+                <div key={m.id ?? i} style={{
+                  padding: '5px 12px',
+                  borderBottom: i < msgs.length - 1 ? `1px solid ${BRD2}` : 'none',
+                  display: 'flex', gap: 8, alignItems: 'flex-start',
+                }}>
+                  <span style={{ fontFamily: MONO, fontSize: 8, color: BRD, flexShrink: 0, paddingTop: 1 }}>
+                    {fmtTime(m.timestamp)}
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    {m.alias && (
+                      <span style={{
+                        fontFamily: MONO, fontSize: 8, fontWeight: 700,
+                        color: '#6090c0', marginRight: 6,
+                      }}>
+                        {m.alias}
+                      </span>
+                    )}
+                    <span style={{
+                      fontFamily: MONO, fontSize: 9, color: MUT,
+                      wordBreak: 'break-word', lineHeight: 1.4,
+                    }}>
+                      {m.message || m.parsed?.description || '—'}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
         </div>
       )}
     </div>

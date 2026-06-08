@@ -30,6 +30,8 @@ export function mergeMessage(incidents, msg) {
         description:      msg.parsed?.description || null,
         event_type:       msg.parsed?.eventType || null,
         map_ref:          msg.parsed?.mapRef || null,
+        six_figure:       msg.parsed?.sixFigure || null,
+        corner:           msg.parsed?.corner || null,
         alarm_level:      msg.parsed?.alarmLevel || null,
         is_cancelled:     msg.parsed?.isCancellation || false,
         responding_units: msg.alias ? [msg.alias] : [],
@@ -45,6 +47,8 @@ export function mergeMessage(incidents, msg) {
       ...existing,
       last_seen:        Math.max(existing.last_seen, msg.timestamp ?? 0),
       is_cancelled:     existing.is_cancelled || (msg.parsed?.isCancellation || false),
+      six_figure:       existing.six_figure || msg.parsed?.sixFigure || null,
+      corner:           existing.corner     || msg.parsed?.corner     || null,
       responding_units: msg.alias && !existing.responding_units.includes(msg.alias)
         ? [...existing.responding_units, msg.alias]
         : existing.responding_units,
