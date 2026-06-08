@@ -7,21 +7,40 @@ import { BG, SURF, BRD, BRD2, TXT, MUT, ACC, GRN, RED } from '../../lib/styles'
 const MONO = "'IBM Plex Mono', monospace"
 
 const EVENT_LABELS = {
-  RESCC1: 'RESCUE — PERSONS TRAPPED',
-  NOSTC1: 'VEHICLE FIRE',
-  NOSTC3: 'VEHICLE INCIDENT',
-  INCIC3: 'VEHICLE INCIDENT',
-  INCIC1: 'INCIDENT',
-  ALARC1: 'ALARM',
-  SF:     'STRUCTURE FIRE',
-  NS:     'SPARKS FROM VEHICLE',
+  // Rescue
+  RESCC1: 'RESCUE — TRAPPED', RESCC2: 'RESCUE', RESCC3: 'RESCUE',
+  // Outside / no-structure fire
+  NOSTC1: 'OUTSIDE FIRE', NOSTC2: 'OUTSIDE FIRE', NS: 'OUTSIDE FIRE',
+  // Road / vehicle incident
+  NOSTC3: 'ROAD INCIDENT', INCIC3: 'ROAD INCIDENT', MVA: 'MOTOR VEHICLE ACC',
+  // Structure fire
+  SF: 'STRUCTURE FIRE', STRUC1: 'STRUCTURE FIRE', STRUC2: 'STRUCTURE FIRE', STRUC3: 'STRUCTURE FIRE',
+  // Grass / scrub
+  'G&SC1': 'GRASS FIRE', 'G&SC2': 'GRASS FIRE', 'G&SC3': 'GRASS FIRE',
+  // Alarm
+  ALARC1: 'ALARM', ALARC2: 'ALARM', ALARC3: 'ALARM',
+  // General incident / assist
+  INCIC1: 'INCIDENT', INCIC2: 'INCIDENT', ASUPP: 'ASSIST',
+  // Medical
+  MR: 'MEDICAL RESPONSE',
+  // Hazmat
+  HZ: 'HAZMAT', HAZMA: 'HAZMAT', HAZM1: 'HAZMAT', CHEM: 'CHEM EMERGENCY', CHEMA: 'CHEM EMERGENCY',
+  // Other
+  EXPLC: 'EXPLOSION', COLPS: 'COLLAPSE', FLOOD: 'FLOOD', STORM: 'STORM DAMAGE',
 }
 
 const FILTERS = [
   { id: 'trapped',  label: 'TRAPPED',  colour: '#d04040', match: i => i.event_type?.startsWith('RESCC') },
-  { id: 'veh_fire', label: 'VEH FIRE', colour: '#c87020', match: i => ['NOSTC1','NS','SF'].includes(i.event_type) },
-  { id: 'veh_inc',  label: 'VEH INC',  colour: ACC,       match: i => ['NOSTC3','INCIC1','INCIC3'].includes(i.event_type) },
+  { id: 'veh_fire', label: 'VEH FIRE', colour: '#c87020', match: i => ['NOSTC1','NOSTC2','NS'].includes(i.event_type) },
+  { id: 'veh_inc',  label: 'VEH INC',  colour: ACC,       match: i => ['NOSTC3','INCIC3','MVA'].includes(i.event_type) },
+  { id: 'struct',   label: 'STRUCT',   colour: '#e05020', match: i => i.event_type === 'SF' || i.event_type?.startsWith('STRUC') },
+  { id: 'grass',    label: 'GRASS',    colour: '#40a040', match: i => i.event_type?.startsWith('G&SC') },
   { id: 'alarm',    label: 'ALARM',    colour: '#6090c0', match: i => i.event_type?.startsWith('ALARC') },
+  { id: 'medical',  label: 'MEDICAL',  colour: '#8060c0', match: i => i.event_type === 'MR' },
+  { id: 'hazmat',   label: 'HAZMAT',   colour: '#b0b020', match: i =>
+      i.event_type?.startsWith('HZ') || i.event_type?.startsWith('HAZM') || i.event_type?.startsWith('CHEM') },
+  { id: 'incident', label: 'INCIDENT', colour: '#5a5a5a', match: i =>
+      ['INCIC1','INCIC2','ASUPP','EXPLC','COLPS'].includes(i.event_type) },
   { id: 'sep' },
   { id: 'cfa',      label: 'CFA',      colour: '#e05020', match: i => i.agency === 'CFA' },
   { id: 'frv',      label: 'FRV',      colour: '#c03030', match: i => i.agency === 'FRV' },
@@ -29,12 +48,18 @@ const FILTERS = [
 ]
 const REAL_FILTERS = FILTERS.filter(f => f.id !== 'sep')
 
+const DEFAULT_FILTERS = new Set(['veh_fire', 'veh_inc'])
+
 function eventColour(type, cancelled) {
   if (cancelled) return MUT
   if (!type) return MUT
   if (type.startsWith('RESCC'))                          return '#d04040'
-  if (type === 'NOSTC1' || type === 'NS' || type === 'SF') return '#c87020'
-  if (type.startsWith('NOSTC') || type.startsWith('INCIC')) return ACC
+  if (['NOSTC1','NOSTC2','NS'].includes(type))           return '#c87020'
+  if (type === 'SF' || type.startsWith('STRUC'))         return '#e05020'
+  if (type.startsWith('G&SC'))                           return '#40a040'
+  if (['NOSTC3','INCIC3','MVA'].includes(type))          return ACC
+  if (type === 'MR')                                     return '#8060c0'
+  if (type.startsWith('HZ') || type.startsWith('HAZM') || type.startsWith('CHEM')) return '#b0b020'
   if (type.startsWith('ALARC'))                          return '#6090c0'
   return MUT
 }
@@ -162,7 +187,7 @@ function incidentsReducer(state, action) {
 }
 
 export default function IncidentFeedTab() {
-  const [active,       setActive]       = useState(new Set())
+  const [active,       setActive]       = useState(DEFAULT_FILTERS)
   const [historyState, setHistoryState] = useState('loading')
   const [lastDbTs,     setLastDbTs]     = useState(null)  // most recent message timestamp from Supabase
   const [incidents, dispatch] = useReducer(incidentsReducer, {})
@@ -283,19 +308,30 @@ export default function IncidentFeedTab() {
           </span>
         )}
 
-        {active.size > 0 && (
+        <div style={{ display: 'flex', gap: 4, marginLeft: lastDbTs ? 8 : 'auto' }}>
+          {active.size > 0 && (
+            <button
+              onClick={() => setActive(new Set())}
+              style={{
+                fontFamily: MONO, fontSize: 9, color: MUT,
+                background: 'none', border: `1px solid ${BRD}`, cursor: 'pointer',
+                padding: '2px 8px', letterSpacing: '0.05em',
+              }}
+            >
+              ALL
+            </button>
+          )}
           <button
-            onClick={() => setActive(new Set())}
+            onClick={() => setActive(new Set(DEFAULT_FILTERS))}
             style={{
-              marginLeft: lastDbTs ? 8 : 'auto',
               fontFamily: MONO, fontSize: 9, color: MUT,
               background: 'none', border: `1px solid ${BRD}`, cursor: 'pointer',
               padding: '2px 8px', letterSpacing: '0.05em',
             }}
           >
-            CLEAR
+            RESET
           </button>
-        )}
+        </div>
       </div>
 
       {/* Filter badges */}
@@ -337,7 +373,7 @@ export default function IncidentFeedTab() {
           {historyState === 'loading'
             ? 'LOADING 31-DAY HISTORY…'
             : active.size > 0 && hiddenCount > 0
-              ? `FILTERS ACTIVE — ${hiddenCount} INCIDENT${hiddenCount !== 1 ? 'S' : ''} HIDDEN · CLEAR TO SHOW ALL`
+              ? `FILTERS ACTIVE — ${hiddenCount} INCIDENT${hiddenCount !== 1 ? 'S' : ''} HIDDEN · TAP ALL TO SHOW EVERYTHING`
               : 'MONITORING — WAITING FOR DISPATCH'}
         </div>
       )}
