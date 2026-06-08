@@ -119,53 +119,53 @@ function stationMapsUrl(unit) {
 // Broadcastify feed covering all FRV Melbourne Metro talkgroups (ESTA MMR network)
 const FGD_DEFAULT_FEED = 24820
 
-// Mini inline Broadcastify scanner player — drops down from the Ch. badge
+// Radio channel badge — tapping opens a dark scanner panel linking to Broadcastify
 function ChannelBadge({ fgd }) {
   const [open, setOpen] = useState(false)
-  const label     = `Ch. ${fgd.replace('FGD', '')}`
-  const listenUrl = `https://www.broadcastify.com/listen/feed/${FGD_DEFAULT_FEED}`
+  const num      = fgd.replace('FGD', '')
+  const label    = `Ch. ${num}`
+  const feedUrl  = `https://www.broadcastify.com/listen/feed/${FGD_DEFAULT_FEED}`
 
   return (
-    <div style={{ display: 'inline-flex', flexDirection: 'column', position: 'relative', zIndex: open ? 10 : 'auto' }}
+    <div style={{ position: 'relative', display: 'inline-block' }}
       onClick={e => e.stopPropagation()}>
       <button
         onClick={() => setOpen(o => !o)}
         style={{
-          fontFamily: MONO, fontSize: 7, color: open ? '#6ab06a' : '#5a8a5a',
-          background: open ? '#0d1a0d' : 'transparent',
+          fontFamily: MONO, fontSize: 7, fontWeight: 700,
+          color: open ? '#6ab06a' : '#5a8a5a',
+          background: open ? '#0a1a0a' : 'transparent',
           border: `1px solid ${open ? '#2a5a2a' : '#1a3a1a'}`,
           borderRadius: open ? '2px 2px 0 0' : 2,
-          padding: '1px 5px', cursor: 'pointer',
-          display: 'flex', alignItems: 'center', gap: 3,
+          padding: '1px 6px', cursor: 'pointer',
+          display: 'inline-flex', alignItems: 'center', gap: 3,
         }}>
-        📻 {label} <span style={{ fontSize: 5, opacity: 0.6 }}>{open ? '▲' : '▼'}</span>
+        📻 {label}
       </button>
       {open && (
         <div style={{
-          position: 'absolute', top: '100%', left: 0,
-          border: '1px solid #2a5a2a', borderRadius: '0 2px 2px 2px',
-          overflow: 'hidden', background: '#070d07',
-          zIndex: 20, boxShadow: '0 4px 16px #000c',
+          position: 'absolute', top: '100%', left: 0, zIndex: 30,
+          background: '#070d07', border: '1px solid #2a5a2a',
+          borderRadius: '0 2px 2px 2px',
+          boxShadow: '0 6px 20px #000d', padding: '10px 12px', minWidth: 210,
         }}>
-          <iframe
-            src={`https://www.broadcastify.com/webPlayer/${FGD_DEFAULT_FEED}`}
-            width="320" height="80"
-            frameBorder="0" scrolling="no"
-            title={`FRV ${label}`}
-            allow="autoplay; encrypted-media"
-            style={{ display: 'block' }}
-          />
-          <div style={{
-            padding: '3px 8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            borderTop: '1px solid #1a3a1a',
-          }}>
-            <span style={{ fontSize: 6, color: '#3a5a3a', fontFamily: MONO, letterSpacing: '0.06em' }}>
-              FRV METRO · ESTA MMR · {fgd}
-            </span>
-            <a href={listenUrl} target="_blank" rel="noopener noreferrer"
-              style={{ fontSize: 6, color: '#5a8a5a', fontFamily: MONO, textDecoration: 'none' }}>
-              ↗ broadcastify
-            </a>
+          <div style={{ fontSize: 6, color: '#3a5a3a', fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 8 }}>
+            FRV METRO · ESTA MMR · {fgd}
+          </div>
+          <a
+            href={feedUrl} target="_blank" rel="noopener noreferrer"
+            onClick={() => setOpen(false)}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+              background: '#0f2a0f', border: '1px solid #3a6a3a', borderRadius: 2,
+              padding: '9px 14px', textDecoration: 'none',
+              color: '#7ad07a', fontFamily: MONO, fontSize: 10, fontWeight: 700,
+              letterSpacing: '0.06em',
+            }}>
+            ▶ Open Scanner
+          </a>
+          <div style={{ marginTop: 6, fontSize: 6, color: '#2a4a2a', fontFamily: MONO, textAlign: 'center' }}>
+            opens Broadcastify in browser
           </div>
         </div>
       )}
