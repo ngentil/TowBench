@@ -115,7 +115,7 @@ function AllocateModal({ eventId, onConfirm, onCancel, busy, err }) {
   );
 }
 
-function AllocationCard({ feature, fromLog, userPos, nearbyKm, acceptedJob, userEmail, role, isDispatch, companyId, onAccept, onUnassign, onAllocateToPlate, handoverNotes, onAddNote, onEditNote, searchTerm, dispatchedJob, trucks, depots, onDispatch }) {
+function AllocationCard({ feature, fromLog, userPos, nearbyKm, acceptedJob, userEmail, role, isDispatch, companyId, onAccept, onUnassign, onAllocateToPlate, handoverNotes, onAddNote, onEditNote, searchTerm, dispatchedJob, trucks, depots, onDispatch, pagerHit }) {
   const [open, setOpen]               = useState(false);
   const [noteInput, setNoteInput]     = useState('');
   const [showNoteBox, setShowNoteBox] = useState(false);
@@ -276,6 +276,24 @@ function AllocationCard({ feature, fromLog, userPos, nearbyKm, acceptedJob, user
           <span style={{ fontSize: 8, color: MUT }}>{open ? '▲' : '▼'}</span>
         </div>
       </div>
+
+      {/* Pager cross-reference banner — shown whenever a matching pager incident was seen */}
+      {pagerHit && (() => {
+        const mins = Math.floor((Date.now() - pagerHit.firstSeen) / 60000)
+        const age  = mins < 60 ? `${mins}m ago` : `${Math.floor(mins / 60)}h ago`
+        const lbl  = pagerHit.event_type || 'INCIDENT'
+        return (
+          <div style={{
+            margin: '0 10px 8px', padding: '5px 10px',
+            background: '#120d00', border: '1px solid #3a2600',
+            borderRadius: 2, fontSize: 8, color: '#c89020',
+            display: 'flex', alignItems: 'center', gap: 6,
+            fontFamily: "'IBM Plex Mono',monospace",
+          }}>
+            🚒 <strong>Pager activity</strong> · {pagerHit.agency} {lbl} · first seen {age}
+          </div>
+        )
+      })()}
 
       {open && (
         <div style={{ padding: '0 12px 12px', borderTop: '1px solid #1a1a1a' }}>
@@ -443,9 +461,79 @@ function AllocationCard({ feature, fromLog, userPos, nearbyKm, acceptedJob, user
   );
 }
 
+// Normalise road type abbreviations so "PRINCES HIGHWAY" matches "PRINCES HWY"
+function normRoad(s) {
+  return (s || '').toUpperCase()
+    .replace(/\bHIGHWAY\b/g, 'HWY').replace(/\bSTREET\b/g, 'ST')
+    .replace(/\bROAD\b/g, 'RD').replace(/\bAVENUE\b/g, 'AVE')
+    .replace(/\bDRIVE\b/g, 'DR').replace(/\bCRESCENT\b/g, 'CR')
+    .replace(/\bBOULEVARD\b/g, 'BLVD').replace(/\bPARADE\b/g, 'PDE')
+    .replace(/[^A-Z0-9 ]/g, '').trim()
+}
+
+function pagerMatchesAllocation(inc, feature) {
+  const coords = feature.geometry?.coordinates  // [lng, lat]
+  // Proximity check — most reliable when geocode data is available
+  if (coords && inc.coords) {
+    if (haversineKm(coords[1], coords[0], inc.coords.lat, inc.coords.lng) < 0.5) return true
+  }
+  // Text fallback — match on road name words + suburb
+  const p      = feature.properties || {}
+  const road   = normRoad(p.closedRoadName)
+  const sub    = (suburb(feature) || '').toUpperCase()
+  const addr   = normRoad(inc.address || inc.corner)
+  if (!road || !addr) return false
+  const words  = road.split(/\s+/).filter(w => w.length > 2 && !/^\d+$/.test(w))
+  if (!words.length) return false
+  const hits   = words.filter(w => addr.includes(w)).length
+  return hits >= 2 || (hits >= 1 && sub && addr.includes(sub))
+}
+
 export default function TowAllocationsTab({ allFeatures, liveIds, loading, err, lastFetch, countdown, fetchAllocations, isStale, acceptedJobs, userEmail, role, isDispatch, companyId, onAcceptJob, onUnassignJob, onAllocateToPlate, companyConfig, userPos }) {
   const { rainSoon, maxProb, hoursUntil } = useWeather();
   const [handoverNotes, setHandoverNotes] = useState(new Map());
+
+  // Pager cross-reference — load recent incidents + their geocoded coords
+  const [pagerIncidents, setPagerIncidents] = useState([])
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+        const { data: msgs } = await supabase
+          .from('vicpagers_messages')
+          .select('incident_id, address, corner, event_type, agency, received_at')
+          .gte('received_at', cutoff)
+          .order('received_at', { ascending: true })
+        if (!msgs?.length) return
+
+        // Keep earliest message per incident (= when it was first seen)
+        const seen = new Map()
+        for (const m of msgs) {
+          const key = m.incident_id || `${m.agency}:${m.address}`
+          if (!seen.has(key)) seen.set(key, m)
+        }
+        const unique = Array.from(seen.values()).filter(i => i.address || i.corner)
+
+        // Look up geocoded coordinates from cache table
+        const addrKeys = [...new Set(unique.map(i => i.address || i.corner).filter(Boolean))]
+        let geoMap = new Map()
+        if (addrKeys.length) {
+          const { data: geoRows } = await supabase
+            .from('geocode_cache').select('key, lat, lng').in('key', addrKeys.slice(0, 200))
+          for (const r of geoRows || []) geoMap.set(r.key, { lat: r.lat, lng: r.lng })
+        }
+
+        setPagerIncidents(unique.map(i => ({
+          ...i,
+          coords: geoMap.get(i.address || i.corner) || null,
+          firstSeen: new Date(i.received_at).getTime(),
+        })))
+      } catch { /* table may not exist */ }
+    }
+    load()
+    const t = setInterval(load, 5 * 60 * 1000)
+    return () => clearInterval(t)
+  }, [])
 
   // Dispatch integration
   const [trucks,         setTrucks]         = useState([]);
@@ -921,7 +1009,8 @@ export default function TowAllocationsTab({ allFeatures, liveIds, loading, err, 
               searchTerm={searchTerm.trim()}
               dispatchedJob={dispatchedMap.get(String(f.properties?.eventId))}
               trucks={trucks} depots={depots}
-              onDispatch={setDispatchTarget} />
+              onDispatch={setDispatchTarget}
+              pagerHit={pagerIncidents.find(inc => pagerMatchesAllocation(inc, f)) || null} />
           ))}
           {statusFilter === 'all' && cleared.length > 0 && <div style={{ marginTop: 12 }} />}
         </>
@@ -938,7 +1027,8 @@ export default function TowAllocationsTab({ allFeatures, liveIds, loading, err, 
               onAccept={null} onUnassign={null} onAllocateToPlate={null}
               handoverNotes={handoverNotes.get(String(f.properties?.eventId)) || []} onAddNote={addHandoverNote} onEditNote={editHandoverNote}
               searchTerm={searchTerm.trim()}
-              dispatchedJob={null} trucks={trucks} depots={depots} onDispatch={setDispatchTarget} />
+              dispatchedJob={null} trucks={trucks} depots={depots} onDispatch={setDispatchTarget}
+              pagerHit={pagerIncidents.find(inc => pagerMatchesAllocation(inc, f)) || null} />
           ))}
         </>
       )}
