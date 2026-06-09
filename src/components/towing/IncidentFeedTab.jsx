@@ -42,10 +42,8 @@ const EVENT_LABELS = {
 
 const FILTERS = [
   { id: 'trapped',  label: 'TRAPPED',  colour: '#d04040', match: i => i.event_type?.startsWith('RESCC') },
-  { id: 'veh_fire', label: 'FIRE',     colour: '#c87020', match: i => ['NOSTC1','NOSTC2','NS'].includes(i.event_type) || i.event_type === 'SF' || i.event_type?.startsWith('STRUC') },
+  { id: 'veh_fire', label: 'FIRE',     colour: '#c87020', match: i => ['NOSTC1','NOSTC2','NS'].includes(i.event_type) || i.event_type === 'SF' || i.event_type?.startsWith('STRUC') || i.event_type?.startsWith('G&SC') },
   { id: 'veh_inc',  label: 'INCIDENT', colour: ACC,       match: i => ['NOSTC3','INCIC3','MVA'].includes(i.event_type) },
-  { id: 'struct',   label: 'STRUCT',   colour: '#e05020', match: i => i.event_type === 'SF' || i.event_type?.startsWith('STRUC') },
-  { id: 'grass',    label: 'GRASS',    colour: '#40a040', match: i => i.event_type?.startsWith('G&SC') },
   { id: 'alarm',    label: 'ALARM',    colour: '#6090c0', match: i => i.event_type?.startsWith('ALARC') },
   { id: 'medical',  label: 'MEDICAL',  colour: '#8060c0', match: i => i.event_type === 'MR' },
   { id: 'hazmat',   label: 'HAZMAT',   colour: '#b0b020', match: i =>
