@@ -8,6 +8,7 @@ import { timeIn, fmtTimer, fmtShort, haversineKm } from '../../lib/utils';
 import { Highlight } from '../ui/shared';
 import { DispatchModal, CompleteModal } from './DispatchTab';
 import DriverJobCard from './DriverJobCard';
+import { findDepotsForAddress, REGION_STYLE, REGION_LABELS } from '../../lib/towDepots';
 
 const ORANGE = '#e8870a';
 
@@ -227,6 +228,22 @@ function AllocationCard({ feature, fromLog, userPos, nearbyKm, acceptedJob, user
                 </span>
               )}
               {impact && <span style={{ fontSize: 7, color: MUT, border: '1px solid #252525', borderRadius: 2, padding: '1px 4px' }}>{impact}</span>}
+              {(() => {
+                const hits = findDepotsForAddress(sub)
+                if (!hits.length) return null
+                const region = hits[0].region
+                const st = REGION_STYLE[region]
+                const nums = [...new Set(hits.map(h => h.depot))].join(' / ')
+                return (
+                  <span style={{ fontSize: 7, fontWeight: 700, color: st.color,
+                                 border: `1px solid ${st.border}`, borderRadius: 2,
+                                 padding: '1px 5px', background: st.bg,
+                                 fontFamily: "'IBM Plex Mono',monospace" }}
+                        title={`ACC ${REGION_LABELS[region]} region`}>
+                    🏢 {nums}
+                  </span>
+                )
+              })()}
             </div>
           )}
         </div>

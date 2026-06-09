@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { useVicPagers, mergeMessage } from '../../lib/useVicPagers'
 import { getRecentVicPagers, dbRowToMessage } from '../../lib/db/incidents'
 import { BG, SURF, BRD, BRD2, TXT, MUT, ACC, GRN, RED } from '../../lib/styles'
+import { findDepotsForAddress, REGION_STYLE, REGION_LABELS } from '../../lib/towDepots'
 
 const MONO = "'IBM Plex Mono', monospace"
 
@@ -363,6 +364,22 @@ function IncidentCard({ incident, nearbyKm }) {
             {incident.agency}
           </span>
         )}
+        {/* ACC depot badge */}
+        {(() => {
+          const hits = findDepotsForAddress(incident.address || incident.corner || '')
+          if (!hits.length) return null
+          const region = hits[0].region
+          const st = REGION_STYLE[region]
+          const nums = [...new Set(hits.map(h => h.depot))].join(' / ')
+          return (
+            <span style={{ fontSize: 8, fontWeight: 700, fontFamily: MONO, color: st.color,
+                           border: `1px solid ${st.border}`, borderRadius: 3,
+                           padding: '3px 8px', background: st.bg, flexShrink: 0 }}
+                  title={`ACC ${REGION_LABELS[region]} region`}>
+              🏢 {nums}
+            </span>
+          )
+        })()}
         {/* Station units — links to Google Maps */}
         {units.slice(0, 3).map(u => (
           <a key={u} href={stationMapsUrl(u)} target="_blank" rel="noopener noreferrer"
