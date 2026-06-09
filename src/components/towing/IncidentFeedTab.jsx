@@ -43,13 +43,11 @@ const EVENT_LABELS = {
 const FILTERS = [
   { id: 'trapped',  label: 'TRAPPED',  colour: '#d04040', match: i => i.event_type?.startsWith('RESCC') },
   { id: 'veh_fire', label: 'FIRE',     colour: '#c87020', match: i => ['NOSTC1','NOSTC2','NS'].includes(i.event_type) || i.event_type === 'SF' || i.event_type?.startsWith('STRUC') || i.event_type?.startsWith('G&SC') },
-  { id: 'veh_inc',  label: 'INCIDENT', colour: ACC,       match: i => ['NOSTC3','INCIC3','MVA'].includes(i.event_type) },
+  { id: 'veh_inc',  label: 'INCIDENT', colour: ACC,       match: i => ['NOSTC3','INCIC3','MVA','INCIC1','INCIC2','ASUPP','EXPLC','COLPS'].includes(i.event_type) },
   { id: 'alarm',    label: 'ALARM',    colour: '#6090c0', match: i => i.event_type?.startsWith('ALARC') },
   { id: 'medical',  label: 'MEDICAL',  colour: '#8060c0', match: i => i.event_type === 'MR' },
   { id: 'hazmat',   label: 'HAZMAT',   colour: '#b0b020', match: i =>
       i.event_type?.startsWith('HZ') || i.event_type?.startsWith('HAZM') || i.event_type?.startsWith('CHEM') },
-  { id: 'incident', label: 'INCIDENT', colour: '#5a5a5a', match: i =>
-      ['INCIC1','INCIC2','ASUPP','EXPLC','COLPS'].includes(i.event_type) },
   { id: 'sep' },
   { id: 'cfa',      label: 'CFA',      colour: '#e05020', match: i => i.agency === 'CFA' },
   { id: 'frv',      label: 'FRV',      colour: '#c03030', match: i => i.agency === 'FRV' },
@@ -57,7 +55,14 @@ const FILTERS = [
 ]
 const REAL_FILTERS = FILTERS.filter(f => f.id !== 'sep')
 
-const DEFAULT_FILTERS = new Set(['veh_inc', 'incident'])
+const DEFAULT_FILTERS = new Set(['veh_inc'])
+
+const SORT_OPTS = [
+  { id: 'newest',  label: '↓ Newest' },
+  { id: 'oldest',  label: '↑ Oldest' },
+  { id: 'closest', label: '📍 Closest' },
+  { id: 'suburb',  label: 'A–Z Suburb' },
+]
 
 function eventColour(type, cancelled) {
   if (cancelled) return MUT
@@ -524,6 +529,7 @@ function incidentsReducer(state, action) {
 
 export default function IncidentFeedTab({ userPos, companyId }) {
   const [active,       setActive]       = useState(DEFAULT_FILTERS)
+  const [sortBy,       setSortBy]       = useState('newest')
   const [nearbyKm, setNearbyKm] = useState(() => Number(localStorage.getItem('towbench_nearby_km') ?? 0))
   const setRadius = km => { setNearbyKm(km); localStorage.setItem('towbench_nearby_km', km) }
 
@@ -646,7 +652,6 @@ export default function IncidentFeedTab({ userPos, companyId }) {
   // Geocode incident addresses whenever we have an effective position (for distance display + radius filter).
   // Primary key: address || corner. Fallback key: first recognisable station unit (~stn:…).
   useEffect(() => {
-    console.log('[geo] effect fired — effectivePos:', effectivePos, 'geocodingRef:', geocodingRef.current, 'incidents:', allIncidents.length)
     if (!effectivePos || geocodingRef.current) return
     const cacheKey = i => i.address || i.corner || stationGeoKey(i)
     const pending = allIncidents
@@ -656,7 +661,6 @@ export default function IncidentFeedTab({ userPos, companyId }) {
         const bReal = !!(b.address || b.corner)
         return aReal === bReal ? 0 : aReal ? -1 : 1
       })
-    console.log('[geo] pending:', pending.length, 'cache size:', geocodeCache.current.size)
     if (!pending.length) return
 
     geocodingRef.current = true
@@ -664,7 +668,7 @@ export default function IncidentFeedTab({ userPos, companyId }) {
 
     (async () => {
       for (const inc of pending) {
-        if (cancelled) { console.log('[geo] cancelled'); break }
+        if (cancelled) break
         const key = cacheKey(inc)
         if (!key || geocodeCache.current.has(key)) continue
         geocodeCache.current.set(key, null)
@@ -675,7 +679,6 @@ export default function IncidentFeedTab({ userPos, companyId }) {
             ? key.replace('~stn:', '') + ' fire station, Victoria, Australia'
             : key + ', Victoria, Australia'
           const q   = encodeURIComponent(searchTerm)
-          console.log('[geo] fetching:', key)
           const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1`, {
             headers: { 'User-Agent': 'TowBench/1.0' },
             signal: AbortSignal.timeout(5000),
@@ -684,21 +687,17 @@ export default function IncidentFeedTab({ userPos, companyId }) {
           if (data[0]) {
             const coords = { lat: +data[0].lat, lng: +data[0].lon }
             geocodeCache.current.set(key, coords)
-            console.log('[geo] got coords for', key, coords)
             supabase.from('geocode_cache')
               .upsert({ key, lat: coords.lat, lng: coords.lng }, { onConflict: 'key' })
               .then(() => {})
-          } else {
-            console.log('[geo] no result for', key)
           }
-        } catch (e) { console.log('[geo] error for', key, e?.message) }
+        } catch (_) {}
         setGeoRev(v => v + 1)
       }
       geocodingRef.current = false
-      console.log('[geo] done')
     })()
 
-    return () => { console.log('[geo] cleanup — cancelling'); cancelled = true; geocodingRef.current = false }
+    return () => { cancelled = true; geocodingRef.current = false }
   }, [allIncidents, effectivePos])
 
   // Always compute distance when we have a position (used for badges + radius filter)
@@ -720,6 +719,21 @@ export default function IncidentFeedTab({ userPos, companyId }) {
   const filtered = active.size === 0
     ? nearbyFiltered
     : nearbyFiltered.filter(i => REAL_FILTERS.filter(f => active.has(f.id)).some(f => f.match(i)))
+
+  const sorted = useMemo(() => {
+    if (sortBy === 'oldest')  return [...filtered].sort((a, b) => (a.first_seen || 0) - (b.first_seen || 0))
+    if (sortBy === 'closest') return [...filtered].sort((a, b) => {
+      if (a._distKm == null && b._distKm == null) return 0
+      if (a._distKm == null) return 1
+      if (b._distKm == null) return -1
+      return a._distKm - b._distKm
+    })
+    if (sortBy === 'suburb')  return [...filtered].sort((a, b) =>
+      (a.address || a.corner || '').localeCompare(b.address || b.corner || '')
+    )
+    return [...filtered].sort((a, b) => (b.first_seen || 0) - (a.first_seen || 0))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered, sortBy, geoRev])
 
   const totalCount   = allIncidents.length
   const hiddenCount  = totalCount - filtered.length
@@ -890,8 +904,24 @@ export default function IncidentFeedTab({ userPos, companyId }) {
         ))}
       </div>
 
+      {/* Sort controls */}
+      <div style={{ marginBottom: 12, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 8, color: MUT, letterSpacing: '0.08em', textTransform: 'uppercase', flexShrink: 0 }}>↕ Sort</span>
+        {SORT_OPTS.map(opt => (
+          <button key={opt.id} onClick={() => setSortBy(opt.id)}
+            style={{
+              fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', padding: '4px 8px', borderRadius: 2, cursor: 'pointer', fontFamily: MONO,
+              background: sortBy === opt.id ? ACC + '22' : '#0d0d0d',
+              border: `1px solid ${sortBy === opt.id ? ACC : '#2a2a2a'}`,
+              color: sortBy === opt.id ? ACC : MUT,
+            }}>
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
       {/* Incident list */}
-      {filtered.length === 0 && (
+      {sorted.length === 0 && (
         <div style={{
           textAlign: 'center', padding: '48px 0',
           fontFamily: MONO, fontSize: 11, color: MUT,
@@ -905,7 +935,7 @@ export default function IncidentFeedTab({ userPos, companyId }) {
         </div>
       )}
 
-      {filtered.map(incident => (
+      {sorted.map(incident => (
         <IncidentCard
           key={incident.incident_id || incident.messages?.[0]?.id}
           incident={incident}
