@@ -288,11 +288,13 @@ function IncidentCard({ incident, nearbyKm }) {
   const mapsUrl = query ? `https://www.google.com/maps/search/?api=1&query=${query}` : null
   const svUrl   = query ? `https://maps.google.com/maps?q=${query}&layer=c` : null
 
-  const border     = `1px solid ${incident.is_cancelled ? BRD : colour + '55'}`
-  const borderLeft = `3px solid ${colour}`
+  const isNearby   = incident._distKm != null && nearbyKm > 0 && incident._distKm <= nearbyKm && !incident.is_cancelled
+  const border     = isNearby ? '1px solid #cc222255' : `1px solid ${incident.is_cancelled ? BRD : colour + '55'}`
+  const borderLeft = isNearby ? '3px solid #cc2222'   : `3px solid ${colour}`
 
   return (
-    <div style={{ background: '#0d0d0d', border, borderLeft, borderRadius: 2, marginBottom: 6, overflow: 'hidden', opacity: incident.is_cancelled ? 0.5 : 1 }}>
+    <div className={isNearby ? 'nearby-pulse' : ''}
+      style={{ background: '#0d0d0d', border, borderLeft, borderRadius: 2, marginBottom: 6, overflow: 'hidden', opacity: incident.is_cancelled ? 0.5 : 1 }}>
 
       {/* ── Row 1: ONLY this row expands the card ── */}
       <div onClick={() => setOpen(o => !o)}
