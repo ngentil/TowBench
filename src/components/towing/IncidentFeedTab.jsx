@@ -112,7 +112,7 @@ const APPLIANCE_TYPES = {
 }
 
 function vehicleSearchUrl(name) {
-  return `https://www.google.com/search?q=site:emergencyvehiclesapp.com+"${encodeURIComponent(name)}"`
+  return `https://emergencyvehiclesapp.com/vehicles?search=${encodeURIComponent(name)}`
 }
 
 function stationMapsUrl(unit) {
@@ -164,19 +164,14 @@ function ApplianceBadge({ code }) {
       .catch(() => setLoaded(true))
   }, [name])
 
-  const href    = data?.vehicleUrl || vehicleSearchUrl(name)
+  const href    = data?.vehicleUrl || null
   const img     = (!imgErr && data?.imageUrl) ? data.imageUrl : null
   const showImg = loaded && img
 
-  return (
-    <a href={href} target="_blank" rel="noopener noreferrer"
-      onClick={e => e.stopPropagation()}
-      style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center',
-               textDecoration: 'none', border: `1px solid ${BRD}`, borderRadius: 2,
-               overflow: 'hidden', background: '#0a0a0a', width: 88, flexShrink: 0 }}>
-
+  const inner = (
+    <>
       {/* Photo area */}
-      <div style={{ width: 88, height: 56, background: '#111', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', position: 'relative' }}>
+      <div style={{ width: 88, height: 56, background: '#111', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
         {!loaded && <span style={{ fontSize: 8, color: BRD }}>…</span>}
         {showImg && (
           <img src={img} alt={name}
@@ -185,7 +180,6 @@ function ApplianceBadge({ code }) {
         )}
         {loaded && !showImg && <span style={{ fontSize: 22 }}>🚒</span>}
       </div>
-
       {/* Name label */}
       <div style={{ fontFamily: MONO, fontSize: 7, color: MUT, padding: '3px 4px',
                     width: '100%', boxSizing: 'border-box', textAlign: 'center',
@@ -193,8 +187,25 @@ function ApplianceBadge({ code }) {
                     borderTop: `1px solid ${BRD}` }}>
         {name}
       </div>
-    </a>
+    </>
   )
+
+  const tileStyle = {
+    display: 'inline-flex', flexDirection: 'column', alignItems: 'center',
+    border: `1px solid ${BRD}`, borderRadius: 2,
+    overflow: 'hidden', background: '#0a0a0a', width: 88, flexShrink: 0,
+  }
+
+  if (href) {
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer"
+        onClick={e => e.stopPropagation()}
+        style={{ ...tileStyle, textDecoration: 'none', cursor: 'pointer' }}>
+        {inner}
+      </a>
+    )
+  }
+  return <div style={{ ...tileStyle, cursor: 'default' }}>{inner}</div>
 }
 
 function labelAppliance(code) {
