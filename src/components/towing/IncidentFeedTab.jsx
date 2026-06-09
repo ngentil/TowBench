@@ -137,10 +137,10 @@ function ChannelBadge({ fgd }) {
     <a href={href} target="_blank" rel="noopener noreferrer"
       onClick={e => e.stopPropagation()}
       style={{
-        fontFamily: MONO, fontSize: 7, fontWeight: 700,
-        color: '#5a8a5a', border: '1px solid #1a3a1a', borderRadius: 2,
-        padding: '1px 5px', textDecoration: 'none',
-        display: 'inline-flex', alignItems: 'center', gap: 3,
+        fontFamily: MONO, fontSize: 9, fontWeight: 700,
+        color: '#5a9a5a', border: '1px solid #1a3a1a', borderRadius: 3,
+        padding: '4px 9px', textDecoration: 'none', background: '#071207',
+        display: 'inline-flex', alignItems: 'center', gap: 4,
       }}>
       📻 Ch. {fgd.replace('FGD', '')}
     </a>
@@ -273,92 +273,96 @@ function IncidentCard({ incident, nearbyKm }) {
   const borderLeft = `3px solid ${colour}`
 
   return (
-    <div style={{ background: '#0d0d0d', border, borderLeft, borderRadius: 2, marginBottom: 6, overflow: 'hidden' }}>
+    <div style={{ background: '#0d0d0d', border, borderLeft, borderRadius: 2, marginBottom: 6, overflow: 'hidden', opacity: incident.is_cancelled ? 0.5 : 1 }}>
 
-      {/* ── Collapsed header ── */}
+      {/* ── Row 1: ONLY this row expands the card ── */}
       <div onClick={() => setOpen(o => !o)}
-        style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none', opacity: incident.is_cancelled ? 0.45 : 1 }}>
-
-        {/* Row 1: type · alarm · age · toggle */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 10, fontWeight: 700, color: colour, fontFamily: MONO, letterSpacing: '0.06em', textTransform: 'uppercase', flex: 1 }}>
-            {incident.is_cancelled ? '✓ ' : ''}{label}
+        style={{ padding: '10px 12px 8px', cursor: 'pointer', userSelect: 'none', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: colour, fontFamily: MONO, letterSpacing: '0.06em', textTransform: 'uppercase', flex: 1 }}>
+          {incident.is_cancelled ? '✓ ' : ''}{label}
+        </span>
+        {incident.alarm_level && (
+          <span style={{ fontSize: 8, fontWeight: 700, color: '#c87020', background: '#1a1000', border: '1px solid #3a2a00', padding: '2px 6px', fontFamily: MONO, borderRadius: 2, flexShrink: 0 }}>
+            {incident.alarm_level}
           </span>
-          {incident.alarm_level && (
-            <span style={{ fontSize: 7, fontWeight: 700, color: '#c87020', background: '#1a1000', border: '1px solid #3a2a00', padding: '1px 5px', fontFamily: MONO }}>
-              {incident.alarm_level}
-            </span>
-          )}
-          {ageMins != null && ageMins > 0 && (
-            <span style={{ fontSize: 7, color: ageMins > 60 ? MUT : ACC, border: `1px solid ${ageMins > 60 ? BRD : ACC + '44'}`, borderRadius: 2, padding: '1px 4px', fontFamily: MONO, fontWeight: 700 }}>
-              ⏱ {ageMins < 60 ? `${ageMins}m` : `${Math.floor(ageMins/60)}h`}
-            </span>
-          )}
-          {incident._distKm != null && (
-            <span
-              title={incident._distFallback ? 'Approx. — distance to responding station, not exact incident location' : undefined}
-              style={{
-                fontSize: 7, fontWeight: 700, fontFamily: MONO,
-                color:  nearbyKm > 0 && incident._distKm <= nearbyKm ? '#cc2222'
-                      : incident._distFallback ? '#6a6a50' : MUT,
-                border: `1px solid ${
-                  nearbyKm > 0 && incident._distKm <= nearbyKm ? '#cc222255'
-                  : incident._distFallback ? '#3a3a28' : '#2a2a2a'
-                }`,
-                borderRadius: 2, padding: '1px 4px',
-                fontStyle: incident._distFallback ? 'italic' : 'normal',
-              }}>
-              {incident._distFallback ? '~' : ''}📍 {incident._distKm.toFixed(1)}km
-            </span>
-          )}
-          <span style={{ fontSize: 8, color: MUT }}>{open ? '▲' : '▼'}</span>
-        </div>
+        )}
+        {ageMins != null && ageMins > 0 && (
+          <span style={{ fontSize: 8, color: ageMins > 60 ? MUT : ACC, border: `1px solid ${ageMins > 60 ? BRD : ACC + '44'}`, borderRadius: 2, padding: '2px 5px', fontFamily: MONO, fontWeight: 700, flexShrink: 0 }}>
+            ⏱ {ageMins < 60 ? `${ageMins}m` : `${Math.floor(ageMins/60)}h`}
+          </span>
+        )}
+        {incident._distKm != null && (
+          <span
+            title={incident._distFallback ? 'Approx. — distance to responding station, not exact incident location' : undefined}
+            style={{
+              fontSize: 8, fontWeight: 700, fontFamily: MONO, flexShrink: 0,
+              color:  nearbyKm > 0 && incident._distKm <= nearbyKm ? '#cc2222'
+                    : incident._distFallback ? '#7a7a55' : MUT,
+              border: `1px solid ${
+                nearbyKm > 0 && incident._distKm <= nearbyKm ? '#cc222255'
+                : incident._distFallback ? '#3a3a28' : '#2a2a2a'
+              }`,
+              borderRadius: 2, padding: '2px 5px',
+              fontStyle: incident._distFallback ? 'italic' : 'normal',
+            }}>
+            {incident._distFallback ? '~' : ''}📍 {incident._distKm.toFixed(1)}km
+          </span>
+        )}
+        {/* Expand chevron — visual affordance for the tap zone */}
+        <span style={{ fontSize: 13, color: MUT, flexShrink: 0, paddingLeft: 4 }}>{open ? '▲' : '▼'}</span>
+      </div>
 
-        {/* Row 2: address — tappable Maps + Street View icons */}
-        <div style={{ marginTop: 3, display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 11, fontWeight: 700, color: TXT }}>
+      {/* ── Row 2: address + map buttons — outside expand zone ── */}
+      {(addr || incident.corner) && (
+        <div style={{ padding: '0 12px 8px', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: TXT, flex: 1, minWidth: 0 }}>
             {addr || '—'}
-            {incident.corner && <span style={{ fontWeight: 400, color: MUT, fontSize: 9 }}> @ {incident.corner}</span>}
+            {incident.corner && <span style={{ fontWeight: 400, color: MUT, fontSize: 10 }}> @ {incident.corner}</span>}
           </span>
           {mapsUrl && (
-            <a href={mapsUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
-              style={{ fontSize: 9, color: '#5a7a9a', textDecoration: 'none', flexShrink: 0 }}>📍</a>
+            <a href={mapsUrl} target="_blank" rel="noopener noreferrer"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 9, color: '#6090b0', border: '1px solid #1e2e40', borderRadius: 3, padding: '4px 9px', textDecoration: 'none', background: '#080f18', flexShrink: 0 }}>
+              📍 Maps
+            </a>
           )}
           {svUrl && (
-            <a href={svUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
-              style={{ fontSize: 9, color: '#5a6a7a', textDecoration: 'none', flexShrink: 0 }}>🔭</a>
-          )}
-        </div>
-
-        {/* Row 3: dispatch summary — always visible */}
-        <div style={{ marginTop: 4, display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
-          {incident.agency && (
-            <span style={{ fontSize: 7, fontWeight: 700, color: MUT, border: `1px solid ${BRD}`, borderRadius: 2, padding: '1px 5px', fontFamily: MONO }}>
-              {incident.agency}
-            </span>
-          )}
-          {units.slice(0, 3).map(u => (
-            <a key={u} href={stationMapsUrl(u)} target="_blank" rel="noopener noreferrer"
-              onClick={e => e.stopPropagation()}
-              style={{ fontSize: 7, color: '#6090c0', fontFamily: MONO, border: '1px solid #1a2a3a', borderRadius: 2, padding: '1px 5px', textDecoration: 'none' }}>
-              {u}
+            <a href={svUrl} target="_blank" rel="noopener noreferrer"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 9, color: '#708090', border: '1px solid #1e2830', borderRadius: 3, padding: '4px 9px', textDecoration: 'none', background: '#080c10', flexShrink: 0 }}>
+              🔭 Street View
             </a>
-          ))}
-          {units.length > 3 && (
-            <span style={{ fontSize: 7, color: MUT, fontFamily: MONO }}>+{units.length - 3} more</span>
           )}
-          {dispatch.fgds.map(f => <ChannelBadge key={f} fgd={f} />)}
-          {dispatch.appliances.map(a => {
-            const name = labelAppliance(a)
-            return (
-              <a key={a} href={vehicleSearchUrl(name)} target="_blank" rel="noopener noreferrer"
-                onClick={e => e.stopPropagation()}
-                style={{ fontSize: 7, color: MUT, fontFamily: MONO, border: `1px solid ${BRD}`, borderRadius: 2, padding: '1px 5px', textDecoration: 'none' }}>
-                🚒 {name}
-              </a>
-            )
-          })}
         </div>
+      )}
+
+      {/* ── Row 3: dispatch badges — outside expand zone ── */}
+      <div style={{ padding: '0 12px 10px', display: 'flex', gap: 7, flexWrap: 'wrap', alignItems: 'center' }}>
+        {/* Agency — plain label, NOT a link */}
+        {incident.agency && (
+          <span style={{ fontSize: 8, fontWeight: 700, color: '#666', border: `1px solid #2a2a2a`, borderRadius: 3, padding: '3px 8px', fontFamily: MONO }}>
+            {incident.agency}
+          </span>
+        )}
+        {/* Station units — links to Google Maps */}
+        {units.slice(0, 3).map(u => (
+          <a key={u} href={stationMapsUrl(u)} target="_blank" rel="noopener noreferrer"
+            style={{ fontSize: 9, color: '#6090c0', fontFamily: MONO, border: '1px solid #1a2a3a', borderRadius: 3, padding: '4px 9px', textDecoration: 'none', background: '#05101e' }}>
+            {u}
+          </a>
+        ))}
+        {units.length > 3 && (
+          <span style={{ fontSize: 8, color: MUT, fontFamily: MONO }}>+{units.length - 3} more</span>
+        )}
+        {dispatch.fgds.map(f => <ChannelBadge key={f} fgd={f} />)}
+        {/* Appliance badges — links to vehicle search */}
+        {dispatch.appliances.map(a => {
+          const name = labelAppliance(a)
+          return (
+            <a key={a} href={vehicleSearchUrl(name)} target="_blank" rel="noopener noreferrer"
+              style={{ fontSize: 9, color: '#8a8a7a', fontFamily: MONO, border: `1px solid #2a2a1e`, borderRadius: 3, padding: '4px 8px', textDecoration: 'none', background: '#0c0c08' }}>
+              🚒 {name}
+            </a>
+          )
+        })}
       </div>
 
       {/* ── Expanded detail ── */}
