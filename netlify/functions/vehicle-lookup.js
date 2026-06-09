@@ -52,6 +52,29 @@ async function microlinkImage(vehicleUrl) {
   }
 }
 
+// ── emergencyvehiclesapp.com HTML scraper ─────────────────────────────────────
+// Searches the site for the vehicle name and returns the first matching URL + image.
+async function scrapeEmergencyVehiclesApp(name) {
+  try {
+    const searchUrl = `https://emergencyvehiclesapp.com/vehicles?search=${encodeURIComponent(name)}`;
+    const res = await fetch(searchUrl, {
+      signal: AbortSignal.timeout(10000),
+      headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36' },
+    });
+    if (!res.ok) return { vehicleUrl: null, imageUrl: null };
+    const html = await res.text();
+    // Extract first /vehicle/{id} href from the results page
+    const match = html.match(/href="(?:https:\/\/emergencyvehiclesapp\.com)?\/vehicle\/(\d+)"/);
+    if (!match) return { vehicleUrl: null, imageUrl: null };
+    const vehicleUrl = `https://emergencyvehiclesapp.com/vehicle/${match[1]}`;
+    const imageUrl = await microlinkImage(vehicleUrl);
+    return { vehicleUrl, imageUrl };
+  } catch (e) {
+    console.warn('scrape failed:', e.message);
+    return { vehicleUrl: null, imageUrl: null };
+  }
+}
+
 // ── Google CSE fallback (optional) ───────────────────────────────────────────
 async function googleCSE(name) {
   const key = process.env.GOOGLE_CSE_KEY;
@@ -104,7 +127,14 @@ exports.handler = async function (event) {
   let vehicleUrl = staticId ? `https://emergencyvehiclesapp.com/vehicle/${staticId}` : null;
   let imageUrl   = vehicleUrl ? await microlinkImage(vehicleUrl) : null;
 
-  // 3. Google CSE for callsigns not in static table, or if microlink failed
+  // 3. Scrape emergencyvehiclesapp.com search for callsigns not in static table
+  if (!vehicleUrl) {
+    const scraped = await scrapeEmergencyVehiclesApp(name);
+    vehicleUrl = scraped.vehicleUrl;
+    imageUrl   = scraped.imageUrl;
+  }
+
+  // 4. Google CSE fallback (requires GOOGLE_CSE_KEY + GOOGLE_CSE_ID env vars)
   if (!vehicleUrl || !imageUrl) {
     const cse = await googleCSE(name);
     vehicleUrl = vehicleUrl || cse.vehicleUrl;
