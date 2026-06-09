@@ -560,17 +560,19 @@ export default function IncidentFeedTab({ userPos, companyId }) {
   // Geocode cache: address → { lat, lng } | null (null = failed / in-progress)
   const geocodeCache   = useRef(new Map())
   const geocodingRef   = useRef(false)
-  const [dbCacheLoaded, setDbCacheLoaded] = useState(false)
 
-  // Load persisted geocodes from Supabase on mount so we don't re-hit Nominatim each session
+  // Load persisted geocodes from Supabase on mount — populates in-memory cache so
+  // geocoding can skip already-known addresses. Geocoding starts in parallel; the
+  // per-item has(key) check in the loop skips anything DB load beats it to.
   useEffect(() => {
-    supabase.from('geocode_cache').select('key, lat, lng').then(({ data }) => {
-      if (data) {
-        for (const row of data) geocodeCache.current.set(row.key, { lat: row.lat, lng: row.lng })
-      }
-      setDbCacheLoaded(true)
-      setGeoRev(v => v + 1)
-    })
+    supabase.from('geocode_cache').select('key, lat, lng')
+      .then(({ data }) => {
+        if (data) {
+          for (const row of data) geocodeCache.current.set(row.key, { lat: row.lat, lng: row.lng })
+        }
+        setGeoRev(v => v + 1)
+      })
+      .catch(() => {})
   }, [])
   const [geoRev, setGeoRev] = useState(0)
   const [historyState, setHistoryState] = useState('loading')
@@ -641,9 +643,8 @@ export default function IncidentFeedTab({ userPos, companyId }) {
 
   // Geocode incident addresses whenever we have an effective position (for distance display + radius filter).
   // Primary key: address || corner. Fallback key: first recognisable station unit (~stn:…).
-  // Waits for the DB cache to load first so we don't re-geocode already-known addresses.
   useEffect(() => {
-    if (!effectivePos || !dbCacheLoaded || geocodingRef.current) return
+    if (!effectivePos || geocodingRef.current) return
     const cacheKey = i => i.address || i.corner || stationGeoKey(i)
     // Real addresses first so distance badges appear quickly; station fallbacks follow
     const pending = allIncidents
@@ -666,6 +667,8 @@ export default function IncidentFeedTab({ userPos, companyId }) {
         geocodeCache.current.set(key, null)
         try {
           await new Promise(r => setTimeout(r, 250))
+          // DB load may have populated this key during the wait — skip Nominatim if so
+          if (geocodeCache.current.get(key) !== null) { setGeoRev(v => v + 1); continue }
           // Station fallback: search for the station by name rather than a street address
           const searchTerm = key.startsWith('~stn:')
             ? key.replace('~stn:', '') + ' fire station, Victoria, Australia'
@@ -690,7 +693,7 @@ export default function IncidentFeedTab({ userPos, companyId }) {
     })()
 
     return () => { cancelled = true; geocodingRef.current = false }
-  }, [allIncidents, effectivePos, dbCacheLoaded])
+  }, [allIncidents, effectivePos])
 
   // Always compute distance when we have a position (used for badges + radius filter)
   const withDistance = effectivePos
