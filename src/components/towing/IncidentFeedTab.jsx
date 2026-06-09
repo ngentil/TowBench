@@ -558,8 +558,20 @@ export default function IncidentFeedTab({ userPos, companyId }) {
   }, [locationSource, userPos?.lat, userPos?.lng, depots])
 
   // Geocode cache: address → { lat, lng } | null (null = failed / in-progress)
-  const geocodeCache  = useRef(new Map())
-  const geocodingRef  = useRef(false)
+  const geocodeCache   = useRef(new Map())
+  const geocodingRef   = useRef(false)
+  const [dbCacheLoaded, setDbCacheLoaded] = useState(false)
+
+  // Load persisted geocodes from Supabase on mount so we don't re-hit Nominatim each session
+  useEffect(() => {
+    supabase.from('geocode_cache').select('key, lat, lng').then(({ data }) => {
+      if (data) {
+        for (const row of data) geocodeCache.current.set(row.key, { lat: row.lat, lng: row.lng })
+      }
+      setDbCacheLoaded(true)
+      setGeoRev(v => v + 1)
+    })
+  }, [])
   const [geoRev, setGeoRev] = useState(0)
   const [historyState, setHistoryState] = useState('loading')
   const [lastDbTs,     setLastDbTs]     = useState(null)  // most recent message timestamp from Supabase
@@ -629,8 +641,9 @@ export default function IncidentFeedTab({ userPos, companyId }) {
 
   // Geocode incident addresses whenever we have an effective position (for distance display + radius filter).
   // Primary key: address || corner. Fallback key: first recognisable station unit (~stn:…).
+  // Waits for the DB cache to load first so we don't re-geocode already-known addresses.
   useEffect(() => {
-    if (!effectivePos || geocodingRef.current) return
+    if (!effectivePos || !dbCacheLoaded || geocodingRef.current) return
     const cacheKey = i => i.address || i.corner || stationGeoKey(i)
     // Real addresses first so distance badges appear quickly; station fallbacks follow
     const pending = allIncidents
@@ -663,7 +676,13 @@ export default function IncidentFeedTab({ userPos, companyId }) {
             signal: AbortSignal.timeout(5000),
           })
           const data = await res.json()
-          if (data[0]) geocodeCache.current.set(key, { lat: +data[0].lat, lng: +data[0].lon })
+          if (data[0]) {
+            const coords = { lat: +data[0].lat, lng: +data[0].lon }
+            geocodeCache.current.set(key, coords)
+            supabase.from('geocode_cache')
+              .upsert({ key, lat: coords.lat, lng: coords.lng }, { onConflict: 'key' })
+              .then(() => {})
+          }
         } catch { /* leave as null */ }
         setGeoRev(v => v + 1)
       }
@@ -671,7 +690,7 @@ export default function IncidentFeedTab({ userPos, companyId }) {
     })()
 
     return () => { cancelled = true; geocodingRef.current = false }
-  }, [allIncidents, effectivePos])
+  }, [allIncidents, effectivePos, dbCacheLoaded])
 
   // Always compute distance when we have a position (used for badges + radius filter)
   const withDistance = effectivePos
