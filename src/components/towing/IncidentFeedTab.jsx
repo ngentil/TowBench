@@ -644,9 +644,9 @@ export default function IncidentFeedTab({ userPos, companyId }) {
   // Geocode incident addresses whenever we have an effective position (for distance display + radius filter).
   // Primary key: address || corner. Fallback key: first recognisable station unit (~stn:…).
   useEffect(() => {
+    console.log('[geo] effect fired — effectivePos:', effectivePos, 'geocodingRef:', geocodingRef.current, 'incidents:', allIncidents.length)
     if (!effectivePos || geocodingRef.current) return
     const cacheKey = i => i.address || i.corner || stationGeoKey(i)
-    // Real addresses first so distance badges appear quickly; station fallbacks follow
     const pending = allIncidents
       .filter(i => { const k = cacheKey(i); return k && !geocodeCache.current.has(k) })
       .sort((a, b) => {
@@ -654,6 +654,7 @@ export default function IncidentFeedTab({ userPos, companyId }) {
         const bReal = !!(b.address || b.corner)
         return aReal === bReal ? 0 : aReal ? -1 : 1
       })
+    console.log('[geo] pending:', pending.length, 'cache size:', geocodeCache.current.size)
     if (!pending.length) return
 
     geocodingRef.current = true
@@ -661,19 +662,18 @@ export default function IncidentFeedTab({ userPos, companyId }) {
 
     (async () => {
       for (const inc of pending) {
-        if (cancelled) break
+        if (cancelled) { console.log('[geo] cancelled'); break }
         const key = cacheKey(inc)
         if (!key || geocodeCache.current.has(key)) continue
         geocodeCache.current.set(key, null)
         try {
           await new Promise(r => setTimeout(r, 250))
-          // DB load may have populated this key during the wait — skip Nominatim if so
           if (geocodeCache.current.get(key) !== null) { setGeoRev(v => v + 1); continue }
-          // Station fallback: search for the station by name rather than a street address
           const searchTerm = key.startsWith('~stn:')
             ? key.replace('~stn:', '') + ' fire station, Victoria, Australia'
             : key + ', Victoria, Australia'
           const q   = encodeURIComponent(searchTerm)
+          console.log('[geo] fetching:', key)
           const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1`, {
             headers: { 'User-Agent': 'TowBench/1.0' },
             signal: AbortSignal.timeout(5000),
@@ -682,17 +682,21 @@ export default function IncidentFeedTab({ userPos, companyId }) {
           if (data[0]) {
             const coords = { lat: +data[0].lat, lng: +data[0].lon }
             geocodeCache.current.set(key, coords)
+            console.log('[geo] got coords for', key, coords)
             supabase.from('geocode_cache')
               .upsert({ key, lat: coords.lat, lng: coords.lng }, { onConflict: 'key' })
               .then(() => {})
+          } else {
+            console.log('[geo] no result for', key)
           }
-        } catch { /* leave as null */ }
+        } catch (e) { console.log('[geo] error for', key, e?.message) }
         setGeoRev(v => v + 1)
       }
       geocodingRef.current = false
+      console.log('[geo] done')
     })()
 
-    return () => { cancelled = true; geocodingRef.current = false }
+    return () => { console.log('[geo] cleanup — cancelling'); cancelled = true; geocodingRef.current = false }
   }, [allIncidents, effectivePos])
 
   // Always compute distance when we have a position (used for badges + radius filter)
