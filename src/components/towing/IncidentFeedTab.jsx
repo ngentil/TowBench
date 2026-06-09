@@ -386,16 +386,18 @@ function IncidentCard({ incident, nearbyKm }) {
         })}
       </div>
 
+      {/* ── Row 4: description — always visible, large + bold for at-a-glance ── */}
+      {incident.description && (
+        <div style={{ padding: '0 12px 10px' }}>
+          <div style={{ fontFamily: MONO, fontSize: 13, fontWeight: 700, color: '#d07820', lineHeight: 1.55, letterSpacing: '0.02em' }}>
+            {incident.description}
+          </div>
+        </div>
+      )}
+
       {/* ── Expanded detail ── */}
       {open && (
         <div style={{ borderTop: '1px solid #1a1a1a', padding: '0 12px 12px', opacity: incident.is_cancelled ? 0.6 : 1 }}>
-
-          {/* Description */}
-          {incident.description && (
-            <div style={{ marginTop: 10, fontSize: 10, color: TXT, lineHeight: 1.6, background: '#0a0a0a', padding: '8px 10px', borderRadius: 2, border: '1px solid #1a1a1a', fontFamily: MONO }}>
-              {incident.description}
-            </div>
-          )}
 
           {/* Info grid — Address / Cross St / Street View tiles are tappable */}
           <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
@@ -490,14 +492,14 @@ function IncidentCard({ incident, nearbyKm }) {
                 const p = parsePageMsg(m.message)
                 return (
                   <div key={m.id ?? i} style={{
-                    padding: '7px 8px',
+                    padding: '10px 12px',
                     borderBottom: i < msgs.length - 1 ? `1px solid ${BRD2}` : 'none',
                   }}>
                     {/* Page header: time · unit · radio · appliances */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 3 }}>
-                      <span style={{ fontFamily: MONO, fontSize: 8, color: MUT, flexShrink: 0 }}>{fmtTime(m.timestamp)}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 4 }}>
+                      <span style={{ fontFamily: MONO, fontSize: 10, fontWeight: 700, color: MUT, flexShrink: 0 }}>{fmtTime(m.timestamp)}</span>
                       {m.alias && (
-                        <span style={{ fontFamily: MONO, fontSize: 8, fontWeight: 700, color: '#6090c0' }}>{m.alias}</span>
+                        <span style={{ fontFamily: MONO, fontSize: 10, fontWeight: 700, color: '#6090c0' }}>{m.alias}</span>
                       )}
                       {p.fgds?.map(f => <ChannelBadge key={f} fgd={f} />)}
                       {p.appliances?.map(a => {
@@ -515,7 +517,7 @@ function IncidentCard({ incident, nearbyKm }) {
                       )}
                     </div>
                     {/* Raw message */}
-                    <div style={{ fontFamily: MONO, fontSize: 8, color: BRD, lineHeight: 1.5, wordBreak: 'break-word' }}>
+                    <div style={{ fontFamily: MONO, fontSize: 12, fontWeight: 700, color: '#c87020', lineHeight: 1.6, wordBreak: 'break-word', marginTop: 4 }}>
                       {m.message || '—'}
                     </div>
                   </div>
