@@ -110,14 +110,8 @@ function AllocationInfoCard({ feature, acceptedJob, isLive, userEmail, userPos, 
         </div>
       )}
 
-      {isLive && (
+      {isLive && (acceptedJob) && (
         <div style={{ padding: '5px 8px 7px', borderTop: '1px solid #1e1e1e' }}>
-          {!acceptedJob && (
-            <button onClick={() => onAcceptJob(eventId)}
-              style={{ fontSize: 8, padding: '3px 9px', background: GRN + '22', border: `1px solid ${GRN}55`, color: GRN, borderRadius: 2, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", fontWeight: 700 }}>
-              ✓ Accept
-            </button>
-          )}
           {isAcceptedByMe && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={{ fontSize: 8, color: isOverdue ? '#cc2222' : GRN, fontFamily: "'IBM Plex Mono',monospace" }}>
