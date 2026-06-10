@@ -1,10 +1,13 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, useReducer } from 'react';
 import 'leaflet/dist/leaflet.css';
 import { ACC, MUT, BRD, TXT, GRN, SURF } from '../../lib/styles';
 import useWeather from '../../hooks/useWeather';
 import { timeIn, fmtTimer, haversineKm } from '../../lib/utils';
 import { supabase } from '../../lib/supabase';
 import { BRIDGE_URL } from '../../lib/constants';
+import { IncidentCard } from './IncidentFeedTab';
+import { getRecentVicPagers, dbRowToMessage } from '../../lib/db/incidents';
+import { mergeMessage } from '../../lib/useVicPagers';
 
 const ORANGE = '#e8670a';
 
@@ -107,14 +110,8 @@ function AllocationInfoCard({ feature, acceptedJob, isLive, userEmail, userPos, 
         </div>
       )}
 
-      {isLive && (
+      {isLive && (acceptedJob) && (
         <div style={{ padding: '5px 8px 7px', borderTop: '1px solid #1e1e1e' }}>
-          {!acceptedJob && (
-            <button onClick={() => onAcceptJob(eventId)}
-              style={{ fontSize: 8, padding: '3px 9px', background: GRN + '22', border: `1px solid ${GRN}55`, color: GRN, borderRadius: 2, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", fontWeight: 700 }}>
-              ✓ Accept
-            </button>
-          )}
           {isAcceptedByMe && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={{ fontSize: 8, color: isOverdue ? '#cc2222' : GRN, fontFamily: "'IBM Plex Mono',monospace" }}>
@@ -348,13 +345,19 @@ function BridgeInfoCard({ rec, dist, onClose, pos }) {
   );
 }
 
+function pagerReducer(state, action) {
+  if (action.type === 'SEED') return action.messages.reduce((acc, msg) => mergeMessage(acc, msg), state);
+  if (action.type === 'MERGE') return mergeMessage(state, action.msg);
+  return state;
+}
+
 export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, countdown, isStale, acceptedJobs, userEmail, onAcceptJob, onReleaseJob, companyConfig, companyId, userPos }) {
   const { rainSoon, maxProb, hoursUntil } = useWeather();
 
   // Layer toggles
   const [showActive,      setShowActive]      = useState(true);
-  const [showCleared,     setShowCleared]     = useState(true);
-  const [showHotspots,    setShowHotspots]    = useState(true);
+  const [showCleared,     setShowCleared]     = useState(false);
+  const [showHotspots,    setShowHotspots]    = useState(false);
   const [showTruck,       setShowTruck]       = useState(true);
   const [showBridges,     setShowBridges]     = useState(false);
   const [bridgeData,      setBridgeData]      = useState([]); // array of [lat,lng,h,label,btype]
@@ -364,6 +367,11 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
   const [vesselData,      setVesselData]      = useState([]);
   const [showAircraft,    setShowAircraft]    = useState(false);
   const [aircraftData,    setAircraftData]    = useState([]);
+  const [showPagerDots,   setShowPagerDots]   = useState(true);
+  const [pagerGeoCache,   setPagerGeoCache]   = useState(() => new Map());
+  const [pagerIncidents,  dispatchPager]      = useReducer(pagerReducer, {});
+  const [selectedPagerInc, setSelectedPagerInc] = useState(null);
+  const [pagerCardPos,    setPagerCardPos]    = useState({ x: 0, y: 0 });
 
   // Map state
   const [driverLocations, setDriverLocations] = useState([]);
@@ -423,6 +431,8 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
   const userPosRef              = useRef(null);
   const selectedLatLngRef       = useRef(null);
   const selectedBridgeLatLngRef = useRef(null);
+  const selectedPagerLatLngRef  = useRef(null);
+  const pagerLayerRef           = useRef(null);
   const clickTargetRef          = useRef(null);
 
   userPosRef.current     = userPos;
@@ -461,6 +471,32 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
 
     return () => { clearTimeout(debounceTimer); supabase.removeChannel(channel); };
   }, [companyId]);
+
+  // Load geocode cache from Supabase (populated by pager tab geocoding)
+  useEffect(() => {
+    supabase.from('geocode_cache').select('key, lat, lng')
+      .then(({ data }) => {
+        if (data) {
+          const m = new Map();
+          for (const row of data) m.set(row.key, { lat: row.lat, lng: row.lng });
+          setPagerGeoCache(m);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Load pager history + subscribe to new messages
+  useEffect(() => {
+    getRecentVicPagers(31)
+      .then(rows => dispatchPager({ type: 'SEED', messages: rows.map(dbRowToMessage) }))
+      .catch(() => {});
+    const channel = supabase.channel('ops-pager-live')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'vicpagers_messages' }, ({ new: row }) => {
+        dispatchPager({ type: 'MERGE', msg: dbRowToMessage(row) });
+      })
+      .subscribe();
+    return () => supabase.removeChannel(channel);
+  }, []);
 
   // Fetch all company depots with coords when trace panel opens
   useEffect(() => {
@@ -635,6 +671,7 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
       const emergencyLayer = L.layerGroup(); // not added by default — toggled on demand
       const vesselLayer    = L.layerGroup();
       const aircraftLayer  = L.layerGroup();
+      const pagerLayer     = L.layerGroup().addTo(map);
 
       activeLayerRef.current    = activeLayer;
       clearedLayerRef.current   = clearedLayer;
@@ -646,6 +683,7 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
       emergencyLayerRef.current = emergencyLayer;
       vesselLayerRef.current    = vesselLayer;
       aircraftLayerRef.current  = aircraftLayer;
+      pagerLayerRef.current     = pagerLayer;
       mapRef.current            = map;
 
       if (!document.getElementById('ops-full-style')) {
@@ -669,6 +707,11 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
         if (bll) {
           const bpt = map.latLngToContainerPoint([bll.lat, bll.lng]);
           setBridgeCardPos({ x: bpt.x, y: bpt.y });
+        }
+        const pll = selectedPagerLatLngRef.current;
+        if (pll) {
+          const ppt = map.latLngToContainerPoint([pll.lat, pll.lng]);
+          setPagerCardPos({ x: ppt.x, y: ppt.y });
         }
       };
       map.on('move zoom moveend zoomend', updateCardPos);
@@ -696,6 +739,8 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
         selectedLatLngRef.current = null;
         setSelectedBridge(null);
         selectedBridgeLatLngRef.current = null;
+        setSelectedPagerInc(null);
+        selectedPagerLatLngRef.current = null;
       });
 
       setMapReady(true);
@@ -790,6 +835,43 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
     });
   }, [mapReady, userPos, driverLocations, userEmail]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Rebuild pager incident dots
+  useEffect(() => {
+    const L = leafletRef.current, layer = pagerLayerRef.current;
+    if (!L || !layer) return;
+    layer.clearLayers();
+    const color = '#20a0c0';
+    const sz = 8;
+    Object.values(pagerIncidents).forEach(inc => {
+      if (inc.is_cancelled) return;
+      const key = inc.address || inc.corner;
+      if (!key) return;
+      const coords = pagerGeoCache.get(key);
+      if (!coords) return;
+      const dotHtml =
+        `<div style="position:relative;width:${sz}px;height:${sz}px">` +
+        `<div style="position:absolute;top:50%;left:50%;width:${sz}px;height:${sz}px;border-radius:50%;background:${color};animation:ops-pulse 2.5s ease-out infinite"></div>` +
+        `<div style="position:absolute;top:50%;left:50%;width:${sz}px;height:${sz}px;border-radius:50%;background:${color};transform:translate(-50%,-50%);opacity:0.9"></div>` +
+        `</div>`;
+      const marker = L.marker([coords.lat, coords.lng], {
+        icon: L.divIcon({ className: '', html: dotHtml, iconSize: [sz, sz], iconAnchor: [sz / 2, sz / 2] }),
+        bubblingMouseEvents: false, zIndexOffset: 110,
+      });
+      marker.addTo(layer);
+      const tip = [inc.event_type, inc.address].filter(Boolean).join(' · ');
+      if (tip) marker.bindTooltip(`📟 ${tip}`, { direction: 'top', className: 'towbench-tooltip' });
+      marker.on('click', e => {
+        L.DomEvent.stopPropagation(e);
+        const map = mapRef.current;
+        if (!map) return;
+        const pt = map.latLngToContainerPoint([coords.lat, coords.lng]);
+        setPagerCardPos({ x: pt.x, y: pt.y });
+        setSelectedPagerInc(inc);
+        selectedPagerLatLngRef.current = { lat: coords.lat, lng: coords.lng };
+      });
+    });
+  }, [mapReady, pagerIncidents, pagerGeoCache]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Show/hide layers
   useEffect(() => {
     const map = mapRef.current, al = activeLayerRef.current, cl = clearedLayerRef.current, hl = hotspotLayerRef.current, tl = truckLayerRef.current;
@@ -799,6 +881,12 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
     if (showHotspots) map.addLayer(hl);  else map.removeLayer(hl);
     if (showTruck)    map.addLayer(tl);  else map.removeLayer(tl);
   }, [showActive, showCleared, showHotspots, showTruck]);
+
+  useEffect(() => {
+    const map = mapRef.current, pl = pagerLayerRef.current;
+    if (!map || !pl) return;
+    if (showPagerDots) map.addLayer(pl); else map.removeLayer(pl);
+  }, [showPagerDots]);
 
   // Fetch bridge data once when layer is first enabled
   useEffect(() => {
@@ -1030,6 +1118,10 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
   }, [showAircraft, aircraftData, mapReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const liveCount    = liveIds.size;
+  const pagerDotCount = Object.values(pagerIncidents).filter(inc => {
+    const key = inc.address || inc.corner;
+    return key && pagerGeoCache.has(key) && !inc.is_cancelled;
+  }).length;
   const cutoff24h    = Date.now() - 24 * 60 * 60 * 1000;
   const clearedCount = allFeatures.filter(f => {
     const id = String(f.properties?.eventId || '');
@@ -1081,9 +1173,10 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* Layer toggle bar */}
       <div style={{ padding: '6px 10px', display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0, overflowX: 'auto', overflowY: 'hidden', scrollbarWidth: 'none', background: '#0a0a0a', borderBottom: '1px solid ' + BRD }}>
-        <LayerBadge active={showActive}   onClick={() => setShowActive(v  => !v)}  color={GRN}    label={`🟢 Active ${liveCount}`} />
-        <LayerBadge active={showCleared}  onClick={() => setShowCleared(v => !v)}  color="#666"   label={`⚫ Cleared ${clearedCount}`} />
-        <LayerBadge active={showHotspots} onClick={() => setShowHotspots(v => !v)} color={ORANGE} label="🟠 Hotspots" />
+        <LayerBadge active={showActive}    onClick={() => setShowActive(v    => !v)} color={GRN}      label={`🟢 Active ${liveCount}`} />
+        <LayerBadge active={showCleared}   onClick={() => setShowCleared(v   => !v)} color="#666"     label={`⚫ Cleared ${clearedCount}`} />
+        <LayerBadge active={showHotspots}  onClick={() => setShowHotspots(v  => !v)} color={ORANGE}   label="🟠 Hotspots" />
+        <LayerBadge active={showPagerDots} onClick={() => setShowPagerDots(v => !v)} color="#20a0c0"  label={`📟 Pager ${pagerDotCount}`} />
         <LayerBadge active={showTruck}    onClick={() => setShowTruck(v   => !v)}  color={GRN}    label="🚛 Trucks" />
         <LayerBadge
           active={traceOpen}
@@ -1609,6 +1702,33 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
             onClose={() => { setSelectedBridge(null); selectedBridgeLatLngRef.current = null; }}
             pos={bridgeCardPos}
           />
+        )}
+
+        {selectedPagerInc && (
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              position: 'absolute',
+              left: Math.min(pagerCardPos.x + 14, (containerRef.current?.clientWidth || 400) - 314),
+              top: Math.max(8, pagerCardPos.y - 8),
+              zIndex: 1600, width: 300, pointerEvents: 'all',
+              boxShadow: '0 4px 28px #000c',
+              maxHeight: '72vh', overflowY: 'auto',
+              borderRadius: 2,
+            }}
+          >
+            <div style={{
+              display: 'flex', justifyContent: 'flex-end', alignItems: 'center',
+              padding: '4px 6px', background: '#0d0d0d',
+              borderBottom: '1px solid #1a1a1a', borderRadius: '2px 2px 0 0',
+            }}>
+              <button
+                onClick={() => { setSelectedPagerInc(null); selectedPagerLatLngRef.current = null; }}
+                style={{ background: 'none', border: 'none', color: '#666', cursor: 'pointer', fontSize: 16, padding: '0 2px', lineHeight: 1 }}
+              >×</button>
+            </div>
+            <IncidentCard incident={selectedPagerInc} nearbyKm={0} initialOpen={true} />
+          </div>
         )}
       </div>
 
