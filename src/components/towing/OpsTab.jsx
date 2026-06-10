@@ -358,7 +358,7 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
   const [showActive,      setShowActive]      = useState(true);
   const [showCleared,     setShowCleared]     = useState(false);
   const [showHotspots,    setShowHotspots]    = useState(false);
-  const [showTruck,       setShowTruck]       = useState(true);
+  const [showTruck,       setShowTruck]       = useState(false);
   const [showBridges,     setShowBridges]     = useState(false);
   const [bridgeData,      setBridgeData]      = useState([]); // array of [lat,lng,h,label,btype]
   const [showEmergency,   setShowEmergency]   = useState(false);
