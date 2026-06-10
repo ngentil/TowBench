@@ -275,8 +275,8 @@ function buildDispatch(msgs) {
   }
 }
 
-function IncidentCard({ incident, nearbyKm }) {
-  const [open, setOpen] = useState(false)
+export function IncidentCard({ incident, nearbyKm, initialOpen = false }) {
+  const [open, setOpen] = useState(initialOpen)
   const colour  = eventColour(incident.event_type, incident.is_cancelled)
   const label   = EVENT_LABELS[incident.event_type] || incident.event_type || 'INCIDENT'
   const units   = incident.responding_units || []
