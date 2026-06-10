@@ -61,7 +61,7 @@ const FILTERS = [
 ]
 const REAL_FILTERS = FILTERS.filter(f => f.id !== 'sep')
 
-const DEFAULT_FILTERS = new Set(['veh_inc', 'vehicle'])
+const DEFAULT_FILTERS = new Set(['vehicle'])
 
 const SORT_OPTS = [
   { id: 'newest',  label: '↓ Newest' },
