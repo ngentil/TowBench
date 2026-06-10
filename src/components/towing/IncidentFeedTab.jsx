@@ -61,7 +61,7 @@ const FILTERS = [
 ]
 const REAL_FILTERS = FILTERS.filter(f => f.id !== 'sep')
 
-const DEFAULT_FILTERS = new Set(['veh_inc'])
+const DEFAULT_FILTERS = new Set(['veh_inc', 'vehicle'])
 
 const SORT_OPTS = [
   { id: 'newest',  label: '↓ Newest' },
@@ -567,7 +567,7 @@ function incidentsReducer(state, action) {
 export default function IncidentFeedTab({ userPos, companyId }) {
   const [active,       setActive]       = useState(DEFAULT_FILTERS)
   const [sortBy,       setSortBy]       = useState('newest')
-  const [nearbyKm, setNearbyKm] = useState(() => Number(localStorage.getItem('towbench_nearby_km') ?? 0))
+  const [nearbyKm, setNearbyKm] = useState(() => Number(localStorage.getItem('towbench_nearby_km') ?? 15))
   const setRadius = km => { setNearbyKm(km); localStorage.setItem('towbench_nearby_km', km) }
 
   // Depots for source selector
