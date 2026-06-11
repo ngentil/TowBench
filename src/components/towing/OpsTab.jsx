@@ -20,7 +20,7 @@ const traceInp = {
 function LayerBadge({ active, onClick, color, label }) {
   return (
     <button onClick={onClick}
-      style={{ fontSize: 8, fontWeight: 700, padding: '3px 8px', borderRadius: 2, cursor: 'pointer',
+      style={{ fontSize: 8, fontWeight: 700, padding: '7px 10px', minHeight: 36, borderRadius: 2, cursor: 'pointer',
         fontFamily: "'IBM Plex Mono',monospace", letterSpacing: '0.06em',
         border: `1px solid ${active ? color + '88' : '#2a2a2a'}`,
         color: active ? color : '#444',
@@ -662,9 +662,9 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
       L.control.attribution({ prefix: false }).addAttribution('© <a href="https://openstreetmap.org" style="color:#666">OpenStreetMap</a>').addTo(map);
 
       const activeLayer   = L.layerGroup().addTo(map);
-      const clearedLayer  = L.layerGroup().addTo(map);
-      const hotspotLayer  = L.layerGroup().addTo(map);
-      const truckLayer    = L.layerGroup().addTo(map);
+      const clearedLayer  = L.layerGroup(); // off by default — showCleared=false
+      const hotspotLayer  = L.layerGroup(); // off by default — showHotspots=false
+      const truckLayer    = L.layerGroup(); // off by default — showTruck=false
       const routeLayer    = L.layerGroup().addTo(map);
       const tracePinLayer = L.layerGroup().addTo(map);
       const bridgeLayer   = L.layerGroup(); // not added by default — toggled on demand

@@ -839,7 +839,7 @@ export default function IncidentFeedTab({ userPos, companyId }) {
               style={{
                 fontFamily: MONO, fontSize: 9, color: MUT,
                 background: 'none', border: `1px solid ${BRD}`, cursor: 'pointer',
-                padding: '2px 8px', letterSpacing: '0.05em', whiteSpace: 'nowrap',
+                padding: '7px 10px', minHeight: 36, letterSpacing: '0.05em', whiteSpace: 'nowrap',
               }}
             >
               ALL
@@ -850,7 +850,7 @@ export default function IncidentFeedTab({ userPos, companyId }) {
             style={{
               fontFamily: MONO, fontSize: 9, color: MUT,
               background: 'none', border: `1px solid ${BRD}`, cursor: 'pointer',
-              padding: '2px 8px', letterSpacing: '0.05em', whiteSpace: 'nowrap',
+              padding: '7px 10px', minHeight: 36, letterSpacing: '0.05em', whiteSpace: 'nowrap',
             }}
           >
             RESET
@@ -873,7 +873,8 @@ export default function IncidentFeedTab({ userPos, companyId }) {
                   fontWeight:    700,
                   letterSpacing: '0.08em',
                   textTransform: 'uppercase',
-                  padding:       '4px 10px',
+                  padding:       '8px 12px',
+                  minHeight:     36,
                   cursor:        'pointer',
                   border:        `1px solid ${active.has(f.id) ? f.colour : BRD}`,
                   background:    active.has(f.id) ? f.colour + '22' : 'transparent',
@@ -892,7 +893,7 @@ export default function IncidentFeedTab({ userPos, companyId }) {
         <span style={{ fontSize: 8, color: MUT, letterSpacing: '0.08em', textTransform: 'uppercase', flexShrink: 0 }}>📍 Nearby pulse</span>
         {NEARBY_OPTS.map(km => (
           <button key={km} onClick={() => setRadius(km)}
-            style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', padding: '4px 7px', borderRadius: 2, cursor: 'pointer', fontFamily: MONO,
+            style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', padding: '7px 10px', minHeight: 36, borderRadius: 2, cursor: 'pointer', fontFamily: MONO,
               background: nearbyKm === km ? '#cc222222' : '#0d0d0d',
               border: `1px solid ${nearbyKm === km ? '#cc2222' : '#2a2a2a'}`,
               color: nearbyKm === km ? '#cc2222' : MUT }}>
@@ -917,7 +918,7 @@ export default function IncidentFeedTab({ userPos, companyId }) {
         <button
           onClick={() => setLocationSource('auto')}
           style={{
-            fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', padding: '4px 7px', borderRadius: 2, cursor: 'pointer', fontFamily: MONO,
+            fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', padding: '7px 10px', minHeight: 36, borderRadius: 2, cursor: 'pointer', fontFamily: MONO,
             background: locationSource === 'auto' ? (effectivePos ? ACC + '11' : '#1a1a1a') : '#0d0d0d',
             border: `1px solid ${locationSource === 'auto' ? (effectivePos ? ACC : '#333') : '#2a2a2a'}`,
             color: locationSource === 'auto' ? (effectivePos ? ACC : '#555') : MUT,
@@ -927,7 +928,7 @@ export default function IncidentFeedTab({ userPos, companyId }) {
         <button
           onClick={() => setLocationSource('gps')}
           style={{
-            fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', padding: '4px 7px', borderRadius: 2, cursor: 'pointer', fontFamily: MONO,
+            fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', padding: '7px 10px', minHeight: 36, borderRadius: 2, cursor: 'pointer', fontFamily: MONO,
             background: locationSource === 'gps' ? (userPos ? GRN + '11' : '#1a1a1a') : '#0d0d0d',
             border: `1px solid ${locationSource === 'gps' ? (userPos ? GRN : '#333') : '#2a2a2a'}`,
             color: locationSource === 'gps' ? (userPos ? GRN : '#555') : MUT,
@@ -937,7 +938,7 @@ export default function IncidentFeedTab({ userPos, companyId }) {
         {depots.map(d => (
           <button key={d.id} onClick={() => setLocationSource(String(d.id))}
             style={{
-              fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', padding: '4px 7px', borderRadius: 2, cursor: 'pointer', fontFamily: MONO,
+              fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', padding: '7px 10px', minHeight: 36, borderRadius: 2, cursor: 'pointer', fontFamily: MONO,
               background: locationSource === String(d.id) ? '#1a150022' : '#0d0d0d',
               border: `1px solid ${locationSource === String(d.id) ? '#7a6a30' : '#2a2a2a'}`,
               color: locationSource === String(d.id) ? '#c8a84b' : MUT,
@@ -953,7 +954,7 @@ export default function IncidentFeedTab({ userPos, companyId }) {
         {SORT_OPTS.map(opt => (
           <button key={opt.id} onClick={() => setSortBy(opt.id)}
             style={{
-              fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', padding: '4px 8px', borderRadius: 2, cursor: 'pointer', fontFamily: MONO,
+              fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', padding: '7px 10px', minHeight: 36, borderRadius: 2, cursor: 'pointer', fontFamily: MONO,
               background: sortBy === opt.id ? ACC + '22' : '#0d0d0d',
               border: `1px solid ${sortBy === opt.id ? ACC : '#2a2a2a'}`,
               color: sortBy === opt.id ? ACC : MUT,

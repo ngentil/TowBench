@@ -324,7 +324,7 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, co
       <div style={{ background: SURF, borderBottom: '1px solid ' + BRD, overflowX: 'auto', overflowY: 'hidden', display: 'flex', scrollbarWidth: 'none' }}>
         {TABS.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
-            style={{ flexShrink: 0, padding: '8px 14px', fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: tab === t.id ? ACC : MUT, cursor: 'pointer', border: 'none', background: 'none', borderBottom: tab === t.id ? '2px solid ' + ACC : '2px solid transparent', fontFamily: "'IBM Plex Mono',monospace", whiteSpace: 'nowrap' }}>
+            style={{ flexShrink: 0, padding: '13px 16px', minHeight: 44, fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: tab === t.id ? ACC : MUT, cursor: 'pointer', border: 'none', background: 'none', borderBottom: tab === t.id ? '2px solid ' + ACC : '2px solid transparent', fontFamily: "'IBM Plex Mono',monospace", whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center' }}>
             {t.id === 'waze'
               ? <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                   <img src="https://www.waze.com/favicon.ico" alt="Waze" style={{ width: 14, height: 14, opacity: tab === 'waze' ? 1 : 0.45 }} />
@@ -336,7 +336,7 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, co
         {/* Tab order settings — always visible, pinned to the right */}
         <div style={{ flex: 1 }} />
         <button onClick={() => setTab('taborder')}
-          style={{ flexShrink: 0, padding: '8px 14px', fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: tab === 'taborder' ? ACC : MUT, cursor: 'pointer', border: 'none', background: 'none', borderBottom: tab === 'taborder' ? '2px solid ' + ACC : '2px solid transparent', fontFamily: "'IBM Plex Mono',monospace", whiteSpace: 'nowrap' }}>
+          style={{ flexShrink: 0, padding: '13px 16px', minHeight: 44, fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: tab === 'taborder' ? ACC : MUT, cursor: 'pointer', border: 'none', background: 'none', borderBottom: tab === 'taborder' ? '2px solid ' + ACC : '2px solid transparent', fontFamily: "'IBM Plex Mono',monospace", whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center' }}>
           ⇅ Tabs
         </button>
       </div>
