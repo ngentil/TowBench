@@ -129,14 +129,14 @@ export default function AlertsTab() {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {lastFetch && <span style={{ fontSize: 8, color: '#444', fontFamily: "'IBM Plex Mono',monospace" }}>refresh in {countdown}s</span>}
-          <button onClick={fetchAlerts} style={{ fontSize: 8, fontWeight: 700, padding: '3px 9px', borderRadius: 2, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", letterSpacing: '0.06em', border: '1px solid #2a2a2a', color: MUT, background: '#0d0d0d' }}>↺ Refresh</button>
+          <button onClick={fetchAlerts} style={{ fontSize: 8, fontWeight: 700, padding: '7px 12px', minHeight: 36, borderRadius: 2, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", letterSpacing: '0.06em', border: '1px solid #2a2a2a', color: MUT, background: '#0d0d0d' }}>↺ Refresh</button>
         </div>
       </div>
       <div style={{ display: 'flex', gap: 4, marginBottom: 14, flexWrap: 'wrap' }}>
         {FILTERS.map(f => {
           const cnt = f.id === 'all' ? alerts.length : (counts[f.id] || 0);
           const active = filter === f.id;
-          return <button key={f.id} onClick={() => setFilter(f.id)} style={{ fontSize: 8, fontWeight: 700, padding: '3px 9px', borderRadius: 2, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", letterSpacing: '0.06em', border: `1px solid ${active ? ACC + '88' : '#2a2a2a'}`, color: active ? ACC : MUT, background: active ? ACC + '11' : '#0d0d0d' }}>{f.label}{cnt > 0 ? ` (${cnt})` : ''}</button>;
+          return <button key={f.id} onClick={() => setFilter(f.id)} style={{ fontSize: 8, fontWeight: 700, padding: '7px 12px', minHeight: 36, borderRadius: 2, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", letterSpacing: '0.06em', border: `1px solid ${active ? ACC + '88' : '#2a2a2a'}`, color: active ? ACC : MUT, background: active ? ACC + '11' : '#0d0d0d' }}>{f.label}{cnt > 0 ? ` (${cnt})` : ''}</button>;
         })}
       </div>
       {loading && <div style={{ fontSize: 10, color: MUT, textAlign: 'center', padding: '32px 0' }}>Loading…</div>}
