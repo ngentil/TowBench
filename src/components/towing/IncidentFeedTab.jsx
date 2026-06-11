@@ -48,7 +48,8 @@ const FILTERS = [
   { id: 'vehicle',  label: 'VEHICLE',  colour: '#4090d0', match: i => {
       const label = (EVENT_LABELS[i.event_type] || i.event_type || '').toLowerCase()
       const desc  = (i.description || '').toLowerCase()
-      return label.includes('veh') || desc.includes('veh')
+      const text  = label + ' ' + desc
+      return /veh|truck|semi|b-double|prime mover|motorcycle|motor cycle|motorbike|ute|van|bus|tram|suv|4wd|sedan|hatchback|wagon/.test(text)
     }},
   { id: 'alarm',    label: 'ALARM',    colour: '#6090c0', match: i => i.event_type?.startsWith('ALARC') },
   { id: 'medical',  label: 'MEDICAL',  colour: '#8060c0', match: i => i.event_type === 'MR' },
