@@ -160,6 +160,10 @@ export default function ManualDispatchTab({ companyId, companyConfig, userEmail 
   const [saved,   setSaved]   = useState(false);
   const [err,     setErr]     = useState('');
 
+  // Location state
+  const [locLoading, setLocLoading] = useState(false);
+  const [locErr,     setLocErr]     = useState('');
+
   useEffect(() => {
     getTrucks().then(data => setTrucks(data || [])).catch(() => {});
     getDepots().then(data => setDepots(data || [])).catch(() => {});
@@ -423,16 +427,25 @@ export default function ManualDispatchTab({ companyId, companyConfig, userEmail 
             placeholder="Search pickup address…"
           />
           {!pointA && navigator.geolocation && (
-            <button onClick={async () => {
-              try {
-                const pos = await new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej, { enableHighAccuracy: true, timeout: 10_000 }));
-                const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${pos.coords.latitude}&lon=${pos.coords.longitude}`).then(x => x.json());
-                const a = r.address || {}; const label = [a.road || a.pedestrian || '', a.suburb || a.city || ''].filter(Boolean).join(', ') || r.display_name;
-                setPointA({ lat: pos.coords.latitude, lng: pos.coords.longitude, label }); setSearchA(label.split(',')[0].trim());
-              } catch {}
-            }} style={{ marginTop: 5, width: '100%', padding: '5px 0', borderRadius: 2, cursor: 'pointer', border: '1px solid #2a4a2a', color: GRN, background: '#0a150a', fontSize: 9, fontWeight: 700, fontFamily: "'IBM Plex Mono',monospace", letterSpacing: '0.06em' }}>
-              📍 Use my location
-            </button>
+            <>
+              <button onClick={async () => {
+                setLocLoading(true); setLocErr('');
+                try {
+                  const pos = await new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej, { enableHighAccuracy: true, timeout: 10_000 }));
+                  const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${pos.coords.latitude}&lon=${pos.coords.longitude}`).then(x => x.json());
+                  const a = r.address || {}; const label = [a.road || a.pedestrian || '', a.suburb || a.city || ''].filter(Boolean).join(', ') || r.display_name;
+                  setPointA({ lat: pos.coords.latitude, lng: pos.coords.longitude, label }); setSearchA(label.split(',')[0].trim());
+                } catch (e) {
+                  const msg = e?.code === 1 ? 'Location permission denied — check browser settings'
+                            : e?.code === 3 ? 'Location timed out — try again'
+                            : 'Could not get location';
+                  setLocErr(msg);
+                } finally { setLocLoading(false); }
+              }} disabled={locLoading} style={{ marginTop: 5, width: '100%', padding: '5px 0', borderRadius: 2, cursor: locLoading ? 'default' : 'pointer', border: '1px solid #2a4a2a', color: GRN, background: '#0a150a', fontSize: 9, fontWeight: 700, fontFamily: "'IBM Plex Mono',monospace", letterSpacing: '0.06em', opacity: locLoading ? 0.6 : 1 }}>
+                {locLoading ? '…getting location' : '📍 Use my location'}
+              </button>
+              {locErr && <div style={{ fontSize: 8, color: RED, marginTop: 3 }}>{locErr}</div>}
+            </>
           )}
           {pointA && <div style={{ fontSize: 7, color: GRN, marginTop: 3 }}>📍 {pointA.label.split(',').slice(0,2).join(',').trim()}</div>}
         </div>
