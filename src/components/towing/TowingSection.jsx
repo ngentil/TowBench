@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { ACC, MUT, BRD, SURF, TXT } from '../../lib/styles';
 import TowAllocationsTab from './TowAllocationsTab';
 import FleetTab from './FleetTab';
@@ -21,11 +21,15 @@ import AircraftTab from './AircraftTab';
 import IncidentFeedTab from './IncidentFeedTab';
 import TabOrderSettings from '../settings/TabOrderSettings';
 import { applyTabOrder } from '../../lib/tabOrder';
-const VICROADS_PROXY = '/.netlify/functions/vicroads-allocations';
 import useDriverLocation from '../../hooks/useDriverLocation';
 import { useBridgeAlerts } from '../../hooks/useBridgeAlerts';
 
 const POLL_MS = 60_000;
+
+const STATE_PROXIES = {
+  vic: '/.netlify/functions/vicroads-allocations',
+  // nsw, qld, wa, sa — added as each state is implemented
+};
 
 export default function TowingSection({ role, isAdmin, isDispatch, userEmail, companyId, companyConfig, setCompanyConfig, profile, setProfile }) {
   const [isStandalone,      setIsStandalone]      = useState(false);
@@ -129,6 +133,12 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, co
     if (!ids.includes(tab)) setTab('allocations');
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── State-based proxy routing ────────────────────────────────────────────
+  const allocationsProxy = useMemo(
+    () => STATE_PROXIES[companyConfig?.state] || STATE_PROXIES.vic,
+    [companyConfig?.state]
+  );
+
   // ── Shared allocation state ─────────────────────────────────────────────
   const [allFeatures,  setAllFeatures]  = useState([]);
   const [liveIds,      setLiveIds]      = useState(new Set());
@@ -206,7 +216,7 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, co
 
   const fetchAllocations = useCallback(async () => {
     try {
-      const res  = await fetch(VICROADS_PROXY);
+      const res  = await fetch(allocationsProxy);
       if (!res.ok) throw new Error(`API returned ${res.status}`);
       const data = await res.json();
       const all  = data.data?.features || data.features || [];
@@ -230,7 +240,7 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, co
       setCountdown(POLL_MS / 1000);
       fetchAcceptedJobs();
     } catch (e) { setErr(e.message); }
-  }, [fetchAcceptedJobs]);
+  }, [fetchAcceptedJobs, allocationsProxy]);
 
   useEffect(() => {
     fetchAllocations();

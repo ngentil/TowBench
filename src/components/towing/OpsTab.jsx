@@ -652,11 +652,34 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
   // Map init
   useEffect(() => {
     if (!containerRef.current) return;
-    import('leaflet').then(mod => {
+    import('leaflet').then(async mod => {
       const L = mod.default || mod;
       leafletRef.current = L;
       if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
-      const map = L.map(containerRef.current, { center: [-37.814, 144.963], zoom: 11, zoomControl: true, attributionControl: false });
+
+      // Center priority: primary depot → state default → Australia
+      const STATE_CENTERS = {
+        vic: [-37.814, 144.963],
+        nsw: [-33.868, 151.209],
+        qld: [-27.469, 153.026],
+        sa:  [-34.928, 138.601],
+        wa:  [-31.951, 115.861],
+        tas: [-42.882, 147.327],
+        nt:  [-12.462, 130.841],
+        act: [-35.282, 149.129],
+      };
+      const stateCenter = STATE_CENTERS[companyConfig?.state] || [-25.274, 133.775];
+      let initCenter = stateCenter;
+      try {
+        const { data: depots } = await supabase.from('depots')
+          .select('lat, lng').eq('company_id', companyId)
+          .not('lat', 'is', null).order('name').limit(1);
+        if (depots?.[0]?.lat && depots?.[0]?.lng) {
+          initCenter = [depots[0].lat, depots[0].lng];
+        }
+      } catch (_) {}
+
+      const map = L.map(containerRef.current, { center: initCenter, zoom: 11, zoomControl: true, attributionControl: false });
       map.getPanes().tilePane.style.filter = 'invert(100%) hue-rotate(180deg) brightness(90%) contrast(90%) saturate(60%)';
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { subdomains: 'abc', maxZoom: 19 }).addTo(map);
       L.control.attribution({ prefix: false }).addAttribution('© <a href="https://openstreetmap.org" style="color:#666">OpenStreetMap</a>').addTo(map);
