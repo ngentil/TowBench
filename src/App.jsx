@@ -569,7 +569,7 @@ function DispatcherFlow({ onSuccess }) {
           <div>
             <div style={labelStyle}>Confirmation Code</div>
             <input type="text" value={otp} onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
-              placeholder="123456" autoFocus inputMode="numeric" maxLength={6}
+              placeholder="12345678" autoFocus inputMode="numeric" maxLength={8}
               style={{ ...inputStyle, letterSpacing: '0.2em', fontSize: 16 }} />
           </div>
           {err && <div style={{ fontSize: 9, color: RED, lineHeight: 1.5 }}>{err}</div>}
@@ -747,7 +747,7 @@ function SoleOperatorFlow({ onSuccess }) {
           <div>
             <div style={labelStyle}>Confirmation Code</div>
             <input type="text" value={otp} onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
-              placeholder="123456" autoFocus inputMode="numeric" maxLength={6}
+              placeholder="12345678" autoFocus inputMode="numeric" maxLength={8}
               style={{ ...inputStyle, letterSpacing: '0.2em', fontSize: 16 }} />
           </div>
           {err && <div style={{ fontSize: 9, color: RED, lineHeight: 1.5 }}>{err}</div>}
