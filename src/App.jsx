@@ -4,6 +4,7 @@ import { BG, SURF, BRD, TXT, MUT, ACC, btnG, sm } from './lib/styles';
 import TowingSection from './components/towing/TowingSection';
 import { ThemeContext } from './lib/ThemeContext';
 import AuthScreen from './components/auth/AuthScreen';
+import OnboardingScreen from './components/auth/OnboardingScreen';
 
 function getGreeting(name) {
   const h = new Date().getHours();
@@ -30,6 +31,7 @@ function requestGPS() {
 export default function App() {
   const [session,           setSession]           = useState(null);
   const [authChecked,       setAuthChecked]       = useState(false);
+  const [profileChecked,    setProfileChecked]    = useState(false);
   const [profile,           setProfile]           = useState(null); // user_profiles row
   const [truck,             setTruck]             = useState(null); // tow_trucks row (drivers only)
   const [effectiveCompanyId, setEffectiveCompanyId] = useState(null); // null for super_admin until resolved
@@ -61,6 +63,7 @@ export default function App() {
     const tr   = truckRes.data || null;
     setProfile(prof);
     setTruck(tr);
+    setProfileChecked(true);
     if (welcome) {
       const name = tr?.first_name || tr?.driver_name || userEmail.split('@')[0];
       setGreeting(getGreeting(name));
@@ -90,6 +93,7 @@ export default function App() {
       } else {
         setProfile(null);
         setTruck(null);
+        setProfileChecked(false);
       }
     });
     return () => { clearTimeout(timeout); subscription.unsubscribe(); };
@@ -140,6 +144,25 @@ export default function App() {
 
   if (!session) {
     return <AuthScreen />;
+  }
+
+  if (!profileChecked) {
+    return (
+      <div style={{ minHeight: '100vh', background: BG, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ fontSize: 10, color: MUT, fontFamily: "'IBM Plex Mono',monospace", letterSpacing: '0.18em', textTransform: 'uppercase' }}>
+          Loading…
+        </div>
+      </div>
+    );
+  }
+
+  if (!truck) {
+    return (
+      <OnboardingScreen
+        session={session}
+        onComplete={() => loadUserData(session.user.id, session.user.email, false)}
+      />
+    );
   }
 
   if (showGreeting) {

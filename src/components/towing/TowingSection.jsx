@@ -175,7 +175,7 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, us
 
   useEffect(() => {
     fetchAcceptedJobs();
-    getRecentAllocations(744)
+    getRecentAllocations()
       .then(logged => {
         setAllFeatures(prev => mergeFeatures([], [...prev, ...logged]));
         setLoading(false);

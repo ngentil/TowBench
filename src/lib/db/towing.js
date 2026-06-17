@@ -116,12 +116,10 @@ export async function getAllocationsForAnalytics(days = 31) {
   return data || [];
 }
 
-export async function getRecentAllocations(hours = 744) {
-  const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+export async function getRecentAllocations() {
   const { data, error } = await supabase
     .from('tow_allocation_log')
     .select('*')
-    .gte('last_seen', since)
     .order('last_seen', { ascending: false });
   if (error) throw error;
   return (data || []).map(r => ({
