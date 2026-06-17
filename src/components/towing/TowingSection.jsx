@@ -175,7 +175,7 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, us
 
   useEffect(() => {
     fetchAcceptedJobs();
-    getRecentAllocations(744)
+    getRecentAllocations()
       .then(logged => {
         setAllFeatures(prev => mergeFeatures([], [...prev, ...logged]));
         setLoading(false);
@@ -316,7 +316,7 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, us
           <TowInsTab companyId={companyId} userEmail={userEmail} isDispatch={isDispatch} companyConfig={companyConfig} />
         )}
         {tab === 'analytics' && (
-          <TowAnalyticsTab allFeatures={allFeatures} liveIds={liveIds} loading={loading} userEmail={userEmail} />
+          <TowAnalyticsTab liveIds={liveIds} />
         )}
 
         {tab === 'depots'    && <DepotsTab isAdmin={isAdmin} companyId={companyId} />}

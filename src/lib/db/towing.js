@@ -116,15 +116,22 @@ export async function getAllocationsForAnalytics(days = 31) {
   return data || [];
 }
 
-export async function getRecentAllocations(hours = 744) {
-  const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
-  const { data, error } = await supabase
-    .from('tow_allocation_log')
-    .select('*')
-    .gte('last_seen', since)
-    .order('last_seen', { ascending: false });
-  if (error) throw error;
-  return (data || []).map(r => ({
+export async function getRecentAllocations() {
+  // Supabase PostgREST caps at 1000 rows by default — paginate to fetch all.
+  const PAGE = 1000;
+  let all = [], from = 0;
+  while (true) {
+    const { data, error } = await supabase
+      .from('tow_allocation_log')
+      .select('*')
+      .order('last_seen', { ascending: false })
+      .range(from, from + PAGE - 1);
+    if (error) throw error;
+    if (data?.length) all = all.concat(data);
+    if (!data?.length || data.length < PAGE) break;
+    from += PAGE;
+  }
+  return all.map(r => ({
     ...r.data,
     _logMeta: { firstSeen: r.first_seen, lastSeen: r.last_seen, clearedAt: r.cleared_at },
   }));
