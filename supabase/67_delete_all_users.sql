@@ -15,10 +15,9 @@ delete from map_notes;
 delete from driver_locations;
 delete from tow_trucks;
 delete from depots;
+delete from invite_codes;
 delete from company_config;
 delete from user_profiles;
-
--- Companies (optional — safe to keep or clear)
 delete from companies;
 
 -- Auth users — cascades to anything still referencing auth.users(id)
