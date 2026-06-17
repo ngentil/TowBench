@@ -6,6 +6,7 @@ export default function BrandingTab({ companyConfig, setCompanyConfig, companyId
   const [name,   setName]   = useState(companyConfig.company_name || '');
   const [accent, setAccent] = useState(companyConfig.accent_color || '#e8670a');
   const [logo,   setLogo]   = useState(companyConfig.logo_url || '');
+  const [state,  setState]  = useState(companyConfig.state || 'vic');
   const [saving,   setSaving]   = useState(false);
   const [saved,    setSaved]    = useState(false);
   const [err,      setErr]      = useState('');
@@ -21,6 +22,7 @@ export default function BrandingTab({ companyConfig, setCompanyConfig, companyId
       company_name: name.trim() || 'TowBench',
       accent_color: accent,
       logo_url: logo.trim() || null,
+      state: state,
       updated_at: new Date().toISOString(),
     };
     const { data, error } = await supabase.from('company_config')
@@ -55,6 +57,19 @@ export default function BrandingTab({ companyConfig, setCompanyConfig, companyId
               style={{ ...inp, width: 110, fontFamily: "'IBM Plex Mono',monospace" }} placeholder="#e8670a" />
             <div style={{ fontSize: 9, color: MUT }}>Live preview</div>
           </div>
+        )}
+        {row('State / Territory',
+          <select value={state} onChange={e => setState(e.target.value)}
+            style={{ ...inp, width: '100%', boxSizing: 'border-box', fontFamily: "'IBM Plex Mono',monospace" }}>
+            <option value="vic">Victoria (VIC)</option>
+            <option value="nsw">New South Wales (NSW)</option>
+            <option value="qld">Queensland (QLD)</option>
+            <option value="wa">Western Australia (WA)</option>
+            <option value="sa">South Australia (SA)</option>
+            <option value="tas">Tasmania (TAS)</option>
+            <option value="nt">Northern Territory (NT)</option>
+            <option value="act">Australian Capital Territory (ACT)</option>
+          </select>
         )}
         {row('Logo URL (optional)',
           <div>
