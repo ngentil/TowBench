@@ -653,7 +653,7 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
       leafletRef.current = L;
       if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
 
-      // Center priority: primary depot → state default → Melbourne
+      // Center priority: GPS → primary depot → state default → Melbourne
       const STATE_CENTERS = {
         vic: [-37.814, 144.963],
         nsw: [-33.868, 151.209],
@@ -673,6 +673,8 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
           initCenter = [depots[0].lat, depots[0].lng];
         }
       } catch (_) {}
+      // GPS beats everything if available
+      if (userPos?.lat && userPos?.lng) initCenter = [userPos.lat, userPos.lng];
 
       const map = L.map(containerRef.current, { center: initCenter, zoom: 11, zoomControl: true, attributionControl: false });
       map.getPanes().tilePane.style.filter = 'invert(100%) hue-rotate(180deg) brightness(90%) contrast(90%) saturate(60%)';
