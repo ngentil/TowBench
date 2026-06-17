@@ -126,11 +126,13 @@ export default function App() {
     setProfile(null); setTruck(null);
   };
 
-  const role        = profile?.role || 'driver';
-  const isAdmin     = true;
-  const isDispatch  = true;
-  const displayName = session?.user?.email?.split('@')[0] || '';
-  const displayPlate = truck?.plate?.toUpperCase() || '';
+  const role          = profile?.role || 'driver';
+  const isAdmin       = true;
+  const isDispatch    = true;
+  const displayPlate  = truck?.plate?.toUpperCase() || '';
+  const displayFullName = [truck?.first_name, truck?.last_name].filter(Boolean).join(' ') || session?.user?.email?.split('@')[0] || '';
+  const displayDA     = truck?.da_number || null;
+  const displayCompany = companyConfig.company_name || '';
 
   if (!authChecked) {
     return (
@@ -203,15 +205,27 @@ export default function App() {
           {companyConfig.company_name}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            {displayPlate && <span style={{ fontSize: 10, color: TXT, fontWeight: 700, letterSpacing: '0.12em' }}>{displayPlate}</span>}
-            {displayName && <span style={{ fontSize: 9, color: MUT }}>· {displayName}</span>}
-            {role && (
-              <span style={{ fontSize: 7, fontWeight: 700, letterSpacing: '0.1em', padding: '1px 5px',
-                border: `1px solid ${ACC}55`, borderRadius: 2, color: ACC, background: ACC + '15', textTransform: 'uppercase' }}>
-                {role === 'super_admin' ? 'Super Admin' : role}
-              </span>
-            )}
+          {/* Identity block */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {displayFullName && (
+                <span style={{ fontSize: 10, fontWeight: 700, color: TXT, letterSpacing: '0.04em' }}>{displayFullName}</span>
+              )}
+              {displayDA && (
+                <span style={{ fontSize: 8, color: MUT, letterSpacing: '0.06em' }}>DA {displayDA}</span>
+              )}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {displayCompany && (
+                <span style={{ fontSize: 8, color: MUT, letterSpacing: '0.04em' }}>{displayCompany}</span>
+              )}
+              {displayPlate && (
+                <span style={{ fontSize: 8, fontWeight: 700, color: ACC, letterSpacing: '0.14em',
+                  border: `1px solid ${ACC}55`, borderRadius: 2, padding: '1px 5px', background: ACC + '12' }}>
+                  {displayPlate}
+                </span>
+              )}
+            </div>
           </div>
           <button onClick={() => setTheme(t => THEMES[(THEMES.indexOf(t) + 1) % THEMES.length])}
             title={`Theme: ${THEME_LABELS[theme]} — click to cycle`}
