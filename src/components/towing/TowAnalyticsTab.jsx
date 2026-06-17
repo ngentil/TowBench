@@ -177,7 +177,7 @@ export default function TowAnalyticsTab({ liveIds }) {
       <div style={{ marginBottom:14 }}>
         <div>
           <div style={{ fontSize:13,fontWeight:700,color:TXT,letterSpacing:'0.06em' }}>📊 Tow Analytics</div>
-          <div style={{ fontSize:9,color:MUT,marginTop:2 }}>{loading&&allFeatures.length===0?'Loading…':`${features.length} allocation${features.length!==1?'s':''} · last ${periodLabel}`}</div>
+          <div style={{ fontSize:9,color:MUT,marginTop:2 }}>{loading?'Loading…':`${features.length} allocation${features.length!==1?'s':''} · last ${periodLabel}`}</div>
         </div>
         <div style={{ display:'flex',gap:6,marginTop:10,flexWrap:'wrap' }}>
           {PERIODS.map(p=>(
