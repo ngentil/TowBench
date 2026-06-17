@@ -360,13 +360,14 @@ function DriverFlow({ onSuccess }) {
 
 function DispatcherFlow({ onSuccess }) {
   const [mode,        setMode]        = useState('signin'); // 'signin' | 'signup'
-  const [step,        setStep]        = useState(1); // 1=code, 2=company name (admin only), 3=email+pw
+  const [step,        setStep]        = useState(1); // 1=code, 2=company name (admin only), 3=email+pw, 4=otp
   const [code,        setCode]        = useState('');
   const [codeResult,  setCodeResult]  = useState(null); // { valid, role, company_id }
   const [companyName, setCompanyName] = useState('');
   const [email,       setEmail]       = useState('');
   const [password,    setPassword]    = useState('');
   const [confirmPwd,  setConfirmPwd]  = useState('');
+  const [otp,         setOtp]         = useState('');
   const [busy,        setBusy]        = useState(false);
   const [err,         setErr]         = useState('');
 
@@ -407,6 +408,21 @@ function DispatcherFlow({ onSuccess }) {
     setStep(3);
   };
 
+  const finishProfileSetup = async (userId) => {
+    if (codeResult.role === 'admin' && !codeResult.company_id) {
+      const { error: compErr } = await supabase.rpc('create_company_and_admin', { p_company_name: companyName.trim() });
+      if (compErr) { setErr(compErr.message); setBusy(false); return false; }
+    } else {
+      await supabase.from('user_profiles').upsert({
+        id: userId,
+        company_id: codeResult.company_id,
+        role: codeResult.role,
+      }, { onConflict: 'id' });
+    }
+    await supabase.rpc('consume_invite_code', { p_code: code.trim(), p_used_by: email.trim() });
+    return true;
+  };
+
   const handleSignup = async e => {
     e.preventDefault();
     setErr('');
@@ -415,30 +431,32 @@ function DispatcherFlow({ onSuccess }) {
     if (password !== confirmPwd)                       { setErr('Passwords do not match.'); return; }
 
     setBusy(true);
-
     const { data: authData, error: authErr } = await supabase.auth.signUp({ email: email.trim(), password });
     if (authErr) { setErr(authErr.message); setBusy(false); return; }
-    const userId = authData.user?.id;
 
-    if (codeResult.role === 'admin' && !codeResult.company_id) {
-      // Create company + profile in one call (security definer)
-      const { error: compErr } = await supabase.rpc('create_company_and_admin', { p_company_name: companyName.trim() });
-      if (compErr) { setErr(compErr.message); setBusy(false); return; }
-    } else {
-      // Insert dispatch/admin profile for existing company
-      if (userId) {
-        await supabase.from('user_profiles').insert({
-          id: userId,
-          company_id: codeResult.company_id,
-          role: codeResult.role,
-        });
-      }
+    if (!authData.session) {
+      // Email confirmation required — go to OTP step
+      setBusy(false); setStep(4); return;
     }
 
-    await supabase.rpc('consume_invite_code', { p_code: code.trim(), p_used_by: email.trim() });
-
+    // No confirmation required — set up profile immediately
+    const ok = await finishProfileSetup(authData.user?.id);
     setBusy(false);
-    onSuccess();
+    if (ok) onSuccess();
+  };
+
+  const handleOtp = async e => {
+    e.preventDefault();
+    setErr('');
+    if (!otp.trim()) { setErr('Enter the confirmation code from your email.'); return; }
+    setBusy(true);
+    const { data: verifyData, error: verifyErr } = await supabase.auth.verifyOtp({
+      email: email.trim(), token: otp.trim(), type: 'signup',
+    });
+    if (verifyErr) { setErr('Invalid or expired code — check your email and try again.'); setBusy(false); return; }
+    const ok = await finishProfileSetup(verifyData.user?.id);
+    setBusy(false);
+    if (ok) onSuccess();
   };
 
   return (
@@ -543,6 +561,24 @@ function DispatcherFlow({ onSuccess }) {
           </button>
         </form>
       )}
+      {mode === 'signup' && step === 4 && (
+        <form onSubmit={handleOtp} style={formStyle}>
+          <div style={{ fontSize: 8, color: '#5a8a5a', lineHeight: 1.6 }}>
+            Check your email — a confirmation code was sent to <strong style={{ color: TXT }}>{email}</strong>
+          </div>
+          <div>
+            <div style={labelStyle}>Confirmation Code</div>
+            <input type="text" value={otp} onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
+              placeholder="123456" autoFocus inputMode="numeric" maxLength={6}
+              style={{ ...inputStyle, letterSpacing: '0.2em', fontSize: 16 }} />
+          </div>
+          {err && <div style={{ fontSize: 9, color: RED, lineHeight: 1.5 }}>{err}</div>}
+          <button type="submit" disabled={busy}
+            style={{ ...btnA, width: '100%', opacity: busy ? 0.5 : 1 }}>
+            {busy ? 'Verifying…' : 'Confirm & Sign In'}
+          </button>
+        </form>
+      )}
     </>
   );
 }
@@ -550,7 +586,7 @@ function DispatcherFlow({ onSuccess }) {
 // ── Owner / Sole Operator signup ────────────────────────────────────────────
 
 function SoleOperatorFlow({ onSuccess }) {
-  const [step,       setStep]       = useState(1); // 1=company, 2=your name, 3=account
+  const [step,       setStep]       = useState(1); // 1=company, 2=your name, 3=account, 4=otp
   const [companyName,setCompanyName]= useState('');
   const [abn,        setAbn]        = useState('');
   const [firstName,  setFirstName]  = useState('');
@@ -558,6 +594,7 @@ function SoleOperatorFlow({ onSuccess }) {
   const [email,      setEmail]      = useState('');
   const [password,   setPassword]   = useState('');
   const [confirmPwd, setConfirmPwd] = useState('');
+  const [otp,        setOtp]        = useState('');
   const [busy,       setBusy]       = useState(false);
   const [err,        setErr]        = useState('');
 
@@ -580,6 +617,12 @@ function SoleOperatorFlow({ onSuccess }) {
     }
   };
 
+  const setupCompany = async () => {
+    const { error: compErr } = await supabase.rpc('create_company_and_admin', { p_company_name: companyName.trim() });
+    if (compErr) { setErr(compErr.message); setBusy(false); return false; }
+    return true;
+  };
+
   const handleSubmit = async e => {
     e.preventDefault();
     setErr('');
@@ -588,22 +631,34 @@ function SoleOperatorFlow({ onSuccess }) {
     if (password !== confirmPwd)                       { setErr('Passwords do not match.'); return; }
 
     setBusy(true);
-
     const { data: authData, error: authErr } = await supabase.auth.signUp({
-      email: email.trim(),
-      password,
+      email: email.trim(), password,
       options: { data: { first_name: firstName.trim(), last_name: lastName.trim() } },
     });
     if (authErr) { setErr(authErr.message); setBusy(false); return; }
 
-    // Create company + admin profile in one atomic RPC
-    const { error: compErr } = await supabase.rpc('create_company_and_admin', {
-      p_company_name: companyName.trim(),
-    });
-    if (compErr) { setErr(compErr.message); setBusy(false); return; }
+    if (!authData.session) {
+      // Email confirmation required — go to OTP step
+      setBusy(false); setStep(4); return;
+    }
 
+    const ok = await setupCompany();
     setBusy(false);
-    onSuccess();
+    if (ok) onSuccess();
+  };
+
+  const handleOtp = async e => {
+    e.preventDefault();
+    setErr('');
+    if (!otp.trim()) { setErr('Enter the confirmation code from your email.'); return; }
+    setBusy(true);
+    const { error: verifyErr } = await supabase.auth.verifyOtp({
+      email: email.trim(), token: otp.trim(), type: 'signup',
+    });
+    if (verifyErr) { setErr('Invalid or expired code — check your email and try again.'); setBusy(false); return; }
+    const ok = await setupCompany();
+    setBusy(false);
+    if (ok) onSuccess();
   };
 
   return (
@@ -682,6 +737,24 @@ function SoleOperatorFlow({ onSuccess }) {
           </button>
           <button type="button" onClick={() => { setStep(2); setErr(''); }}
             style={{ ...btnG, ...sm, alignSelf: 'flex-start' }}>← Back</button>
+        </form>
+      )}
+      {step === 4 && (
+        <form onSubmit={handleOtp} style={{ display: 'contents' }}>
+          <div style={{ fontSize: 8, color: '#5a8a5a', lineHeight: 1.6 }}>
+            Check your email — a confirmation code was sent to <strong style={{ color: TXT }}>{email}</strong>
+          </div>
+          <div>
+            <div style={labelStyle}>Confirmation Code</div>
+            <input type="text" value={otp} onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
+              placeholder="123456" autoFocus inputMode="numeric" maxLength={6}
+              style={{ ...inputStyle, letterSpacing: '0.2em', fontSize: 16 }} />
+          </div>
+          {err && <div style={{ fontSize: 9, color: RED, lineHeight: 1.5 }}>{err}</div>}
+          <button type="submit" disabled={busy}
+            style={{ ...btnA, width: '100%', opacity: busy ? 0.5 : 1 }}>
+            {busy ? 'Verifying…' : 'Confirm & Sign In'}
+          </button>
         </form>
       )}
     </div>
