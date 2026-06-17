@@ -130,7 +130,7 @@ function DowChart({ counts }) {
 }
 
 export default function TowAnalyticsTab({ liveIds }) {
-  const [periodMs,  setPeriodMs]  = useState(31 * 864e5);
+  const [periodMs,  setPeriodMs]  = useState(Infinity);
   const [history,   setHistory]   = useState([]);
   const [loading,   setLoading]   = useState(true);
   const winW = useWindowWidth(), isMobile = winW < 640;
@@ -167,8 +167,8 @@ export default function TowAnalyticsTab({ liveIds }) {
   const avgDuration = durations.length ? durations.reduce((a,b)=>a+b,0)/durations.length : null;
   const laneValues = features.map(f=>f.properties?.numberLanesImpacted).filter(n=>n!=null&&n>0);
   const avgLanes   = laneValues.length ? (laneValues.reduce((a,b)=>a+b,0)/laneValues.length).toFixed(1) : '—';
-  const days        = Math.round(periodMs / 864e5);
-  const avgPerDay   = features.length ? (features.length / days).toFixed(1) : '0';
+  const days        = periodMs === Infinity ? null : Math.round(periodMs / 864e5);
+  const avgPerDay   = days && features.length ? (features.length / days).toFixed(1) : '—';
   const topSuburb   = topSuburbs[0]?.[0] || '—';
   const periodLabel = PERIODS.find(p => p.ms === periodMs)?.label || '31d';
 
@@ -177,7 +177,7 @@ export default function TowAnalyticsTab({ liveIds }) {
       <div style={{ marginBottom:14 }}>
         <div>
           <div style={{ fontSize:13,fontWeight:700,color:TXT,letterSpacing:'0.06em' }}>📊 Tow Analytics</div>
-          <div style={{ fontSize:9,color:MUT,marginTop:2 }}>{loading?'Loading…':`${features.length} allocation${features.length!==1?'s':''} · last ${periodLabel}`}</div>
+          <div style={{ fontSize:9,color:MUT,marginTop:2 }}>{loading?'Loading…':`${features.length} allocation${features.length!==1?'s':''} · ${periodMs===Infinity?'all time':`last ${periodLabel}`}`}</div>
         </div>
         <div style={{ display:'flex',gap:6,marginTop:10,flexWrap:'wrap' }}>
           {PERIODS.map(p=>(
