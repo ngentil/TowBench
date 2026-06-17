@@ -32,60 +32,29 @@ const STATE_PROXIES = {
 };
 
 export default function TowingSection({ role, isAdmin, isDispatch, userEmail, companyId, companyConfig, setCompanyConfig, profile, setProfile }) {
-  const [isStandalone,      setIsStandalone]      = useState(false);
-  const [standaloneChecked, setStandaloneChecked] = useState(false);
-  const [inviteBannerOpen,  setInviteBannerOpen]  = useState(false);
-  const [inviteCode,        setInviteCode]        = useState('');
-  const [inviteErr,         setInviteErr]         = useState('');
-  const [inviteBusy,        setInviteBusy]        = useState(false);
 
-  // Detect standalone: driver with no dispatch/admin in their company
-  useEffect(() => {
-    if (role !== 'driver' || !companyId) { setStandaloneChecked(true); return; }
-    supabase
-      .from('user_profiles')
-      .select('id', { count: 'exact', head: true })
-      .eq('company_id', companyId)
-      .in('role', ['dispatch', 'admin', 'super_admin'])
-      .then(({ count }) => {
-        setIsStandalone((count ?? 0) === 0);
-        setStandaloneChecked(true);
-      })
-      .catch(() => setStandaloneChecked(true));
-  }, [role, companyId]);
 
-  // Tab visibility by role:
-  //   driver (org):        Allocations, Tow Ins, Map
-  //   driver (standalone): Allocations, Tow Ins, Map, My Tows
-  //   dispatch:            Allocations, Map, Analytics, Fleet
-  //   admin:               All above + Settings
-  //   super_admin:         All tabs
   const ALL_TABS = [
-    { id: 'allocations',   label: '🚦 Tow Allocations',  roles: ['driver','dispatch','admin','super_admin'] },
-    { id: 'incidents',     label: '📟 Pager',             roles: ['dispatch','admin','super_admin'] },
-    { id: 'dispatch',      label: '🚨 Dispatch',          roles: ['dispatch','admin','super_admin'] },
-    { id: 'activetows',    label: '🚛 Active Tows',       roles: ['dispatch','admin','super_admin'] },
-    { id: 'completedtows', label: '✅ Completed Tows',     roles: ['dispatch','admin','super_admin'] },
-    { id: 'towins',        label: '🏭 Tow Ins',           roles: ['driver','dispatch','admin','super_admin'] },
-
-    { id: 'depots',        label: '🏢 Depots',            roles: ['dispatch','admin','super_admin'] },
-    { id: 'fleet',         label: '🚚 My Vehicles',        roles: ['dispatch','admin','super_admin'] },
-    { id: 'ops',           label: '📍 Map',               roles: ['driver','dispatch','admin','super_admin'] },
-    { id: 'bridges',       label: '🌉 Bridges',           roles: ['driver','dispatch','admin','super_admin'] },
-    { id: 'waze',          label: '🧭 Waze',              roles: ['dispatch','admin','super_admin'] },
-    { id: 'vessels',       label: '⛵ Vessels',            roles: ['dispatch','admin','super_admin'] },
-    { id: 'aircraft',      label: '✈ Aircraft',            roles: ['dispatch','admin','super_admin'] },
-    { id: 'mytows',        label: '📋 My Tows',           roles: ['driver'], standaloneOnly: true },
-    { id: 'analytics',     label: '📊 Analytics',         roles: ['dispatch','admin','super_admin'] },
-    { id: 'pricing',       label: '💰 Pricing',           roles: ['admin','super_admin'] },
+    { id: 'allocations',   label: '🚦 Tow Allocations'  },
+    { id: 'incidents',     label: '📟 Pager'             },
+    { id: 'dispatch',      label: '🚨 Dispatch'          },
+    { id: 'activetows',    label: '🚛 Active Tows'       },
+    { id: 'completedtows', label: '✅ Completed Tows'    },
+    { id: 'towins',        label: '🏭 Tow Ins'           },
+    { id: 'depots',        label: '🏢 Depots'            },
+    { id: 'fleet',         label: '🚚 My Vehicles'       },
+    { id: 'ops',           label: '📍 Map'               },
+    { id: 'bridges',       label: '🌉 Bridges'           },
+    { id: 'waze',          label: '🧭 Waze'              },
+    { id: 'vessels',       label: '⛵ Vessels'            },
+    { id: 'aircraft',      label: '✈ Aircraft'           },
+    { id: 'mytows',        label: '📋 My Tows'           },
+    { id: 'analytics',     label: '📊 Analytics'         },
+    { id: 'pricing',       label: '💰 Pricing'           },
   ];
 
-  // Role + standalone filter
-  const roleTabs = ALL_TABS.filter(t => {
-    if (role && !t.roles.includes(role)) return false;
-    if (t.standaloneOnly && !isStandalone) return false;
-    return true;
-  });
+  // All tabs visible — no role filtering
+  const roleTabs = ALL_TABS;
 
   // Apply saved order and hidden prefs
   const [localTabPrefs, setLocalTabPrefs] = useState(profile?.tab_preferences ?? {});
@@ -255,57 +224,8 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, co
 
   const isStale = lastFetch ? (Date.now() - lastFetch.getTime()) > 3 * POLL_MS : false;
 
-  const handleInviteSubmit = async () => {
-    const code = inviteCode.trim().toUpperCase();
-    if (!code) return;
-    setInviteBusy(true); setInviteErr('');
-    const { data, error } = await supabase.rpc('validate_invite_code', { p_code: code });
-    const row = Array.isArray(data) ? data[0] : data;
-    if (error || !row?.valid) {
-      setInviteErr('Invalid or already used code.'); setInviteBusy(false); return;
-    }
-    await supabase.rpc('consume_invite_code', { p_code: code, p_used_by: userEmail });
-    // Reload the page so App re-fetches the user's updated company assignment
-    window.location.reload();
-  };
-
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      {/* Standalone mode invite banner — shown to solo drivers once detection is done */}
-      {standaloneChecked && isStandalone && (
-        <div style={{
-          background: '#0d0d0d', borderBottom: `1px solid #2a1a00`,
-          padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0,
-          fontFamily: "'IBM Plex Mono',monospace",
-        }}>
-          <span style={{ fontSize: 8, color: '#cc8822', flex: 1 }}>
-            Running in standalone mode. Have an invite code from your manager?
-          </span>
-          {!inviteBannerOpen ? (
-            <button onClick={() => setInviteBannerOpen(true)}
-              style={{ fontSize: 8, padding: '2px 8px', background: '#cc882211', border: '1px solid #cc882244', color: '#cc8822', borderRadius: 2, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace', flexShrink: 0" }}>
-              Enter code
-            </button>
-          ) : (
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
-              <input
-                value={inviteCode} onChange={e => setInviteCode(e.target.value.toUpperCase())}
-                placeholder="XXXXXX" maxLength={8}
-                style={{ width: 72, background: '#0a0a0a', border: '1px solid #333', color: TXT, fontFamily: "'IBM Plex Mono',monospace", fontSize: 9, padding: '2px 5px', borderRadius: 2, outline: 'none', letterSpacing: '0.1em' }}
-                onKeyDown={e => e.key === 'Enter' && handleInviteSubmit()}
-              />
-              <button onClick={handleInviteSubmit} disabled={inviteBusy}
-                style={{ fontSize: 8, padding: '2px 8px', background: '#cc882211', border: '1px solid #cc882244', color: '#cc8822', borderRadius: 2, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace" }}>
-                {inviteBusy ? '…' : 'Join'}
-              </button>
-              <button onClick={() => { setInviteBannerOpen(false); setInviteCode(''); setInviteErr(''); }}
-                style={{ fontSize: 10, background: 'none', border: 'none', color: '#555', cursor: 'pointer', padding: 0 }}>×</button>
-              {inviteErr && <span style={{ fontSize: 8, color: '#cc3333' }}>{inviteErr}</span>}
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Low bridge proximity alert — shown across all tabs */}
       {visibleBridgeAlert && (
         <div style={{
