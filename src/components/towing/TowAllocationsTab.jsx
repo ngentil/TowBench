@@ -771,9 +771,11 @@ export default function TowAllocationsTab({ allFeatures, liveIds, loading, err, 
         return notes.some(n => n.note.toLowerCase().includes(searchTerm.toLowerCase()));
       })
     : timeFiltered;
-  const sorted  = [...searched].sort(sortFn);
-  const active  = sorted.filter(f =>  liveIds.has(String(f.properties?.eventId)));
-  const cleared = sorted.filter(f => !liveIds.has(String(f.properties?.eventId)));
+  const sorted   = [...searched].sort(sortFn);
+  const capped   = sorted.slice(0, 1000);
+  const active   = capped.filter(f =>  liveIds.has(String(f.properties?.eventId)));
+  const cleared  = capped.filter(f => !liveIds.has(String(f.properties?.eventId)));
+  const hiddenCount = sorted.length - capped.length;
   const currentSort = SORT_OPTIONS.find(o => o.key === sortBy);
 
   return (
@@ -1001,6 +1003,11 @@ export default function TowAllocationsTab({ allFeatures, liveIds, loading, err, 
         <div style={{ marginBottom: 12, fontSize: 9, padding: '8px 12px', borderRadius: 2, color: ORANGE, background: ORANGE + '11', border: `1px solid ${ORANGE}44`, lineHeight: 1.6 }}>
           ⚠ Live feed error: {err}<br />
           <span style={{ color: MUT }}>Showing logged history. Feed updates every 60 seconds.</span>
+        </div>
+      )}
+      {hiddenCount > 0 && (
+        <div style={{ fontSize: 8, color: MUT, textAlign: 'center', padding: '4px 0 10px', letterSpacing: '0.08em' }}>
+          Showing 1,000 most recent · {hiddenCount.toLocaleString()} older entries in analytics only
         </div>
       )}
       {loading && allFeatures.length === 0 && (
