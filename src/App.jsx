@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from './lib/supabase';
 import { BG, SURF, BRD, TXT, MUT, ACC, btnG, sm } from './lib/styles';
 import TowingSection from './components/towing/TowingSection';
@@ -45,10 +45,18 @@ export default function App() {
   const THEME_COLORS = { '': '#5a5a5a', night: '#c94040', amber: '#e8870a', green: '#3d9e50' };
   const THEME_LABELS = { '': 'Standard', night: 'Red CRT', amber: 'Amber', green: 'Green' };
   const [theme, setTheme] = useState(() => localStorage.getItem('towbench_theme') || '');
+  const [themePickerOpen, setThemePickerOpen] = useState(false);
+  const themePickerRef = useRef(null);
   useEffect(() => {
     document.body.setAttribute('data-theme', theme);
     localStorage.setItem('towbench_theme', theme);
   }, [theme]);
+  useEffect(() => {
+    if (!themePickerOpen) return;
+    const close = e => { if (themePickerRef.current && !themePickerRef.current.contains(e.target)) setThemePickerOpen(false); };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [themePickerOpen]);
 
   useEffect(() => {
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
@@ -221,20 +229,38 @@ export default function App() {
               </span>
             )}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            {THEMES.map(t => {
-              const active = t === theme;
-              const c = THEME_COLORS[t];
-              return (
-                <button key={t} onClick={() => setTheme(t)} title={THEME_LABELS[t]}
-                  style={{ width: 12, height: 12, borderRadius: '50%', padding: 0, cursor: 'pointer', flexShrink: 0,
-                    background: active ? c : c + '55',
-                    border: active ? `2px solid ${c}` : '2px solid transparent',
-                    outline: active ? `2px solid ${c}88` : 'none',
-                    outlineOffset: 1,
-                    boxSizing: 'border-box', transition: 'all 0.15s ease' }} />
-              );
-            })}
+          <div style={{ position: 'relative' }} ref={themePickerRef}>
+            <button onClick={() => setThemePickerOpen(o => !o)} title="Theme"
+              style={{ width: 26, height: 26, borderRadius: '50%', padding: 0, cursor: 'pointer', flexShrink: 0,
+                background: THEME_COLORS[theme],
+                border: `2px solid ${THEME_COLORS[theme]}`,
+                boxShadow: themePickerOpen ? `0 0 0 3px ${THEME_COLORS[theme]}44` : 'none',
+                transition: 'box-shadow 0.15s ease' }} />
+            {themePickerOpen && (
+              <div style={{ position: 'absolute', top: 'calc(100% + 10px)', right: 0, zIndex: 200,
+                background: '#111', border: '1px solid #2a2a2a', borderRadius: 4,
+                padding: 6, display: 'flex', flexDirection: 'column', gap: 1, minWidth: 130,
+                boxShadow: '0 8px 24px #00000088' }}>
+                {THEMES.map(t => {
+                  const active = t === theme;
+                  const c = THEME_COLORS[t];
+                  return (
+                    <button key={t} onClick={() => { setTheme(t); setThemePickerOpen(false); }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '6px 8px',
+                        background: active ? c + '1a' : 'none', border: 'none', borderRadius: 3,
+                        cursor: 'pointer', width: '100%', textAlign: 'left' }}>
+                      <div style={{ width: 10, height: 10, borderRadius: '50%', flexShrink: 0,
+                        background: c, boxShadow: active ? `0 0 0 2px ${c}55` : 'none' }} />
+                      <span style={{ fontSize: 9, fontFamily: "'IBM Plex Mono',monospace",
+                        fontWeight: active ? 700 : 400, letterSpacing: '0.09em', textTransform: 'uppercase',
+                        color: active ? c : '#555' }}>
+                        {THEME_LABELS[t]}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
           <button onClick={signOut} style={{ ...btnG, ...sm, fontSize: 8 }}>Sign Out</button>
         </div>
