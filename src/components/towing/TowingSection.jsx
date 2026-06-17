@@ -31,7 +31,7 @@ const STATE_PROXIES = {
   // nsw, qld, wa, sa — added as each state is implemented
 };
 
-export default function TowingSection({ role, isAdmin, isDispatch, userEmail, companyId, companyConfig, setCompanyConfig, profile, setProfile }) {
+export default function TowingSection({ role, isAdmin, isDispatch, userEmail, userId, companyId, companyConfig, setCompanyConfig, profile, setProfile }) {
 
 
   const ALL_TABS = [
@@ -321,7 +321,7 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, co
 
         {tab === 'depots'    && <DepotsTab isAdmin={isAdmin} companyId={companyId} />}
         {tab === 'fleet'     && <FleetTab isAdmin={isAdmin} companyId={companyId} />}
-        {tab === 'pricing'   && <PricingTab companyConfig={companyConfig} setCompanyConfig={setCompanyConfig} companyId={companyId} />}
+        {tab === 'pricing'   && <PricingTab companyConfig={companyConfig} setCompanyConfig={setCompanyConfig} companyId={companyId} userId={userId} />}
       </div>
     </div>
   );

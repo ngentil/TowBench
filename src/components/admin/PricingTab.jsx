@@ -19,7 +19,7 @@ const STORAGE_PRESETS = [
   'Motor cycle, in locked yard',
 ];
 
-export default function PricingTab({ companyConfig, setCompanyConfig, companyId }) {
+export default function PricingTab({ companyConfig, setCompanyConfig, companyId, userId }) {
   const [tradeBaseFee,       setTradeBaseFee]       = useState(String(companyConfig.trade_base_fee          ?? '0'));
   const [accidentBaseFee,    setAccidentBaseFee]     = useState(String(companyConfig.accident_base_fee       ?? '0'));
   const [tradePerKm,         setTradePerKm]          = useState(String(companyConfig.trade_per_km_fee        ?? '0'));
@@ -45,7 +45,7 @@ export default function PricingTab({ companyConfig, setCompanyConfig, companyId 
 
   // Sync local inputs whenever the upstream companyConfig changes (async load)
   useEffect(() => {
-    if (!companyConfig.company_id) return; // still the default stub
+    if (!companyConfig.user_id && !companyConfig.company_id) return; // still the default stub
     setTradeBaseFee(String(companyConfig.trade_base_fee          ?? '0'));
     setAccidentBaseFee(String(companyConfig.accident_base_fee    ?? '0'));
     setTradePerKm(String(companyConfig.trade_per_km_fee          ?? '0'));
@@ -57,13 +57,14 @@ export default function PricingTab({ companyConfig, setCompanyConfig, companyId 
     setAhStartWE(companyConfig.after_hours_start_weekend ?? '18:00');
     setAhEndWE(companyConfig.after_hours_end_weekend     ?? '06:00');
     setAllowAccidentTwoUp(companyConfig.allow_accident_twoup ?? false);
-  }, [companyConfig.company_id]); // re-run only when a real config row arrives
+  }, [companyConfig.user_id, companyConfig.company_id]); // re-run only when a real config row arrives
 
-  // Load storage types on mount / companyId change
+  // Load storage types — RLS scopes to current user automatically
   useEffect(() => {
-    const load = async (cid) => {
+    if (!userId) return;
+    const load = async () => {
       const { data } = await supabase.from('storage_types').select('id, name, daily_rate')
-        .eq('company_id', cid).in('name', STORAGE_PRESETS);
+        .in('name', STORAGE_PRESETS);
       if (!data) return;
       const rates = {}, ids = {};
       for (const row of data) {
@@ -73,27 +74,16 @@ export default function PricingTab({ companyConfig, setCompanyConfig, companyId 
       setStorageRates(prev => ({ ...prev, ...rates }));
       setStorageIds(ids);
     };
-    if (companyId) {
-      load(companyId);
-    } else {
-      supabase.from('companies').select('id').order('created_at').limit(1).maybeSingle()
-        .then(({ data }) => { if (data?.id) load(data.id); });
-    }
-  }, [companyId]);
+    load();
+  }, [userId]);
 
   const savePricing = async () => {
-    let cid = companyId;
-    if (!cid) {
-      const { data, error: cidErr } = await supabase.from('companies').select('id').order('created_at').limit(1).maybeSingle();
-      if (cidErr) console.error('companies lookup error:', cidErr);
-      cid = data?.id;
-    }
-    if (!cid) { setErr('No company found — run migration 59 in Supabase SQL Editor.'); return; }
+    if (!userId) { setErr('Not signed in.'); return; }
     setSaving(true); setSaved(false); setErr('');
 
-    // 1 — company_config upsert
+    // 1 — company_config upsert (keyed by user_id)
     const payload = {
-      company_id:                cid,
+      user_id:                   userId,
       trade_base_fee:            parseFloat(tradeBaseFee)    || 0,
       accident_base_fee:         parseFloat(accidentBaseFee) || 0,
       trade_per_km_fee:          parseFloat(tradePerKm)      || 0,
@@ -109,7 +99,7 @@ export default function PricingTab({ companyConfig, setCompanyConfig, companyId 
     };
     const { data: cfgData, error: cfgErr } = await supabase
       .from('company_config')
-      .upsert(payload, { onConflict: 'company_id' })
+      .upsert(payload, { onConflict: 'user_id' })
       .select().single();
     if (cfgErr) { console.error('company_config upsert error:', cfgErr); setErr(cfgErr.message); setSaving(false); return; }
     if (cfgData) setCompanyConfig(cfgData);
@@ -125,7 +115,7 @@ export default function PricingTab({ companyConfig, setCompanyConfig, companyId 
           .eq('id', newIds[name]);
       } else {
         const { data: ins } = await supabase.from('storage_types')
-          .insert({ company_id: cid, name, daily_rate: rate })
+          .insert({ name, daily_rate: rate })
           .select('id').single();
         if (ins?.id) newIds[name] = ins.id;
       }
