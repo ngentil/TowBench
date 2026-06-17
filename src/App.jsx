@@ -42,7 +42,7 @@ export default function App() {
   const logoClickRef = React.useRef({ count: 0, timer: null });
 
   const THEMES = ['', 'night', 'amber', 'green'];
-  const THEME_ICONS  = { '': '◻', night: '🔴', amber: '🟠', green: '🟢' };
+  const THEME_COLORS = { '': '#5a5a5a', night: '#c94040', amber: '#e8870a', green: '#3d9e50' };
   const THEME_LABELS = { '': 'Standard', night: 'Red CRT', amber: 'Amber', green: 'Green' };
   const [theme, setTheme] = useState(() => localStorage.getItem('towbench_theme') || '');
   useEffect(() => {
@@ -227,11 +227,21 @@ export default function App() {
               )}
             </div>
           </div>
-          <button onClick={() => setTheme(t => THEMES[(THEMES.indexOf(t) + 1) % THEMES.length])}
-            title={`Theme: ${THEME_LABELS[theme]} — click to cycle`}
-            style={{ ...btnG, ...sm, fontSize: 10, padding: '3px 8px', letterSpacing: 0 }}>
-            {THEME_ICONS[theme]}
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            {THEMES.map(t => {
+              const active = t === theme;
+              const c = THEME_COLORS[t];
+              return (
+                <button key={t} onClick={() => setTheme(t)} title={THEME_LABELS[t]}
+                  style={{ width: 12, height: 12, borderRadius: '50%', padding: 0, cursor: 'pointer', flexShrink: 0,
+                    background: active ? c : c + '55',
+                    border: active ? `2px solid ${c}` : '2px solid transparent',
+                    outline: active ? `2px solid ${c}88` : 'none',
+                    outlineOffset: 1,
+                    boxSizing: 'border-box', transition: 'all 0.15s ease' }} />
+              );
+            })}
+          </div>
           <button onClick={signOut} style={{ ...btnG, ...sm, fontSize: 8 }}>Sign Out</button>
         </div>
       </div>
