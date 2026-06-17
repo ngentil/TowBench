@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { ACC, MUT, BRD, TXT, GRN, SURF } from '../../lib/styles';
+import { getRecentAllocations } from '../../lib/db/towing';
 
 const ORANGE = '#e8870a';
 const PERIODS = [
@@ -9,6 +10,7 @@ const PERIODS = [
   { label: '3m',  ms: 90 * 864e5   },
   { label: '6m',  ms: 180 * 864e5  },
   { label: '12m', ms: 365 * 864e5  },
+  { label: 'All', ms: Infinity      },
 ];
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -127,18 +129,27 @@ function DowChart({ counts }) {
   );
 }
 
-export default function TowAnalyticsTab({ allFeatures, liveIds, loading }) {
-  const [periodMs, setPeriodMs] = useState(31 * 864e5);
+export default function TowAnalyticsTab({ liveIds }) {
+  const [periodMs,  setPeriodMs]  = useState(31 * 864e5);
+  const [history,   setHistory]   = useState([]);
+  const [loading,   setLoading]   = useState(true);
   const winW = useWindowWidth(), isMobile = winW < 640;
 
+  // Load full history directly from Supabase — no live-poll cap
+  useEffect(() => {
+    getRecentAllocations()
+      .then(data => { setHistory(data); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
   const features = useMemo(() => {
+    if (periodMs === Infinity) return history;
     const cutoff = Date.now() - periodMs;
-    return allFeatures.filter(f => {
-      if (periodMs === Infinity) return true;
+    return history.filter(f => {
       const t = new Date(f._logMeta?.firstSeen || f.properties?.lastUpdated || 0).getTime();
       return t >= cutoff;
     });
-  }, [allFeatures, periodMs]);
+  }, [history, periodMs]);
 
   const activeCount  = features.filter(f =>  liveIds.has(String(f.properties?.eventId))).length;
   const clearedCount = features.length - activeCount;
