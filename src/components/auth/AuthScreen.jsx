@@ -12,6 +12,8 @@ export default function AuthScreen() {
   const [message,     setMessage]     = useState('');
   const [awaitingOtp, setAwaitingOtp] = useState(false);
   const [otp,         setOtp]         = useState('');
+  const [showPwd,     setShowPwd]     = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   useEffect(() => {
     const reset = e => { if (e.persisted) setLoading(false); };
@@ -133,15 +135,29 @@ export default function AuthScreen() {
               {mode !== 'forgot' && (
                 <div>
                   <div style={{ fontSize: 8, color: MUT, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 4 }}>Password</div>
-                  <input style={inp} type="password" placeholder="••••••••" value={password}
-                    onChange={e => setPassword(e.target.value)} required />
+                  <div style={{ position: 'relative' }}>
+                    <input style={{ ...inp, paddingRight: 36 }} type={showPwd ? 'text' : 'password'}
+                      placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} required />
+                    <button type="button" onClick={() => setShowPwd(v => !v)}
+                      style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+                        background: 'none', border: 'none', cursor: 'pointer', color: MUT, fontSize: 14, padding: 2, lineHeight: 1 }}>
+                      {showPwd ? '🙈' : '👁'}
+                    </button>
+                  </div>
                 </div>
               )}
               {mode === 'signup' && (
                 <div>
                   <div style={{ fontSize: 8, color: MUT, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 4 }}>Confirm Password</div>
-                  <input style={inp} type="password" placeholder="••••••••" value={confirm}
-                    onChange={e => setConfirm(e.target.value)} required />
+                  <div style={{ position: 'relative' }}>
+                    <input style={{ ...inp, paddingRight: 36 }} type={showConfirm ? 'text' : 'password'}
+                      placeholder="••••••••" value={confirm} onChange={e => setConfirm(e.target.value)} required />
+                    <button type="button" onClick={() => setShowConfirm(v => !v)}
+                      style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+                        background: 'none', border: 'none', cursor: 'pointer', color: MUT, fontSize: 14, padding: 2, lineHeight: 1 }}>
+                      {showConfirm ? '🙈' : '👁'}
+                    </button>
+                  </div>
                 </div>
               )}
 
