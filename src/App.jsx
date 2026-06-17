@@ -132,7 +132,6 @@ export default function App() {
   const displayPlate  = truck?.plate?.toUpperCase() || '';
   const displayFullName = [truck?.first_name, truck?.last_name].filter(Boolean).join(' ') || session?.user?.email?.split('@')[0] || '';
   const displayDA     = truck?.da_number || null;
-  const displayCompany = companyConfig.company_name || '';
 
   if (!authChecked) {
     return (
@@ -215,17 +214,12 @@ export default function App() {
                 <span style={{ fontSize: 8, color: MUT, letterSpacing: '0.06em' }}>DA {displayDA}</span>
               )}
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              {displayCompany && (
-                <span style={{ fontSize: 8, color: MUT, letterSpacing: '0.04em' }}>{displayCompany}</span>
-              )}
-              {displayPlate && (
-                <span style={{ fontSize: 8, fontWeight: 700, color: ACC, letterSpacing: '0.14em',
-                  border: `1px solid ${ACC}55`, borderRadius: 2, padding: '1px 5px', background: ACC + '12' }}>
-                  {displayPlate}
-                </span>
-              )}
-            </div>
+            {displayPlate && (
+              <span style={{ fontSize: 8, fontWeight: 700, color: ACC, letterSpacing: '0.14em',
+                border: `1px solid ${ACC}55`, borderRadius: 2, padding: '1px 5px', background: ACC + '12' }}>
+                {displayPlate}
+              </span>
+            )}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
             {THEMES.map(t => {
