@@ -95,34 +95,26 @@ export default function App() {
     return () => { clearTimeout(timeout); subscription.unsubscribe(); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Company config: load by company_id once profile is known, subscribe to changes.
-  // super_admin has company_id = null — fall back to the first company in the DB.
+  // User config: load by auth.uid() — each user has their own isolated row.
   useEffect(() => {
-    if (!profile) return;
+    if (!session) return;
+    const uid = session.user.id;
+    // effectiveCompanyId stays as profile.company_id for legacy FK compat,
+    // but company_config is now indexed by user_id
+    if (profile?.company_id) setEffectiveCompanyId(profile.company_id);
     const applyConfig = cfg => {
       setCompanyConfig(cfg);
       if (cfg.accent_color) document.documentElement.style.setProperty('--acc', cfg.accent_color);
     };
-    const setup = async (cid) => {
-      setEffectiveCompanyId(cid);
-      const { data } = await supabase.from('company_config').select('*').eq('company_id', cid).single();
-      if (data) applyConfig(data);
-      const chan = supabase.channel('company_config_changes_' + cid)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'company_config',
-            filter: `company_id=eq.${cid}` },
-            payload => { if (payload.new) applyConfig(payload.new); })
-        .subscribe();
-      return () => supabase.removeChannel(chan);
-    };
-    if (profile.company_id) {
-      setup(profile.company_id);
-    } else {
-      // No company on profile (super_admin or admin before company created) —
-      // fall back to the first company in the DB.
-      supabase.from('companies').select('id').order('created_at').limit(1).maybeSingle()
-        .then(({ data }) => { if (data?.id) setup(data.id); });
-    }
-  }, [profile?.company_id, profile?.role]); // eslint-disable-line react-hooks/exhaustive-deps
+    supabase.from('company_config').select('*').eq('user_id', uid).maybeSingle()
+      .then(({ data }) => { if (data) applyConfig(data); });
+    const chan = supabase.channel('user_config_' + uid)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'company_config',
+          filter: `user_id=eq.${uid}` },
+          payload => { if (payload.new) applyConfig(payload.new); })
+      .subscribe();
+    return () => supabase.removeChannel(chan);
+  }, [session?.user?.id, profile?.company_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const signOut = () => {
     if (session?.user?.id) sessionStorage.removeItem(`towbench_greeted_${session.user.id}`);
@@ -211,6 +203,7 @@ export default function App() {
           <TowingSection
             role={role} isAdmin={isAdmin} isDispatch={isDispatch}
             userEmail={session?.user?.email}
+            userId={session?.user?.id}
             companyId={effectiveCompanyId}
             companyConfig={companyConfig} setCompanyConfig={setCompanyConfig}
             profile={profile} setProfile={setProfile}
