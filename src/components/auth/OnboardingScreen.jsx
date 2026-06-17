@@ -38,9 +38,23 @@ export default function OnboardingScreen({ session, onComplete }) {
       });
       if (truckErr) throw truckErr;
 
-      await supabase.from('company_config')
-        .update({ company_name: companyName.trim() })
-        .eq('user_id', session.user.id);
+      await Promise.all([
+        supabase.from('company_config')
+          .update({ company_name: companyName.trim() })
+          .eq('user_id', session.user.id),
+
+        supabase.from('user_profiles')
+          .update({
+            first_name:   firstName.trim(),
+            last_name:    lastName.trim(),
+            company_name: companyName.trim(),
+            plate:        normPlate,
+            da_number:    isTowPlate ? daNumber.trim() : null,
+            email:        session.user.email,
+            onboarded_at: new Date().toISOString(),
+          })
+          .eq('id', session.user.id),
+      ]);
 
       onComplete();
     } catch (e) {
