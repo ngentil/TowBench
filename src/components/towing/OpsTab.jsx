@@ -442,16 +442,14 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
   const selectedAcceptedJob = selectedEventId ? (acceptedJobs?.get(selectedEventId) || null) : null;
   const selectedIsLive      = selectedEventId ? liveIds.has(selectedEventId) : false;
 
-  // Driver locations — scoped to this company, debounced to avoid a full fetch per GPS ping
+  // Driver locations — scoped by RLS, debounced to avoid a full fetch per GPS ping
   useEffect(() => {
-    if (!companyId) return;
     let debounceTimer;
 
     const fetchDrivers = async () => {
       try {
         const { data } = await supabase.from('driver_locations')
-          .select('driver_email, lat, lng, updated_at')
-          .eq('company_id', companyId);
+          .select('driver_email, lat, lng, updated_at');
         if (data) setDriverLocations(data);
       } catch { /* ignore */ }
     };
@@ -462,15 +460,14 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
     };
 
     fetchDrivers();
-    const channel = supabase.channel(`driver-locations-${companyId}`)
+    const channel = supabase.channel('driver-locations-live')
       .on('postgres_changes', {
         event: '*', schema: 'public', table: 'driver_locations',
-        filter: `company_id=eq.${companyId}`,
       }, debouncedFetch)
       .subscribe();
 
     return () => { clearTimeout(debounceTimer); supabase.removeChannel(channel); };
-  }, [companyId]);
+  }, []);
 
   // Load geocode cache from Supabase (populated by pager tab geocoding)
   useEffect(() => {
@@ -500,11 +497,10 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
 
   // Fetch all company depots with coords when trace panel opens
   useEffect(() => {
-    if (!traceOpen || !companyId) return;
+    if (!traceOpen) return;
     (async () => {
       const { data: depots } = await supabase.from('depots')
         .select('id, name, lat, lng')
-        .eq('company_id', companyId)
         .not('lat', 'is', null)
         .order('name');
       if (!depots?.length) { setCompanyDepots([]); setDepotPoint(null); return; }
@@ -657,7 +653,7 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
       leafletRef.current = L;
       if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
 
-      // Center priority: primary depot → state default → Australia
+      // Center priority: GPS → primary depot → state default → Melbourne
       const STATE_CENTERS = {
         vic: [-37.814, 144.963],
         nsw: [-33.868, 151.209],
@@ -668,16 +664,17 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
         nt:  [-12.462, 130.841],
         act: [-35.282, 149.129],
       };
-      const stateCenter = STATE_CENTERS[companyConfig?.state] || [-25.274, 133.775];
+      const stateCenter = STATE_CENTERS[companyConfig?.state] || STATE_CENTERS.vic;
       let initCenter = stateCenter;
       try {
         const { data: depots } = await supabase.from('depots')
-          .select('lat, lng').eq('company_id', companyId)
-          .not('lat', 'is', null).order('name').limit(1);
+          .select('lat, lng').not('lat', 'is', null).order('name').limit(1);
         if (depots?.[0]?.lat && depots?.[0]?.lng) {
           initCenter = [depots[0].lat, depots[0].lng];
         }
       } catch (_) {}
+      // GPS beats everything if available
+      if (userPos?.lat && userPos?.lng) initCenter = [userPos.lat, userPos.lng];
 
       const map = L.map(containerRef.current, { center: initCenter, zoom: 11, zoomControl: true, attributionControl: false });
       map.getPanes().tilePane.style.filter = 'invert(100%) hue-rotate(180deg) brightness(90%) contrast(90%) saturate(60%)';
@@ -767,7 +764,7 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
       });
 
       setMapReady(true);
-    });
+    }).catch(e => console.error('Map init failed:', e));
     return () => { if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; } };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
