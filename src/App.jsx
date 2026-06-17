@@ -42,7 +42,7 @@ export default function App() {
   const logoClickRef = React.useRef({ count: 0, timer: null });
 
   const THEMES = ['', 'night', 'amber', 'green'];
-  const THEME_ICONS  = { '': '◻', night: '🔴', amber: '🟠', green: '🟢' };
+  const THEME_COLORS = { '': '#5a5a5a', night: '#c94040', amber: '#e8870a', green: '#3d9e50' };
   const THEME_LABELS = { '': 'Standard', night: 'Red CRT', amber: 'Amber', green: 'Green' };
   const [theme, setTheme] = useState(() => localStorage.getItem('towbench_theme') || '');
   useEffect(() => {
@@ -126,11 +126,13 @@ export default function App() {
     setProfile(null); setTruck(null);
   };
 
-  const role        = profile?.role || 'driver';
-  const isAdmin     = true;
-  const isDispatch  = true;
-  const displayName = session?.user?.email?.split('@')[0] || '';
-  const displayPlate = truck?.plate?.toUpperCase() || '';
+  const role          = profile?.role || 'driver';
+  const isAdmin       = true;
+  const isDispatch    = true;
+  const displayPlate  = truck?.plate?.toUpperCase() || '';
+  const displayFullName = [truck?.first_name, truck?.last_name].filter(Boolean).join(' ') || session?.user?.email?.split('@')[0] || '';
+  const displayDA     = truck?.da_number || null;
+  const displayCompany = companyConfig.company_name || '';
 
   if (!authChecked) {
     return (
@@ -203,21 +205,43 @@ export default function App() {
           {companyConfig.company_name}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            {displayPlate && <span style={{ fontSize: 10, color: TXT, fontWeight: 700, letterSpacing: '0.12em' }}>{displayPlate}</span>}
-            {displayName && <span style={{ fontSize: 9, color: MUT }}>· {displayName}</span>}
-            {role && (
-              <span style={{ fontSize: 7, fontWeight: 700, letterSpacing: '0.1em', padding: '1px 5px',
-                border: `1px solid ${ACC}55`, borderRadius: 2, color: ACC, background: ACC + '15', textTransform: 'uppercase' }}>
-                {role === 'super_admin' ? 'Super Admin' : role}
-              </span>
-            )}
+          {/* Identity block */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {displayFullName && (
+                <span style={{ fontSize: 10, fontWeight: 700, color: TXT, letterSpacing: '0.04em' }}>{displayFullName}</span>
+              )}
+              {displayDA && (
+                <span style={{ fontSize: 8, color: MUT, letterSpacing: '0.06em' }}>DA {displayDA}</span>
+              )}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {displayCompany && (
+                <span style={{ fontSize: 8, color: MUT, letterSpacing: '0.04em' }}>{displayCompany}</span>
+              )}
+              {displayPlate && (
+                <span style={{ fontSize: 8, fontWeight: 700, color: ACC, letterSpacing: '0.14em',
+                  border: `1px solid ${ACC}55`, borderRadius: 2, padding: '1px 5px', background: ACC + '12' }}>
+                  {displayPlate}
+                </span>
+              )}
+            </div>
           </div>
-          <button onClick={() => setTheme(t => THEMES[(THEMES.indexOf(t) + 1) % THEMES.length])}
-            title={`Theme: ${THEME_LABELS[theme]} — click to cycle`}
-            style={{ ...btnG, ...sm, fontSize: 10, padding: '3px 8px', letterSpacing: 0 }}>
-            {THEME_ICONS[theme]}
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            {THEMES.map(t => {
+              const active = t === theme;
+              const c = THEME_COLORS[t];
+              return (
+                <button key={t} onClick={() => setTheme(t)} title={THEME_LABELS[t]}
+                  style={{ width: 12, height: 12, borderRadius: '50%', padding: 0, cursor: 'pointer', flexShrink: 0,
+                    background: active ? c : c + '55',
+                    border: active ? `2px solid ${c}` : '2px solid transparent',
+                    outline: active ? `2px solid ${c}88` : 'none',
+                    outlineOffset: 1,
+                    boxSizing: 'border-box', transition: 'all 0.15s ease' }} />
+              );
+            })}
+          </div>
           <button onClick={signOut} style={{ ...btnG, ...sm, fontSize: 8 }}>Sign Out</button>
         </div>
       </div>
