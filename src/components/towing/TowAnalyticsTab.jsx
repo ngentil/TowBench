@@ -70,29 +70,6 @@ function BarList({ data, color = ORANGE, maxBars = 10, labelWidth = 110 }) {
   );
 }
 
-function DepotBarList({ depots }) {
-  const max = Math.max(...depots.map(d => d.count), 1);
-  if (!depots.length) return <div style={{ fontSize: 9, color: MUT, padding: '12px 0' }}>No data yet</div>;
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-      {depots.map(({ depot, region, count }) => {
-        const st = REGION_STYLE[region] || {};
-        return (
-          <div key={depot} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ width: 70, fontSize: 8, flexShrink: 0, textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
-              <span style={{ fontSize: 7, color: MUT }}>{REGION_LABELS[region]?.slice(0, 1) || '?'}</span>
-              <span style={{ color: st.color || TXT, fontFamily: "'IBM Plex Mono',monospace", fontWeight: 700 }}>{depot}</span>
-            </div>
-            <div style={{ flex: 1, background: '#1a1a1a', borderRadius: 1, height: 13, overflow: 'hidden' }}>
-              <div style={{ width: `${(count / max) * 100}%`, height: '100%', background: st.color || ORANGE, borderRadius: 1, opacity: 0.7, transition: 'width 0.5s ease' }} />
-            </div>
-            <div style={{ width: 26, fontSize: 8, color: TXT, fontFamily: "'IBM Plex Mono',monospace", flexShrink: 0 }}>{count}</div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
 function HourChart({ counts }) {
   const max = Math.max(...counts, 1);
@@ -242,19 +219,23 @@ export default function TowAnalyticsTab({ liveIds }) {
     ['8hr+',   durations.filter(m => m >= 480).length],
   ].filter(([, v]) => v > 0);
 
-  // ── Depot proximity ────────────────────────────────────────────────────────
+  // ── Depot proximity — suburb breakdown per region ─────────────────────────
 
-  const topDepots = useMemo(() => {
-    const hits = {};
+  const regionActivity = useMemo(() => {
+    const data = {};
     features.forEach(f => {
       const sub = f.properties?.reference?.startIntersectionLocality || '';
-      findDepotsForAddress(sub).forEach(({ depot, region }) => {
-        const k = String(depot);
-        if (!hits[k]) hits[k] = { depot, region, count: 0 };
-        hits[k].count++;
+      if (!sub) return;
+      // Dedupe regions — a suburb can be covered by multiple depots in the same region
+      const regions = [...new Set(findDepotsForAddress(sub).map(h => h.region))];
+      regions.forEach(region => {
+        if (!data[region]) data[region] = {};
+        data[region][sub] = (data[region][sub] || 0) + 1;
       });
     });
-    return Object.values(hits).sort((a, b) => b.count - a.count).slice(0, 12);
+    return Object.fromEntries(
+      Object.entries(data).map(([r, subs]) => [r, Object.entries(subs).sort((a, b) => b[1] - a[1])])
+    );
   }, [features]);
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -353,23 +334,27 @@ export default function TowAnalyticsTab({ liveIds }) {
         </div>
       </div>
 
-      {/* Depot proximity */}
+      {/* Depot activity — suburb breakdown per region */}
       <div style={{ background: SURF, border: '1px solid ' + BRD, borderRadius: 2, padding: '10px 12px', marginBottom: 14 }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
-          <div style={{ fontSize: 8, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700 }}>Depot Activity — Nearby Allocations</div>
+        <div style={{ fontSize: 8, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 4 }}>Depot Activity — Nearby Suburbs by Region</div>
+        <div style={{ fontSize: 7, color: MUT, marginBottom: 12, lineHeight: 1.6, borderLeft: '2px solid #2a2a2a', paddingLeft: 8 }}>
+          Suburb proximity match — leading indicator of which regions are busiest, not confirmed job assignment.
         </div>
-        <div style={{ fontSize: 7, color: MUT, marginBottom: 10, lineHeight: 1.6, borderLeft: '2px solid #2a2a2a', paddingLeft: 8 }}>
-          Matched by suburb proximity — indicates which depots are closest to the work, not which ones got the job. Use as a leading indicator only.
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
-          {(['S', 'N', 'E', 'W']).map(region => {
-            const regionDepots = topDepots.filter(d => d.region === region);
-            if (!regionDepots.length) return null;
-            const st = REGION_STYLE[region];
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 16 }}>
+          {['S', 'N', 'E', 'W'].map(region => {
+            const suburbs = regionActivity[region] || [];
+            const total   = suburbs.reduce((s, [, v]) => s + v, 0);
+            const st      = REGION_STYLE[region];
             return (
               <div key={region}>
-                <div style={{ fontSize: 7, fontWeight: 700, color: st.color, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 6 }}>{REGION_LABELS[region]}</div>
-                <DepotBarList depots={regionDepots} />
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span style={{ fontSize: 9, fontWeight: 700, color: st.color, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{REGION_LABELS[region]}</span>
+                  {total > 0 && <span style={{ fontSize: 8, color: MUT, fontFamily: "'IBM Plex Mono',monospace" }}>{total} nearby</span>}
+                </div>
+                {suburbs.length === 0
+                  ? <div style={{ fontSize: 8, color: MUT }}>No data</div>
+                  : <BarList data={suburbs} color={st.color} maxBars={10} labelWidth={100} />
+                }
               </div>
             );
           })}
