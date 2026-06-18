@@ -1,9 +1,15 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { ACC, MUT, BRD, TXT, GRN, RED, SURF, inp, sel, txa, btnA, btnG, btnD, sm, ovly, mdl, mdlH, mdlB, mdlF } from '../../lib/styles';
 import { FL } from '../ui/shared';
 import { supabase } from '../../lib/supabase';
 import { getTrucks, upsertTruck } from '../../lib/db/towing';
 import { RosterCalendar, MiniRoster } from './RosterCalendar';
+import {
+  getTools, upsertTool, deleteTool,
+  getEquipment, upsertEquipment, deleteEquipment,
+  getConsumables, upsertConsumable, deleteConsumable,
+  getAssignments, assignAsset, unassignAsset,
+} from '../../lib/db/truckAssets';
 
 const ORANGE = '#e8870a';
 const BLUE   = '#5a7a9a';
@@ -279,6 +285,263 @@ function AvailabilityModal({ truck, onSave, onCancel }) {
   );
 }
 
+const ASSET_TABS = [
+  { id: 'tool',        label: '🔧 Tools',       icon: '🔧' },
+  { id: 'equipment',   label: '⚙️ Equipment',   icon: '⚙️' },
+  { id: 'consumable',  label: '🧴 Consumables', icon: '🧴' },
+];
+
+const ASSET_COLORS = {
+  tool:       { badge: '#4a7a3a', bg: '#0a1a08' },
+  equipment:  { badge: '#2a5a8a', bg: '#08121a' },
+  consumable: { badge: '#7a4a1a', bg: '#1a1008' },
+};
+
+function NewCatalogueItemForm({ assetType, onSave, onCancel }) {
+  const [name,     setName]     = useState('');
+  const [brand,    setBrand]    = useState('');
+  const [category, setCategory] = useState('');
+  const [extra,    setExtra]    = useState('');
+  const [saving,   setSaving]   = useState(false);
+  const [err,      setErr]      = useState('');
+
+  const extraLabel = assetType === 'tool' ? 'Condition' : assetType === 'equipment' ? 'Status' : 'Unit';
+  const extraPlaceholder = assetType === 'tool' ? 'Good' : assetType === 'equipment' ? 'Active' : 'each';
+
+  const save = async () => {
+    if (!name.trim()) { setErr('Name required'); return; }
+    setSaving(true); setErr('');
+    try {
+      let item;
+      const base = { name: name.trim(), brand: brand.trim() || null, category: category.trim() || null };
+      if (assetType === 'tool')        item = await upsertTool({ ...base, condition: extra.trim() || 'Good' });
+      else if (assetType === 'equipment') item = await upsertEquipment({ ...base, status: extra.trim() || 'Active' });
+      else                             item = await upsertConsumable({ ...base, unit: extra.trim() || 'each' });
+      onSave(item);
+    } catch (e) { setErr(e.message); setSaving(false); }
+  };
+
+  const fld = { background: '#0a0a0a', border: '1px solid #252525', color: TXT, fontFamily: "'IBM Plex Mono',monospace", fontSize: 11, padding: '6px 8px', borderRadius: 2, outline: 'none', width: '100%', boxSizing: 'border-box' };
+
+  return (
+    <div style={{ border: '1px solid #2a2a2a', borderRadius: 2, padding: 12, background: '#0a0a0a', display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ fontSize: 9, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>New {assetType}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+        <div><FL t="Name *" /><input style={fld} value={name} onChange={e => setName(e.target.value)} placeholder="Item name" autoFocus /></div>
+        <div><FL t="Brand" /><input style={fld} value={brand} onChange={e => setBrand(e.target.value)} placeholder="Optional" /></div>
+        <div><FL t="Category" /><input style={fld} value={category} onChange={e => setCategory(e.target.value)} placeholder="Optional" /></div>
+        <div><FL t={extraLabel} /><input style={fld} value={extra} onChange={e => setExtra(e.target.value)} placeholder={extraPlaceholder} /></div>
+      </div>
+      {err && <div style={{ fontSize: 9, color: RED }}>{err}</div>}
+      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+        <button style={{ ...btnG, ...sm, fontSize: 8 }} onClick={onCancel}>Cancel</button>
+        <button style={{ ...btnA, ...sm, fontSize: 8, opacity: saving ? 0.4 : 1 }} disabled={saving} onClick={save}>{saving ? 'Saving…' : 'Add to Catalogue'}</button>
+      </div>
+    </div>
+  );
+}
+
+function AssetPickerModal({ truck, onClose, onAssigned }) {
+  const [activeTab,   setActiveTab]   = useState('tool');
+  const [catalogue,   setCatalogue]   = useState({ tool: [], equipment: [], consumable: [] });
+  const [assignments, setAssignments] = useState([]);
+  const [search,      setSearch]      = useState('');
+  const [showNew,     setShowNew]     = useState(false);
+  const [assigning,   setAssigning]   = useState(null);
+  const [loading,     setLoading]     = useState(true);
+  const [err,         setErr]         = useState('');
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [tools, equip, cons, assigns] = await Promise.all([
+          getTools(), getEquipment(), getConsumables(), getAssignments(truck.id),
+        ]);
+        setCatalogue({ tool: tools, equipment: equip, consumable: cons });
+        setAssignments(assigns);
+      } catch (e) { setErr(e.message); }
+      finally { setLoading(false); }
+    })();
+  }, [truck.id]);
+
+  const assignedIds = useMemo(() => new Set(assignments.map(a => a.asset_id)), [assignments]);
+
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    return catalogue[activeTab].filter(item =>
+      item.name.toLowerCase().includes(q) ||
+      (item.brand || '').toLowerCase().includes(q) ||
+      (item.category || '').toLowerCase().includes(q)
+    );
+  }, [catalogue, activeTab, search]);
+
+  const handleAssign = async (item) => {
+    setAssigning(item.id);
+    try {
+      const a = await assignAsset({ truckId: truck.id, assetType: activeTab, assetId: item.id, assetName: item.name });
+      setAssignments(prev => [...prev, a]);
+      onAssigned();
+    } catch (e) { setErr(e.message); }
+    finally { setAssigning(null); }
+  };
+
+  const handleUnassign = async (item) => {
+    const a = assignments.find(x => x.asset_id === item.id);
+    if (!a) return;
+    setAssigning(item.id);
+    try {
+      await unassignAsset(a.id);
+      setAssignments(prev => prev.filter(x => x.id !== a.id));
+      onAssigned();
+    } catch (e) { setErr(e.message); }
+    finally { setAssigning(null); }
+  };
+
+  const handleNewSave = (item) => {
+    setCatalogue(prev => ({ ...prev, [activeTab]: [...prev[activeTab], item].sort((a, b) => a.name.localeCompare(b.name)) }));
+    setShowNew(false);
+  };
+
+  return (
+    <div style={ovly} onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={{ ...mdl, maxWidth: 520, maxHeight: '88vh', display: 'flex', flexDirection: 'column' }}>
+        <div style={mdlH}>
+          <div>
+            <b style={{ fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Assign Assets — {truck.plate}</b>
+            <div style={{ fontSize: 8, color: MUT, marginTop: 2 }}>{assignments.length} item{assignments.length !== 1 ? 's' : ''} assigned to this vehicle</div>
+          </div>
+          <button style={{ ...btnG, ...sm }} onClick={onClose}>✕</button>
+        </div>
+
+        {/* Tabs */}
+        <div style={{ display: 'flex', borderBottom: '1px solid #1a1a1a', background: '#080808' }}>
+          {ASSET_TABS.map(t => (
+            <button key={t.id} onClick={() => { setActiveTab(t.id); setSearch(''); setShowNew(false); }}
+              style={{ flex: 1, padding: '8px 0', fontSize: 9, fontWeight: activeTab === t.id ? 700 : 400,
+                color: activeTab === t.id ? ACC : MUT, background: 'none', border: 'none',
+                borderBottom: activeTab === t.id ? `2px solid ${ACC}` : '2px solid transparent',
+                cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", letterSpacing: '0.08em' }}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ flex: 1, overflowY: 'auto', padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {err && <div style={{ fontSize: 9, color: RED }}>{err}</div>}
+
+          {/* Search + New button */}
+          <div style={{ display: 'flex', gap: 6 }}>
+            <input
+              style={{ flex: 1, background: '#0a0a0a', border: '1px solid #252525', color: TXT, fontFamily: "'IBM Plex Mono',monospace", fontSize: 10, padding: '5px 8px', borderRadius: 2, outline: 'none' }}
+              placeholder={`Search ${activeTab}s…`} value={search} onChange={e => setSearch(e.target.value)} />
+            <button style={{ ...btnA, ...sm, fontSize: 8 }} onClick={() => setShowNew(s => !s)}>+ New</button>
+          </div>
+
+          {/* New item form */}
+          {showNew && (
+            <NewCatalogueItemForm assetType={activeTab} onSave={handleNewSave} onCancel={() => setShowNew(false)} />
+          )}
+
+          {/* Catalogue list */}
+          {loading && <div style={{ fontSize: 9, color: MUT, textAlign: 'center', padding: '16px 0' }}>Loading…</div>}
+          {!loading && filtered.length === 0 && (
+            <div style={{ fontSize: 9, color: MUT, textAlign: 'center', padding: '16px 0' }}>
+              {catalogue[activeTab].length === 0 ? `No ${activeTab}s in catalogue yet. Add one above.` : 'No matches.'}
+            </div>
+          )}
+          {filtered.map(item => {
+            const isAssigned = assignedIds.has(item.id);
+            const isBusy     = assigning === item.id;
+            const ac = ASSET_COLORS[activeTab];
+            return (
+              <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px',
+                background: isAssigned ? ac.bg : '#0a0a0a',
+                border: `1px solid ${isAssigned ? ac.badge + '55' : '#1e1e1e'}`,
+                borderRadius: 2 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: TXT }}>{item.name}</div>
+                  <div style={{ fontSize: 8, color: MUT, marginTop: 1 }}>
+                    {[item.brand, item.category, item.condition || item.status || item.unit].filter(Boolean).join(' · ')}
+                  </div>
+                </div>
+                <button
+                  disabled={isBusy}
+                  onClick={() => isAssigned ? handleUnassign(item) : handleAssign(item)}
+                  style={{ ...isAssigned ? btnD : btnA, ...sm, fontSize: 8, opacity: isBusy ? 0.4 : 1, flexShrink: 0 }}>
+                  {isBusy ? '…' : isAssigned ? 'Remove' : 'Assign'}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AssetsPanel({ truck }) {
+  const [assignments, setAssignments] = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [removing,    setRemoving]    = useState(null);
+
+  const load = useCallback(async () => {
+    try {
+      const data = await getAssignments(truck.id);
+      setAssignments(data);
+    } catch { /* silent */ }
+    finally { setLoading(false); }
+  }, [truck.id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleRemove = async (a) => {
+    setRemoving(a.id);
+    try {
+      await unassignAsset(a.id);
+      setAssignments(prev => prev.filter(x => x.id !== a.id));
+    } catch { /* silent */ }
+    finally { setRemoving(null); }
+  };
+
+  const byType = useMemo(() => ({
+    tool:       assignments.filter(a => a.asset_type === 'tool'),
+    equipment:  assignments.filter(a => a.asset_type === 'equipment'),
+    consumable: assignments.filter(a => a.asset_type === 'consumable'),
+  }), [assignments]);
+
+  if (loading) return <div style={{ fontSize: 8, color: MUT, padding: '6px 0 2px 28px' }}>Loading assets…</div>;
+  if (assignments.length === 0) return <div style={{ fontSize: 8, color: MUT, padding: '6px 0 2px 28px' }}>No assets assigned yet.</div>;
+
+  return (
+    <div style={{ paddingLeft: 28, paddingBottom: 4, display: 'flex', flexDirection: 'column', gap: 4 }}>
+      {ASSET_TABS.map(({ id, icon, label }) => {
+        const items = byType[id];
+        if (!items.length) return null;
+        const ac = ASSET_COLORS[id];
+        return (
+          <div key={id}>
+            <div style={{ fontSize: 7, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>
+              {icon} {label.split(' ')[1]}
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+              {items.map(a => (
+                <span key={a.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4,
+                  fontSize: 8, color: TXT, background: ac.bg, border: `1px solid ${ac.badge}55`,
+                  borderRadius: 2, padding: '2px 6px' }}>
+                  {a.asset_name}
+                  <button onClick={() => handleRemove(a)} disabled={removing === a.id}
+                    style={{ background: 'none', border: 'none', color: MUT, cursor: 'pointer', padding: 0,
+                      fontSize: 8, lineHeight: 1, opacity: removing === a.id ? 0.3 : 0.6 }}>✕</button>
+                </span>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function FleetTab({ isAdmin, companyId }) {
   const [trucks,  setTrucks]  = useState([]);
   const [loading, setLoading] = useState(true);
@@ -350,47 +613,76 @@ export default function FleetTab({ isAdmin, companyId }) {
 }
 
 function TruckRow({ truck, isAdmin, onEdit, onDelete, onAvail }) {
+  const [assetsOpen,  setAssetsOpen]  = useState(false);
+  const [pickerOpen,  setPickerOpen]  = useState(false);
+  const [reloadKey,   setReloadKey]   = useState(0);
+
   const hasOverride = truck.override_active;
   const hasRelief   = !!(truck.relief_driver_name || truck.relief_da_number);
   const sc          = hasOverride && !hasRelief ? RED : statusColor(truck.status);
   const activeSched = hasRelief ? truck.relief_schedule : truck.schedule;
 
   return (
-    <div style={{ padding: '8px 10px', background: '#0d0d0d', border: `1px solid ${hasOverride ? (hasRelief ? '#3a3a1a' : '#2a1a1a') : '#252525'}`, borderLeft: `3px solid ${sc}`, borderRadius: 2, marginBottom: 4 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span style={{ fontSize: 16, flexShrink: 0 }}>{truckEmoji(truck.truck_type)}</span>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: TXT, fontFamily: "'IBM Plex Mono',monospace", letterSpacing: '0.1em' }}>{truck.plate}</span>
-            <StatusBadge status={hasOverride && !hasRelief ? 'unavailable' : truck.status} />
-            {hasOverride && !hasRelief && (
-              <span style={{ fontSize: 7, fontWeight: 700, letterSpacing: '0.1em', padding: '1px 5px', border: `1px solid ${RED}55`, borderRadius: 2, color: RED, background: RED + '15', textTransform: 'uppercase' }}>
-                {truck.override_reason || 'Away'}
-              </span>
+    <>
+      <div style={{ background: '#0d0d0d', border: `1px solid ${hasOverride ? (hasRelief ? '#3a3a1a' : '#2a1a1a') : '#252525'}`, borderLeft: `3px solid ${sc}`, borderRadius: 2, marginBottom: 4 }}>
+        <div style={{ padding: '8px 10px', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 16, flexShrink: 0 }}>{truckEmoji(truck.truck_type)}</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: TXT, fontFamily: "'IBM Plex Mono',monospace", letterSpacing: '0.1em' }}>{truck.plate}</span>
+              <StatusBadge status={hasOverride && !hasRelief ? 'unavailable' : truck.status} />
+              {hasOverride && !hasRelief && (
+                <span style={{ fontSize: 7, fontWeight: 700, letterSpacing: '0.1em', padding: '1px 5px', border: `1px solid ${RED}55`, borderRadius: 2, color: RED, background: RED + '15', textTransform: 'uppercase' }}>
+                  {truck.override_reason || 'Away'}
+                </span>
+              )}
+              {hasRelief && (
+                <span style={{ fontSize: 7, fontWeight: 700, letterSpacing: '0.1em', padding: '1px 5px', border: '1px solid #6a6a1a', borderRadius: 2, color: '#cccc44', background: '#cccc4411', textTransform: 'uppercase' }}>Relief</span>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 2, alignItems: 'center' }}>
+              {truck.truck_type && (
+                <span style={{ fontSize: 8, color: MUT, fontFamily: "'IBM Plex Mono',monospace" }}>{truck.truck_type}</span>
+              )}
+            </div>
+            {hasOverride && truck.override_return_date && (
+              <div style={{ fontSize: 8, color: MUT, marginTop: 2 }}>Returns {fmtDate(truck.override_return_date)}</div>
             )}
-            {hasRelief && (
-              <span style={{ fontSize: 7, fontWeight: 700, letterSpacing: '0.1em', padding: '1px 5px', border: '1px solid #6a6a1a', borderRadius: 2, color: '#cccc44', background: '#cccc4411', textTransform: 'uppercase' }}>Relief</span>
+            {truck.notes && !hasOverride && (
+              <div style={{ fontSize: 8, color: MUT, marginTop: 2 }}>{truck.notes}</div>
             )}
+            <MiniRoster schedule={activeSched} />
           </div>
-          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 2, alignItems: 'center' }}>
-            {truck.truck_type && (
-              <span style={{ fontSize: 8, color: MUT, fontFamily: "'IBM Plex Mono',monospace" }}>{truck.truck_type}</span>
-            )}
+          <div style={{ display: 'flex', gap: 4, flexShrink: 0, alignSelf: 'flex-start' }}>
+            <button onClick={() => { setAssetsOpen(o => !o); }} title="Assets"
+              style={{ ...btnG, ...sm, fontSize: 8, color: assetsOpen ? ACC : MUT, borderColor: assetsOpen ? ACC + '44' : undefined }}>
+              🧰
+            </button>
+            {isAdmin && <button onClick={onAvail} style={{ ...btnG, ...sm, fontSize: 8, color: hasOverride ? '#cccc44' : MUT, borderColor: hasOverride ? '#5a5a14' : undefined }}>📅</button>}
+            {isAdmin && <button onClick={onEdit}  style={{ ...btnG, ...sm, fontSize: 8 }}>Edit</button>}
+            <button onClick={onDelete} style={{ ...btnD, ...sm, fontSize: 8 }}>Delete</button>
           </div>
-          {hasOverride && truck.override_return_date && (
-            <div style={{ fontSize: 8, color: MUT, marginTop: 2 }}>Returns {fmtDate(truck.override_return_date)}</div>
-          )}
-          {truck.notes && !hasOverride && (
-            <div style={{ fontSize: 8, color: MUT, marginTop: 2 }}>{truck.notes}</div>
-          )}
-          <MiniRoster schedule={activeSched} />
         </div>
-        <div style={{ display: 'flex', gap: 4, flexShrink: 0, alignSelf: 'flex-start' }}>
-          {isAdmin && <button onClick={onAvail} style={{ ...btnG, ...sm, fontSize: 8, color: hasOverride ? '#cccc44' : MUT, borderColor: hasOverride ? '#5a5a14' : undefined }}>📅</button>}
-          {isAdmin && <button onClick={onEdit}  style={{ ...btnG, ...sm, fontSize: 8 }}>Edit</button>}
-          <button onClick={onDelete} style={{ ...btnD, ...sm, fontSize: 8 }}>Delete</button>
-        </div>
+
+        {/* Assets panel */}
+        {assetsOpen && (
+          <div style={{ borderTop: '1px solid #1a1a1a', padding: '8px 10px 8px 10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+              <span style={{ fontSize: 8, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase' }}>🧰 Assigned Assets</span>
+              <button onClick={() => setPickerOpen(true)} style={{ ...btnA, ...sm, fontSize: 8 }}>Manage</button>
+            </div>
+            <AssetsPanel key={reloadKey} truck={truck} />
+          </div>
+        )}
       </div>
-    </div>
+
+      {pickerOpen && (
+        <AssetPickerModal
+          truck={truck}
+          onClose={() => setPickerOpen(false)}
+          onAssigned={() => setReloadKey(k => k + 1)}
+        />
+      )}
+    </>
   );
 }
