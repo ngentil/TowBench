@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { ACC, MUT, BRD, TXT, GRN, RED, SURF, inp, sel, txa, btnA, btnG, btnD, sm, ovly, mdl, mdlH, mdlB, mdlF } from '../../lib/styles';
 import { FL } from '../ui/shared';
 import { supabase } from '../../lib/supabase';
@@ -297,9 +297,60 @@ const ASSET_COLORS = {
   consumable: { badge: '#7a4a1a', bg: '#1a1008' },
 };
 
-const TOOL_CATEGORIES  = ['Power Tools', 'Hand Tools', 'Measuring & Diagnostic', 'Specialty', 'Lifting & Safety', 'Other'];
-const TOOL_CONDITIONS  = ['New', 'Good', 'Fair', 'Poor'];
-const EQUIP_STATUSES   = ['Active', 'Inactive', 'In Service', 'Project', 'Sold'];
+const TOOL_CATEGORIES = [
+  'Recovery & Rigging', 'Lifting & Jacking', 'Strapping & Tie-Down',
+  'Cutting & Grinding', 'Hand Tools', 'Power Tools',
+  'Measuring & Diagnostic', 'Safety & PPE', 'Other',
+];
+const TOOL_CONDITIONS = ['New', 'Good', 'Fair', 'Poor'];
+const EQUIP_STATUSES  = ['Active', 'Inactive', 'In Service', 'Sold'];
+
+const CONSUMABLE_CATEGORIES = [
+  'Fluids & Lubricants', 'Straps & Rope', 'PPE & Safety',
+  'Cleaning & Degreaser', 'Fasteners & Hardware', 'Tow & Recovery Supplies',
+  'First Aid', 'Other',
+];
+const CONSUMABLE_UNITS = ['each', 'pair', 'box', 'roll', 'L', 'kg', 'set', 'pack'];
+
+function PhotoPicker({ photos, setPhotos }) {
+  const camRef = useRef();
+  const galRef = useRef();
+
+  const handle = e => {
+    const files = Array.from(e.target.files);
+    if (!files.length) return;
+    Promise.all(files.map(f => new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(r.result);
+      r.onerror = rej;
+      r.readAsDataURL(f);
+    }))).then(urls => setPhotos(prev => [...prev, ...urls]));
+    e.target.value = '';
+  };
+
+  return (
+    <div>
+      <FL t="Photos" />
+      {photos.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4, marginBottom: 8 }}>
+          {photos.map((p, i) => (
+            <div key={i} style={{ position: 'relative' }}>
+              <img src={p} alt="" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', borderRadius: 2, border: '1px solid #252525', display: 'block' }} />
+              <button type="button" onClick={() => setPhotos(ps => ps.filter((_, j) => j !== i))}
+                style={{ position: 'absolute', top: 2, right: 2, background: 'rgba(0,0,0,0.85)', border: 'none', color: '#ccc', width: 18, height: 18, borderRadius: '50%', cursor: 'pointer', fontSize: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: 6 }}>
+        <input ref={camRef} type="file" accept="image/*" capture="environment" onChange={handle} style={{ display: 'none' }} />
+        <input ref={galRef} type="file" accept="image/*" multiple onChange={handle} style={{ display: 'none' }} />
+        <button type="button" onClick={() => camRef.current.click()} style={{ ...btnG, flex: 1, fontSize: 9, padding: '8px 0', letterSpacing: '0.06em' }}>📷 Camera</button>
+        <button type="button" onClick={() => galRef.current.click()} style={{ ...btnG, flex: 1, fontSize: 9, padding: '8px 0', letterSpacing: '0.06em' }}>🖼 Gallery</button>
+      </div>
+    </div>
+  );
+}
 
 const fld = {
   background: '#0a0a0a', border: '1px solid #252525', color: TXT,
@@ -321,8 +372,9 @@ function ToolForm({ tool, onSave, onCancel }) {
     storage_location:tool?.storage_location|| '',
     notes:           tool?.notes           || '',
   });
-  const [saving, setSaving] = useState(false);
-  const [err,    setErr]    = useState('');
+  const [photos,  setPhotos] = useState(tool?.photos || []);
+  const [saving,  setSaving] = useState(false);
+  const [err,     setErr]    = useState('');
   const s = (k, v) => setF(p => ({ ...p, [k]: v }));
 
   const save = async () => {
@@ -341,6 +393,7 @@ function ToolForm({ tool, onSave, onCancel }) {
         warranty_expiry:  f.warranty_expiry || null,
         storage_location: f.storage_location.trim() || null,
         notes:            f.notes.trim()  || null,
+        photos,
       });
       onSave(item);
     } catch (e) { setErr(e.message); setSaving(false); }
@@ -387,6 +440,9 @@ function ToolForm({ tool, onSave, onCancel }) {
             <FL t="Notes" />
             <textarea style={{ ...txa, minHeight: 50 }} value={f.notes} onChange={e => s('notes', e.target.value)} placeholder="e.g. 115mm disc, 11,000 RPM" />
           </div>
+          <div style={{ gridColumn: '1/-1' }}>
+            <PhotoPicker photos={photos} setPhotos={setPhotos} />
+          </div>
         </div>
         {err && <div style={{ padding: '6px 16px', fontSize: 9, color: RED }}>⚠ {err}</div>}
         <div style={mdlF}>
@@ -414,8 +470,9 @@ function EquipmentForm({ item, onSave, onCancel }) {
     location: item?.location || '',
     notes:    item?.notes    || '',
   });
-  const [saving, setSaving] = useState(false);
-  const [err,    setErr]    = useState('');
+  const [photos,  setPhotos] = useState(item?.photos || []);
+  const [saving,  setSaving] = useState(false);
+  const [err,     setErr]    = useState('');
   const s = (k, v) => setF(p => ({ ...p, [k]: v }));
 
   const save = async () => {
@@ -434,6 +491,7 @@ function EquipmentForm({ item, onSave, onCancel }) {
         hours:    f.hours !== '' ? parseFloat(f.hours) : null,
         location: f.location.trim() || null,
         notes:    f.notes.trim()  || null,
+        photos,
       });
       onSave(saved);
     } catch (e) { setErr(e.message); setSaving(false); }
@@ -470,6 +528,9 @@ function EquipmentForm({ item, onSave, onCancel }) {
             <FL t="Notes" />
             <textarea style={{ ...txa, minHeight: 50 }} value={f.notes} onChange={e => s('notes', e.target.value)} placeholder="e.g. Next service at 500 hrs" />
           </div>
+          <div style={{ gridColumn: '1/-1' }}>
+            <PhotoPicker photos={photos} setPhotos={setPhotos} />
+          </div>
         </div>
         {err && <div style={{ padding: '6px 16px', fontSize: 9, color: RED }}>⚠ {err}</div>}
         <div style={mdlF}>
@@ -492,8 +553,9 @@ function ConsumableForm({ item, onSave, onCancel }) {
     unit:     item?.unit     || 'each',
     notes:    item?.notes    || '',
   });
-  const [saving, setSaving] = useState(false);
-  const [err,    setErr]    = useState('');
+  const [photos,  setPhotos] = useState(item?.photos || []);
+  const [saving,  setSaving] = useState(false);
+  const [err,     setErr]    = useState('');
   const s = (k, v) => setF(p => ({ ...p, [k]: v }));
 
   const save = async () => {
@@ -504,9 +566,10 @@ function ConsumableForm({ item, onSave, onCancel }) {
         ...item,
         name:     f.name.trim(),
         brand:    f.brand.trim()    || null,
-        category: f.category.trim() || null,
-        unit:     f.unit.trim()     || 'each',
+        category: f.category        || null,
+        unit:     f.unit            || 'each',
         notes:    f.notes.trim()    || null,
+        photos,
       });
       onSave(saved);
     } catch (e) { setErr(e.message); setSaving(false); }
@@ -521,15 +584,29 @@ function ConsumableForm({ item, onSave, onCancel }) {
         </div>
         <div style={{ ...mdlB, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           <div style={{ gridColumn: '1/-1' }}>
+            <FL t="Category" />
+            <select style={{ ...sel, width: '100%' }} value={f.category} onChange={e => s('category', e.target.value)}>
+              <option value="">— no category —</option>
+              {CONSUMABLE_CATEGORIES.map(c => <option key={c}>{c}</option>)}
+            </select>
+          </div>
+          <div style={{ gridColumn: '1/-1' }}>
             <FL t="Name *" />
             <input style={fld} value={f.name} onChange={e => s('name', e.target.value)} placeholder="e.g. Nitrile Gloves" autoFocus />
           </div>
           <div><FL t="Brand" /><input style={fld} value={f.brand} onChange={e => s('brand', e.target.value)} placeholder="e.g. Ansell" /></div>
-          <div><FL t="Category" /><input style={fld} value={f.category} onChange={e => s('category', e.target.value)} placeholder="e.g. PPE" /></div>
-          <div><FL t="Unit" /><input style={fld} value={f.unit} onChange={e => s('unit', e.target.value)} placeholder="e.g. box, litre, each" /></div>
+          <div>
+            <FL t="Unit" />
+            <select style={{ ...sel, width: '100%' }} value={f.unit} onChange={e => s('unit', e.target.value)}>
+              {CONSUMABLE_UNITS.map(u => <option key={u}>{u}</option>)}
+            </select>
+          </div>
           <div style={{ gridColumn: '1/-1' }}>
             <FL t="Notes" />
-            <textarea style={{ ...txa, minHeight: 40 }} value={f.notes} onChange={e => s('notes', e.target.value)} placeholder="e.g. Size L preferred" />
+            <textarea style={{ ...txa, minHeight: 40 }} value={f.notes} onChange={e => s('notes', e.target.value)} placeholder="e.g. Size L, reorder when 2 boxes left" />
+          </div>
+          <div style={{ gridColumn: '1/-1' }}>
+            <PhotoPicker photos={photos} setPhotos={setPhotos} />
           </div>
         </div>
         {err && <div style={{ padding: '6px 16px', fontSize: 9, color: RED }}>⚠ {err}</div>}

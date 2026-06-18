@@ -21,6 +21,7 @@ export async function upsertTool(tool) {
     storage_location: tool.storage_location || null,
     serial_no:        tool.serial_no        || null,
     notes:            tool.notes            || null,
+    photos:           tool.photos           || [],
   };
   if (tool.id) row.id = tool.id;
   const { data, error } = await supabase
@@ -56,6 +57,7 @@ export async function upsertEquipment(eq) {
     hours:    eq.hours    != null && eq.hours !== '' ? parseFloat(eq.hours) : null,
     location: eq.location || null,
     notes:    eq.notes    || null,
+    photos:   eq.photos   || [],
   };
   if (eq.id) row.id = eq.id;
   const { data, error } = await supabase
@@ -86,6 +88,7 @@ export async function upsertConsumable(c) {
     category: c.category || null,
     unit:     c.unit     || 'each',
     notes:    c.notes    || null,
+    photos:   c.photos   || [],
   };
   if (c.id) row.id = c.id;
   const { data, error } = await supabase
