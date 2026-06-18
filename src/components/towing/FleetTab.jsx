@@ -738,10 +738,9 @@ function AssetPickerModal({ truck, catalogue: initialCatalogue, onCatalogueChang
                 background: isAssigned ? ac.bg : '#0a0a0a',
                 border: `1px solid ${isAssigned ? ac.badge + '55' : '#1e1e1e'}`,
                 borderRadius: 2 }}>
-                {thumb
-                  ? <img src={thumb} alt="" style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 2, border: '1px solid #252525', flexShrink: 0 }} />
-                  : <span style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0, background: '#111', borderRadius: 2, border: '1px solid #1e1e1e' }}>{ASSET_TABS.find(t => t.id === activeTab)?.icon}</span>
-                }
+                {thumb && (
+                  <img src={thumb} alt="" style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 2, border: '1px solid #252525', flexShrink: 0 }} />
+                )}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: TXT }}>{item.name}</div>
                   <div style={{ fontSize: 8, color: MUT, marginTop: 1 }}>
@@ -845,7 +844,6 @@ function AssetsPanel({ truck, catalogue, version }) {
                   {thumb && (
                     <img src={thumb} alt="" style={{ width: 20, height: 20, objectFit: 'cover', borderRadius: 1, flexShrink: 0 }} />
                   )}
-                  {!thumb && <span style={{ fontSize: 9 }}>{icon}</span>}
                   {a.asset_name}
                   <button onClick={() => handleRemove(a)} disabled={removing === a.id}
                     style={{ background: 'none', border: 'none', color: MUT, cursor: 'pointer', padding: 0,
