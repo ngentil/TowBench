@@ -297,45 +297,248 @@ const ASSET_COLORS = {
   consumable: { badge: '#7a4a1a', bg: '#1a1008' },
 };
 
-function NewCatalogueItemForm({ assetType, onSave, onCancel }) {
-  const [name,     setName]     = useState('');
-  const [brand,    setBrand]    = useState('');
-  const [category, setCategory] = useState('');
-  const [extra,    setExtra]    = useState('');
-  const [saving,   setSaving]   = useState(false);
-  const [err,      setErr]      = useState('');
+const TOOL_CATEGORIES  = ['Power Tools', 'Hand Tools', 'Measuring & Diagnostic', 'Specialty', 'Lifting & Safety', 'Other'];
+const TOOL_CONDITIONS  = ['New', 'Good', 'Fair', 'Poor'];
+const EQUIP_STATUSES   = ['Active', 'Inactive', 'In Service', 'Project', 'Sold'];
 
-  const extraLabel = assetType === 'tool' ? 'Condition' : assetType === 'equipment' ? 'Status' : 'Unit';
-  const extraPlaceholder = assetType === 'tool' ? 'Good' : assetType === 'equipment' ? 'Active' : 'each';
+const fld = {
+  background: '#0a0a0a', border: '1px solid #252525', color: TXT,
+  fontFamily: "'IBM Plex Mono',monospace", fontSize: 11, padding: '6px 8px',
+  borderRadius: 2, outline: 'none', width: '100%', boxSizing: 'border-box',
+};
+
+function ToolForm({ tool, onSave, onCancel }) {
+  const isEdit = !!tool?.id;
+  const [f, setF] = useState({
+    name:            tool?.name            || '',
+    brand:           tool?.brand           || '',
+    model:           tool?.model           || '',
+    category:        tool?.category        || '',
+    condition:       tool?.condition       || 'Good',
+    purchase_date:   tool?.purchase_date   || '',
+    purchase_price:  tool?.purchase_price  != null ? String(tool.purchase_price) : '',
+    warranty_expiry: tool?.warranty_expiry || '',
+    storage_location:tool?.storage_location|| '',
+    notes:           tool?.notes           || '',
+  });
+  const [saving, setSaving] = useState(false);
+  const [err,    setErr]    = useState('');
+  const s = (k, v) => setF(p => ({ ...p, [k]: v }));
 
   const save = async () => {
-    if (!name.trim()) { setErr('Name required'); return; }
+    if (!f.name.trim()) { setErr('Name required'); return; }
     setSaving(true); setErr('');
     try {
-      let item;
-      const base = { name: name.trim(), brand: brand.trim() || null, category: category.trim() || null };
-      if (assetType === 'tool')        item = await upsertTool({ ...base, condition: extra.trim() || 'Good' });
-      else if (assetType === 'equipment') item = await upsertEquipment({ ...base, status: extra.trim() || 'Active' });
-      else                             item = await upsertConsumable({ ...base, unit: extra.trim() || 'each' });
+      const item = await upsertTool({
+        ...tool,
+        name:             f.name.trim(),
+        brand:            f.brand.trim()  || null,
+        model:            f.model.trim()  || null,
+        category:         f.category      || null,
+        condition:        f.condition,
+        purchase_date:    f.purchase_date || null,
+        purchase_price:   parseFloat(f.purchase_price) || 0,
+        warranty_expiry:  f.warranty_expiry || null,
+        storage_location: f.storage_location.trim() || null,
+        notes:            f.notes.trim()  || null,
+      });
       onSave(item);
     } catch (e) { setErr(e.message); setSaving(false); }
   };
 
-  const fld = { background: '#0a0a0a', border: '1px solid #252525', color: TXT, fontFamily: "'IBM Plex Mono',monospace", fontSize: 11, padding: '6px 8px', borderRadius: 2, outline: 'none', width: '100%', boxSizing: 'border-box' };
+  return (
+    <div style={ovly} onClick={e => e.target === e.currentTarget && onCancel()}>
+      <div style={{ ...mdl, maxWidth: 520, maxHeight: '90vh', overflowY: 'auto' }}>
+        <div style={mdlH}>
+          <b style={{ fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.1em' }}>{isEdit ? 'Edit Tool' : 'Add Tool'}</b>
+          <button style={{ ...btnG, ...sm }} onClick={onCancel}>✕</button>
+        </div>
+        <div style={{ ...mdlB, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div style={{ gridColumn: '1/-1' }}>
+            <FL t="Tool Name *" />
+            <input style={fld} value={f.name} onChange={e => s('name', e.target.value)} placeholder="e.g. Angle Grinder" autoFocus />
+          </div>
+          <div><FL t="Brand" /><input style={fld} value={f.brand} onChange={e => s('brand', e.target.value)} placeholder="e.g. Makita" /></div>
+          <div><FL t="Model" /><input style={fld} value={f.model} onChange={e => s('model', e.target.value)} placeholder="e.g. GA5030" /></div>
+          <div>
+            <FL t="Category" />
+            <select style={{ ...sel, width: '100%' }} value={f.category} onChange={e => s('category', e.target.value)}>
+              <option value="">— select —</option>
+              {TOOL_CATEGORIES.map(c => <option key={c}>{c}</option>)}
+            </select>
+          </div>
+          <div>
+            <FL t="Condition" />
+            <select style={{ ...sel, width: '100%' }} value={f.condition} onChange={e => s('condition', e.target.value)}>
+              {TOOL_CONDITIONS.map(c => <option key={c}>{c}</option>)}
+            </select>
+          </div>
+          <div><FL t="Purchase Date" /><input style={fld} type="date" value={f.purchase_date} onChange={e => s('purchase_date', e.target.value)} /></div>
+          <div><FL t="Purchase Price ($)" /><input style={fld} type="number" min="0" step="0.01" value={f.purchase_price} onChange={e => s('purchase_price', e.target.value)} placeholder="0.00" /></div>
+          <div style={{ gridColumn: '1/-1' }}>
+            <FL t="Warranty Expires" />
+            <input style={{ ...fld, width: 'calc(50% - 5px)', boxSizing: 'border-box' }} type="date" value={f.warranty_expiry} onChange={e => s('warranty_expiry', e.target.value)} />
+          </div>
+          <div style={{ gridColumn: '1/-1' }}>
+            <FL t="Storage Location" />
+            <input style={fld} value={f.storage_location} onChange={e => s('storage_location', e.target.value)} placeholder="e.g. Top box, middle drawer" />
+          </div>
+          <div style={{ gridColumn: '1/-1' }}>
+            <FL t="Notes" />
+            <textarea style={{ ...txa, minHeight: 50 }} value={f.notes} onChange={e => s('notes', e.target.value)} placeholder="e.g. 115mm disc, 11,000 RPM" />
+          </div>
+        </div>
+        {err && <div style={{ padding: '6px 16px', fontSize: 9, color: RED }}>⚠ {err}</div>}
+        <div style={mdlF}>
+          <button style={btnG} onClick={onCancel}>Cancel</button>
+          <button style={{ ...btnA, opacity: f.name.trim() && !saving ? 1 : 0.4 }} disabled={!f.name.trim() || saving} onClick={save}>
+            {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Add Tool'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EquipmentForm({ item, onSave, onCancel }) {
+  const isEdit = !!item?.id;
+  const [f, setF] = useState({
+    name:     item?.name     || '',
+    brand:    item?.brand    || '',
+    model:    item?.model    || '',
+    category: item?.category || '',
+    serial_no:item?.serial_no|| '',
+    status:   item?.status   || 'Active',
+    year:     item?.year     ? String(item.year) : '',
+    hours:    item?.hours    != null ? String(item.hours) : '',
+    location: item?.location || '',
+    notes:    item?.notes    || '',
+  });
+  const [saving, setSaving] = useState(false);
+  const [err,    setErr]    = useState('');
+  const s = (k, v) => setF(p => ({ ...p, [k]: v }));
+
+  const save = async () => {
+    if (!f.name.trim()) { setErr('Name required'); return; }
+    setSaving(true); setErr('');
+    try {
+      const saved = await upsertEquipment({
+        ...item,
+        name:     f.name.trim(),
+        brand:    f.brand.trim()  || null,
+        model:    f.model.trim()  || null,
+        category: f.category      || null,
+        serial_no:f.serial_no.trim() || null,
+        status:   f.status,
+        year:     f.year ? parseInt(f.year) : null,
+        hours:    f.hours !== '' ? parseFloat(f.hours) : null,
+        location: f.location.trim() || null,
+        notes:    f.notes.trim()  || null,
+      });
+      onSave(saved);
+    } catch (e) { setErr(e.message); setSaving(false); }
+  };
 
   return (
-    <div style={{ border: '1px solid #2a2a2a', borderRadius: 2, padding: 12, background: '#0a0a0a', display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div style={{ fontSize: 9, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>New {assetType}</div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-        <div><FL t="Name *" /><input style={fld} value={name} onChange={e => setName(e.target.value)} placeholder="Item name" autoFocus /></div>
-        <div><FL t="Brand" /><input style={fld} value={brand} onChange={e => setBrand(e.target.value)} placeholder="Optional" /></div>
-        <div><FL t="Category" /><input style={fld} value={category} onChange={e => setCategory(e.target.value)} placeholder="Optional" /></div>
-        <div><FL t={extraLabel} /><input style={fld} value={extra} onChange={e => setExtra(e.target.value)} placeholder={extraPlaceholder} /></div>
+    <div style={ovly} onClick={e => e.target === e.currentTarget && onCancel()}>
+      <div style={{ ...mdl, maxWidth: 520, maxHeight: '90vh', overflowY: 'auto' }}>
+        <div style={mdlH}>
+          <b style={{ fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.1em' }}>{isEdit ? 'Edit Equipment' : 'Add Equipment'}</b>
+          <button style={{ ...btnG, ...sm }} onClick={onCancel}>✕</button>
+        </div>
+        <div style={{ ...mdlB, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div style={{ gridColumn: '1/-1' }}>
+            <FL t="Name *" />
+            <input style={fld} value={f.name} onChange={e => s('name', e.target.value)} placeholder="e.g. Air Compressor" autoFocus />
+          </div>
+          <div><FL t="Brand / Make" /><input style={fld} value={f.brand} onChange={e => s('brand', e.target.value)} placeholder="e.g. DeWalt" /></div>
+          <div><FL t="Model" /><input style={fld} value={f.model} onChange={e => s('model', e.target.value)} placeholder="e.g. D55146" /></div>
+          <div><FL t="Serial / Asset No." /><input style={fld} value={f.serial_no} onChange={e => s('serial_no', e.target.value)} placeholder="e.g. SN-001" /></div>
+          <div>
+            <FL t="Status" />
+            <select style={{ ...sel, width: '100%' }} value={f.status} onChange={e => s('status', e.target.value)}>
+              {EQUIP_STATUSES.map(s => <option key={s}>{s}</option>)}
+            </select>
+          </div>
+          <div><FL t="Year" /><input style={fld} type="number" min="1900" max="2099" value={f.year} onChange={e => s('year', e.target.value)} placeholder="e.g. 2022" /></div>
+          <div><FL t="Hours" /><input style={fld} type="number" min="0" step="0.1" value={f.hours} onChange={e => s('hours', e.target.value)} placeholder="0" /></div>
+          <div style={{ gridColumn: '1/-1' }}>
+            <FL t="Location / Storage" />
+            <input style={fld} value={f.location} onChange={e => s('location', e.target.value)} placeholder="e.g. Depot 1, left bay" />
+          </div>
+          <div style={{ gridColumn: '1/-1' }}>
+            <FL t="Notes" />
+            <textarea style={{ ...txa, minHeight: 50 }} value={f.notes} onChange={e => s('notes', e.target.value)} placeholder="e.g. Next service at 500 hrs" />
+          </div>
+        </div>
+        {err && <div style={{ padding: '6px 16px', fontSize: 9, color: RED }}>⚠ {err}</div>}
+        <div style={mdlF}>
+          <button style={btnG} onClick={onCancel}>Cancel</button>
+          <button style={{ ...btnA, opacity: f.name.trim() && !saving ? 1 : 0.4 }} disabled={!f.name.trim() || saving} onClick={save}>
+            {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Add Equipment'}
+          </button>
+        </div>
       </div>
-      {err && <div style={{ fontSize: 9, color: RED }}>{err}</div>}
-      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-        <button style={{ ...btnG, ...sm, fontSize: 8 }} onClick={onCancel}>Cancel</button>
-        <button style={{ ...btnA, ...sm, fontSize: 8, opacity: saving ? 0.4 : 1 }} disabled={saving} onClick={save}>{saving ? 'Saving…' : 'Add to Catalogue'}</button>
+    </div>
+  );
+}
+
+function ConsumableForm({ item, onSave, onCancel }) {
+  const isEdit = !!item?.id;
+  const [f, setF] = useState({
+    name:     item?.name     || '',
+    brand:    item?.brand    || '',
+    category: item?.category || '',
+    unit:     item?.unit     || 'each',
+    notes:    item?.notes    || '',
+  });
+  const [saving, setSaving] = useState(false);
+  const [err,    setErr]    = useState('');
+  const s = (k, v) => setF(p => ({ ...p, [k]: v }));
+
+  const save = async () => {
+    if (!f.name.trim()) { setErr('Name required'); return; }
+    setSaving(true); setErr('');
+    try {
+      const saved = await upsertConsumable({
+        ...item,
+        name:     f.name.trim(),
+        brand:    f.brand.trim()    || null,
+        category: f.category.trim() || null,
+        unit:     f.unit.trim()     || 'each',
+        notes:    f.notes.trim()    || null,
+      });
+      onSave(saved);
+    } catch (e) { setErr(e.message); setSaving(false); }
+  };
+
+  return (
+    <div style={ovly} onClick={e => e.target === e.currentTarget && onCancel()}>
+      <div style={{ ...mdl, maxWidth: 420, maxHeight: '90vh', overflowY: 'auto' }}>
+        <div style={mdlH}>
+          <b style={{ fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.1em' }}>{isEdit ? 'Edit Consumable' : 'Add Consumable'}</b>
+          <button style={{ ...btnG, ...sm }} onClick={onCancel}>✕</button>
+        </div>
+        <div style={{ ...mdlB, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div style={{ gridColumn: '1/-1' }}>
+            <FL t="Name *" />
+            <input style={fld} value={f.name} onChange={e => s('name', e.target.value)} placeholder="e.g. Nitrile Gloves" autoFocus />
+          </div>
+          <div><FL t="Brand" /><input style={fld} value={f.brand} onChange={e => s('brand', e.target.value)} placeholder="e.g. Ansell" /></div>
+          <div><FL t="Category" /><input style={fld} value={f.category} onChange={e => s('category', e.target.value)} placeholder="e.g. PPE" /></div>
+          <div><FL t="Unit" /><input style={fld} value={f.unit} onChange={e => s('unit', e.target.value)} placeholder="e.g. box, litre, each" /></div>
+          <div style={{ gridColumn: '1/-1' }}>
+            <FL t="Notes" />
+            <textarea style={{ ...txa, minHeight: 40 }} value={f.notes} onChange={e => s('notes', e.target.value)} placeholder="e.g. Size L preferred" />
+          </div>
+        </div>
+        {err && <div style={{ padding: '6px 16px', fontSize: 9, color: RED }}>⚠ {err}</div>}
+        <div style={mdlF}>
+          <button style={btnG} onClick={onCancel}>Cancel</button>
+          <button style={{ ...btnA, opacity: f.name.trim() && !saving ? 1 : 0.4 }} disabled={!f.name.trim() || saving} onClick={save}>
+            {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Add Consumable'}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -347,6 +550,7 @@ function AssetPickerModal({ truck, onClose, onAssigned }) {
   const [assignments, setAssignments] = useState([]);
   const [search,      setSearch]      = useState('');
   const [showNew,     setShowNew]     = useState(false);
+  const [editItem,    setEditItem]    = useState(null);
   const [assigning,   setAssigning]   = useState(null);
   const [loading,     setLoading]     = useState(true);
   const [err,         setErr]         = useState('');
@@ -397,12 +601,19 @@ function AssetPickerModal({ truck, onClose, onAssigned }) {
     finally { setAssigning(null); }
   };
 
-  const handleNewSave = (item) => {
-    setCatalogue(prev => ({ ...prev, [activeTab]: [...prev[activeTab], item].sort((a, b) => a.name.localeCompare(b.name)) }));
+  const handleCatalogueSave = (item, isEdit) => {
+    setCatalogue(prev => {
+      const list = isEdit
+        ? prev[activeTab].map(x => x.id === item.id ? item : x)
+        : [...prev[activeTab], item];
+      return { ...prev, [activeTab]: list.sort((a, b) => a.name.localeCompare(b.name)) };
+    });
     setShowNew(false);
+    setEditItem(null);
   };
 
   return (
+    <>
     <div style={ovly} onClick={e => e.target === e.currentTarget && onClose()}>
       <div style={{ ...mdl, maxWidth: 520, maxHeight: '88vh', display: 'flex', flexDirection: 'column' }}>
         <div style={mdlH}>
@@ -434,13 +645,8 @@ function AssetPickerModal({ truck, onClose, onAssigned }) {
             <input
               style={{ flex: 1, background: '#0a0a0a', border: '1px solid #252525', color: TXT, fontFamily: "'IBM Plex Mono',monospace", fontSize: 10, padding: '5px 8px', borderRadius: 2, outline: 'none' }}
               placeholder={`Search ${activeTab}s…`} value={search} onChange={e => setSearch(e.target.value)} />
-            <button style={{ ...btnA, ...sm, fontSize: 8 }} onClick={() => setShowNew(s => !s)}>+ New</button>
+            <button style={{ ...btnA, ...sm, fontSize: 8 }} onClick={() => setShowNew(true)}>+ New</button>
           </div>
-
-          {/* New item form */}
-          {showNew && (
-            <NewCatalogueItemForm assetType={activeTab} onSave={handleNewSave} onCancel={() => setShowNew(false)} />
-          )}
 
           {/* Catalogue list */}
           {loading && <div style={{ fontSize: 9, color: MUT, textAlign: 'center', padding: '16px 0' }}>Loading…</div>}
@@ -464,18 +670,42 @@ function AssetPickerModal({ truck, onClose, onAssigned }) {
                     {[item.brand, item.category, item.condition || item.status || item.unit].filter(Boolean).join(' · ')}
                   </div>
                 </div>
-                <button
-                  disabled={isBusy}
-                  onClick={() => isAssigned ? handleUnassign(item) : handleAssign(item)}
-                  style={{ ...isAssigned ? btnD : btnA, ...sm, fontSize: 8, opacity: isBusy ? 0.4 : 1, flexShrink: 0 }}>
-                  {isBusy ? '…' : isAssigned ? 'Remove' : 'Assign'}
-                </button>
+                <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                  <button onClick={() => setEditItem(item)} style={{ ...btnG, ...sm, fontSize: 8 }}>Edit</button>
+                  <button
+                    disabled={isBusy}
+                    onClick={() => isAssigned ? handleUnassign(item) : handleAssign(item)}
+                    style={{ ...isAssigned ? btnD : btnA, ...sm, fontSize: 8, opacity: isBusy ? 0.4 : 1 }}>
+                    {isBusy ? '…' : isAssigned ? 'Remove' : 'Assign'}
+                  </button>
+                </div>
               </div>
             );
           })}
         </div>
       </div>
     </div>
+
+    {/* Full-screen form modals rendered outside the picker overlay */}
+    {showNew && activeTab === 'tool' && (
+      <ToolForm onSave={item => handleCatalogueSave(item, false)} onCancel={() => setShowNew(false)} />
+    )}
+    {showNew && activeTab === 'equipment' && (
+      <EquipmentForm onSave={item => handleCatalogueSave(item, false)} onCancel={() => setShowNew(false)} />
+    )}
+    {showNew && activeTab === 'consumable' && (
+      <ConsumableForm onSave={item => handleCatalogueSave(item, false)} onCancel={() => setShowNew(false)} />
+    )}
+    {editItem && activeTab === 'tool' && (
+      <ToolForm tool={editItem} onSave={item => handleCatalogueSave(item, true)} onCancel={() => setEditItem(null)} />
+    )}
+    {editItem && activeTab === 'equipment' && (
+      <EquipmentForm item={editItem} onSave={item => handleCatalogueSave(item, true)} onCancel={() => setEditItem(null)} />
+    )}
+    {editItem && activeTab === 'consumable' && (
+      <ConsumableForm item={editItem} onSave={item => handleCatalogueSave(item, true)} onCancel={() => setEditItem(null)} />
+    )}
+    </>
   );
 }
 
