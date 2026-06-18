@@ -621,9 +621,9 @@ function ConsumableForm({ item, onSave, onCancel }) {
   );
 }
 
-function AssetPickerModal({ truck, onClose, onAssigned }) {
+function AssetPickerModal({ truck, catalogue: initialCatalogue, onCatalogueChange, onClose, onAssigned }) {
   const [activeTab,   setActiveTab]   = useState('tool');
-  const [catalogue,   setCatalogue]   = useState({ tool: [], equipment: [], consumable: [] });
+  const [catalogue,   setCatalogue]   = useState(initialCatalogue);
   const [assignments, setAssignments] = useState([]);
   const [search,      setSearch]      = useState('');
   const [showNew,     setShowNew]     = useState(false);
@@ -633,16 +633,10 @@ function AssetPickerModal({ truck, onClose, onAssigned }) {
   const [err,         setErr]         = useState('');
 
   useEffect(() => {
-    (async () => {
-      try {
-        const [tools, equip, cons, assigns] = await Promise.all([
-          getTools(), getEquipment(), getConsumables(), getAssignments(truck.id),
-        ]);
-        setCatalogue({ tool: tools, equipment: equip, consumable: cons });
-        setAssignments(assigns);
-      } catch (e) { setErr(e.message); }
-      finally { setLoading(false); }
-    })();
+    getAssignments(truck.id)
+      .then(setAssignments)
+      .catch(e => setErr(e.message))
+      .finally(() => setLoading(false));
   }, [truck.id]);
 
   const assignedIds = useMemo(() => new Set(assignments.map(a => a.asset_id)), [assignments]);
@@ -683,7 +677,9 @@ function AssetPickerModal({ truck, onClose, onAssigned }) {
       const list = isEdit
         ? prev[activeTab].map(x => x.id === item.id ? item : x)
         : [...prev[activeTab], item];
-      return { ...prev, [activeTab]: list.sort((a, b) => a.name.localeCompare(b.name)) };
+      const sorted = list.sort((a, b) => a.name.localeCompare(b.name));
+      onCatalogueChange(activeTab, sorted);
+      return { ...prev, [activeTab]: sorted };
     });
     setShowNew(false);
     setEditItem(null);
@@ -736,11 +732,16 @@ function AssetPickerModal({ truck, onClose, onAssigned }) {
             const isAssigned = assignedIds.has(item.id);
             const isBusy     = assigning === item.id;
             const ac = ASSET_COLORS[activeTab];
+            const thumb = item.photos?.[0];
             return (
               <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px',
                 background: isAssigned ? ac.bg : '#0a0a0a',
                 border: `1px solid ${isAssigned ? ac.badge + '55' : '#1e1e1e'}`,
                 borderRadius: 2 }}>
+                {thumb
+                  ? <img src={thumb} alt="" style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 2, border: '1px solid #252525', flexShrink: 0 }} />
+                  : <span style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0, background: '#111', borderRadius: 2, border: '1px solid #1e1e1e' }}>{ASSET_TABS.find(t => t.id === activeTab)?.icon}</span>
+                }
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: TXT }}>{item.name}</div>
                   <div style={{ fontSize: 8, color: MUT, marginTop: 1 }}>
@@ -786,20 +787,26 @@ function AssetPickerModal({ truck, onClose, onAssigned }) {
   );
 }
 
-function AssetsPanel({ truck }) {
+function AssetsPanel({ truck, catalogue, version }) {
   const [assignments, setAssignments] = useState([]);
   const [loading,     setLoading]     = useState(true);
   const [removing,    setRemoving]    = useState(null);
 
-  const load = useCallback(async () => {
-    try {
-      const data = await getAssignments(truck.id);
-      setAssignments(data);
-    } catch { /* silent */ }
-    finally { setLoading(false); }
-  }, [truck.id]);
+  const catMap = useMemo(() => {
+    const m = {};
+    ['tool', 'equipment', 'consumable'].forEach(type => {
+      (catalogue[type] || []).forEach(item => { m[item.id] = item; });
+    });
+    return m;
+  }, [catalogue]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    setLoading(true);
+    getAssignments(truck.id)
+      .then(setAssignments)
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [truck.id, version]);
 
   const handleRemove = async (a) => {
     setRemoving(a.id);
@@ -816,32 +823,36 @@ function AssetsPanel({ truck }) {
     consumable: assignments.filter(a => a.asset_type === 'consumable'),
   }), [assignments]);
 
-  if (loading) return <div style={{ fontSize: 8, color: MUT, padding: '6px 0 2px 28px' }}>Loading assets…</div>;
-  if (assignments.length === 0) return <div style={{ fontSize: 8, color: MUT, padding: '6px 0 2px 28px' }}>No assets assigned yet.</div>;
+  if (loading) return <div style={{ fontSize: 8, color: MUT, padding: '4px 0' }}>Loading…</div>;
+  if (assignments.length === 0) return (
+    <div style={{ fontSize: 8, color: MUT, padding: '4px 0' }}>No assets assigned — tap Manage Assets to add.</div>
+  );
 
   return (
-    <div style={{ paddingLeft: 28, paddingBottom: 4, display: 'flex', flexDirection: 'column', gap: 4 }}>
-      {ASSET_TABS.map(({ id, icon, label }) => {
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {ASSET_TABS.map(({ id, icon }) => {
         const items = byType[id];
         if (!items.length) return null;
         const ac = ASSET_COLORS[id];
         return (
-          <div key={id}>
-            <div style={{ fontSize: 7, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>
-              {icon} {label.split(' ')[1]}
-            </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-              {items.map(a => (
+          <div key={id} style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            {items.map(a => {
+              const thumb = catMap[a.asset_id]?.photos?.[0];
+              return (
                 <span key={a.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4,
                   fontSize: 8, color: TXT, background: ac.bg, border: `1px solid ${ac.badge}55`,
-                  borderRadius: 2, padding: '2px 6px' }}>
+                  borderRadius: 2, padding: thumb ? '2px 6px 2px 2px' : '2px 6px' }}>
+                  {thumb && (
+                    <img src={thumb} alt="" style={{ width: 20, height: 20, objectFit: 'cover', borderRadius: 1, flexShrink: 0 }} />
+                  )}
+                  {!thumb && <span style={{ fontSize: 9 }}>{icon}</span>}
                   {a.asset_name}
                   <button onClick={() => handleRemove(a)} disabled={removing === a.id}
                     style={{ background: 'none', border: 'none', color: MUT, cursor: 'pointer', padding: 0,
-                      fontSize: 8, lineHeight: 1, opacity: removing === a.id ? 0.3 : 0.6 }}>✕</button>
+                      fontSize: 9, lineHeight: 1, opacity: removing === a.id ? 0.3 : 0.6 }}>✕</button>
                 </span>
-              ))}
-            </div>
+              );
+            })}
           </div>
         );
       })}
@@ -850,9 +861,10 @@ function AssetsPanel({ truck }) {
 }
 
 export default function FleetTab({ isAdmin, companyId }) {
-  const [trucks,  setTrucks]  = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [err,     setErr]     = useState('');
+  const [trucks,    setTrucks]    = useState([]);
+  const [catalogue, setCatalogue] = useState({ tool: [], equipment: [], consumable: [] });
+  const [loading,   setLoading]   = useState(true);
+  const [err,       setErr]       = useState('');
   const [truckForm,  setTruckForm]  = useState(null);
   const [availModal, setAvailModal] = useState(null);
 
@@ -865,6 +877,16 @@ export default function FleetTab({ isAdmin, companyId }) {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    Promise.all([getTools(), getEquipment(), getConsumables()])
+      .then(([tool, equipment, consumable]) => setCatalogue({ tool, equipment, consumable }))
+      .catch(() => {});
+  }, []);
+
+  const handleCatalogueChange = useCallback((type, updatedList) => {
+    setCatalogue(prev => ({ ...prev, [type]: updatedList }));
+  }, []);
 
   const handleSaveTruck = async (truck) => {
     const saved = await upsertTruck(!truck.id ? { ...truck, company_id: companyId } : truck);
@@ -908,6 +930,8 @@ export default function FleetTab({ isAdmin, companyId }) {
       {trucks.map(truck => (
         <TruckRow
           key={truck.id} truck={truck} isAdmin={isAdmin}
+          catalogue={catalogue}
+          onCatalogueChange={handleCatalogueChange}
           onEdit={() => setTruckForm(truck)}
           onDelete={() => handleDeleteTruck(truck)}
           onAvail={() => setAvailModal(truck)}
@@ -919,10 +943,9 @@ export default function FleetTab({ isAdmin, companyId }) {
   );
 }
 
-function TruckRow({ truck, isAdmin, onEdit, onDelete, onAvail }) {
-  const [assetsOpen,  setAssetsOpen]  = useState(false);
+function TruckRow({ truck, isAdmin, onEdit, onDelete, onAvail, catalogue, onCatalogueChange }) {
   const [pickerOpen,  setPickerOpen]  = useState(false);
-  const [reloadKey,   setReloadKey]   = useState(0);
+  const [assignVer,   setAssignVer]   = useState(0);
 
   const hasOverride = truck.override_active;
   const hasRelief   = !!(truck.relief_driver_name || truck.relief_da_number);
@@ -931,7 +954,9 @@ function TruckRow({ truck, isAdmin, onEdit, onDelete, onAvail }) {
 
   return (
     <>
-      <div style={{ background: '#0d0d0d', border: `1px solid ${hasOverride ? (hasRelief ? '#3a3a1a' : '#2a1a1a') : '#252525'}`, borderLeft: `3px solid ${sc}`, borderRadius: 2, marginBottom: 4 }}>
+      <div style={{ background: '#0d0d0d', border: `1px solid ${hasOverride ? (hasRelief ? '#3a3a1a' : '#2a1a1a') : '#252525'}`, borderLeft: `3px solid ${sc}`, borderRadius: 2, marginBottom: 6 }}>
+
+        {/* Truck header */}
         <div style={{ padding: '8px 10px', display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ fontSize: 16, flexShrink: 0 }}>{truckEmoji(truck.truck_type)}</span>
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -947,47 +972,41 @@ function TruckRow({ truck, isAdmin, onEdit, onDelete, onAvail }) {
                 <span style={{ fontSize: 7, fontWeight: 700, letterSpacing: '0.1em', padding: '1px 5px', border: '1px solid #6a6a1a', borderRadius: 2, color: '#cccc44', background: '#cccc4411', textTransform: 'uppercase' }}>Relief</span>
               )}
             </div>
-            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 2, alignItems: 'center' }}>
-              {truck.truck_type && (
-                <span style={{ fontSize: 8, color: MUT, fontFamily: "'IBM Plex Mono',monospace" }}>{truck.truck_type}</span>
-              )}
-            </div>
+            {truck.truck_type && (
+              <div style={{ fontSize: 8, color: MUT, marginTop: 2 }}>{truck.truck_type}</div>
+            )}
             {hasOverride && truck.override_return_date && (
-              <div style={{ fontSize: 8, color: MUT, marginTop: 2 }}>Returns {fmtDate(truck.override_return_date)}</div>
+              <div style={{ fontSize: 8, color: MUT, marginTop: 1 }}>Returns {fmtDate(truck.override_return_date)}</div>
             )}
             {truck.notes && !hasOverride && (
-              <div style={{ fontSize: 8, color: MUT, marginTop: 2 }}>{truck.notes}</div>
+              <div style={{ fontSize: 8, color: MUT, marginTop: 1 }}>{truck.notes}</div>
             )}
             <MiniRoster schedule={activeSched} />
           </div>
           <div style={{ display: 'flex', gap: 4, flexShrink: 0, alignSelf: 'flex-start' }}>
-            <button onClick={() => { setAssetsOpen(o => !o); }} title="Assets"
-              style={{ ...btnG, ...sm, fontSize: 8, color: assetsOpen ? ACC : MUT, borderColor: assetsOpen ? ACC + '44' : undefined }}>
-              🧰
-            </button>
             {isAdmin && <button onClick={onAvail} style={{ ...btnG, ...sm, fontSize: 8, color: hasOverride ? '#cccc44' : MUT, borderColor: hasOverride ? '#5a5a14' : undefined }}>📅</button>}
             {isAdmin && <button onClick={onEdit}  style={{ ...btnG, ...sm, fontSize: 8 }}>Edit</button>}
             <button onClick={onDelete} style={{ ...btnD, ...sm, fontSize: 8 }}>Delete</button>
           </div>
         </div>
 
-        {/* Assets panel */}
-        {assetsOpen && (
-          <div style={{ borderTop: '1px solid #1a1a1a', padding: '8px 10px 8px 10px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-              <span style={{ fontSize: 8, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase' }}>🧰 Assigned Assets</span>
-              <button onClick={() => setPickerOpen(true)} style={{ ...btnA, ...sm, fontSize: 8 }}>Manage</button>
-            </div>
-            <AssetsPanel key={reloadKey} truck={truck} />
+        {/* Assets — always visible */}
+        <div style={{ borderTop: '1px solid #181818', padding: '8px 10px 10px', background: '#0a0a0a' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+            <span style={{ fontSize: 7, color: MUT, letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 700 }}>🧰 Assets</span>
+            <button onClick={() => setPickerOpen(true)} style={{ ...btnA, ...sm, fontSize: 8 }}>+ Manage Assets</button>
           </div>
-        )}
+          <AssetsPanel truck={truck} catalogue={catalogue} version={assignVer} />
+        </div>
       </div>
 
       {pickerOpen && (
         <AssetPickerModal
           truck={truck}
+          catalogue={catalogue}
+          onCatalogueChange={onCatalogueChange}
           onClose={() => setPickerOpen(false)}
-          onAssigned={() => setReloadKey(k => k + 1)}
+          onAssigned={() => setAssignVer(v => v + 1)}
         />
       )}
     </>
