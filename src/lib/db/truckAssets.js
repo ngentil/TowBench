@@ -9,9 +9,23 @@ export async function getTools() {
 }
 
 export async function upsertTool(tool) {
+  const row = {
+    name:             tool.name,
+    brand:            tool.brand            || null,
+    model:            tool.model            || null,
+    category:         tool.category         || null,
+    condition:        tool.condition        || 'Good',
+    purchase_date:    tool.purchase_date    || null,
+    purchase_price:   parseFloat(tool.purchase_price) || 0,
+    warranty_expiry:  tool.warranty_expiry  || null,
+    storage_location: tool.storage_location || null,
+    serial_no:        tool.serial_no        || null,
+    notes:            tool.notes            || null,
+  };
+  if (tool.id) row.id = tool.id;
   const { data, error } = await supabase
     .from('truck_tools')
-    .upsert(tool, { onConflict: 'id' })
+    .upsert(row, { onConflict: 'id' })
     .select().single();
   if (error) throw error;
   return data;
@@ -31,9 +45,22 @@ export async function getEquipment() {
 }
 
 export async function upsertEquipment(eq) {
+  const row = {
+    name:     eq.name,
+    brand:    eq.brand    || null,
+    model:    eq.model    || null,
+    category: eq.category || null,
+    serial_no:eq.serial_no|| null,
+    status:   eq.status   || 'Active',
+    year:     eq.year     ? parseInt(eq.year) : null,
+    hours:    eq.hours    != null && eq.hours !== '' ? parseFloat(eq.hours) : null,
+    location: eq.location || null,
+    notes:    eq.notes    || null,
+  };
+  if (eq.id) row.id = eq.id;
   const { data, error } = await supabase
     .from('truck_equipment')
-    .upsert(eq, { onConflict: 'id' })
+    .upsert(row, { onConflict: 'id' })
     .select().single();
   if (error) throw error;
   return data;
@@ -53,9 +80,17 @@ export async function getConsumables() {
 }
 
 export async function upsertConsumable(c) {
+  const row = {
+    name:     c.name,
+    brand:    c.brand    || null,
+    category: c.category || null,
+    unit:     c.unit     || 'each',
+    notes:    c.notes    || null,
+  };
+  if (c.id) row.id = c.id;
   const { data, error } = await supabase
     .from('truck_consumables')
-    .upsert(c, { onConflict: 'id' })
+    .upsert(row, { onConflict: 'id' })
     .select().single();
   if (error) throw error;
   return data;
