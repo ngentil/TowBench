@@ -18,6 +18,19 @@ function kmBetween(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 }
 
+const EVENT_EMOJI = {
+  RESCC1: '🚗', RESCC2: '🚗', RESCC3: '🚗',
+  NOSTC1: '🔥', NOSTC2: '🔥', NS: '🔥',
+  NOSTC3: '💥', INCIC3: '💥', MVA: '💥',
+  SF: '🏠', STRUC1: '🏠', STRUC2: '🏠', STRUC3: '🏠',
+  'G&SC1': '🌿', 'G&SC2': '🌿', 'G&SC3': '🌿',
+  ALARC1: '🔔', ALARC2: '🔔', ALARC3: '🔔',
+  INCIC1: '⚠️', INCIC2: '⚠️', ASUPP: '🤝',
+  MR: '🚑',
+  HZ: '☢️', HAZMA: '☢️', HAZM1: '☢️', CHEM: '☣️', CHEMA: '☣️',
+  EXPLC: '💥', COLPS: '🏚️', FLOOD: '🌊', STORM: '⛈️',
+}
+
 const EVENT_LABELS = {
   // Rescue
   RESCC1: 'RESCUE — TRAPPED', RESCC2: 'RESCUE', RESCC3: 'RESCUE',
@@ -303,110 +316,83 @@ export function IncidentCard({ incident, nearbyKm, initialOpen = false }) {
     <div className={isNearby ? 'nearby-pulse' : ''}
       style={{ background: '#0d0d0d', border, borderLeft, borderRadius: 2, marginBottom: 6, overflow: 'hidden', opacity: incident.is_cancelled ? 0.5 : 1 }}>
 
-      {/* ── Row 1: ONLY this row expands the card ── */}
+      {/* ── Clickable header — matches AllocationCard layout ── */}
       <div onClick={() => setOpen(o => !o)}
-        style={{ padding: '10px 12px 8px', cursor: 'pointer', userSelect: 'none', display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: colour, fontFamily: MONO, letterSpacing: '0.06em', textTransform: 'uppercase', flex: 1 }}>
-          {incident.is_cancelled ? '✓ ' : ''}{label}
-        </span>
-        {incident.alarm_level && (
-          <span style={{ fontSize: 8, fontWeight: 700, color: '#c87020', background: '#1a1000', border: '1px solid #3a2a00', padding: '2px 6px', fontFamily: MONO, borderRadius: 2, flexShrink: 0 }}>
-            {incident.alarm_level}
-          </span>
-        )}
-        {ageMins != null && ageMins > 0 && (
-          <span style={{ fontSize: 8, color: ageMins > 60 ? MUT : ACC, border: `1px solid ${ageMins > 60 ? BRD : ACC + '44'}`, borderRadius: 2, padding: '2px 5px', fontFamily: MONO, fontWeight: 700, flexShrink: 0 }}>
-            ⏱ {ageMins < 60 ? `${ageMins}m` : `${Math.floor(ageMins/60)}h`}
-          </span>
-        )}
-        {incident._distKm != null && (
-          <span
-            title={incident._distFallback ? 'Approx. — distance to responding station, not exact incident location' : undefined}
-            style={{
-              fontSize: 8, fontWeight: 700, fontFamily: MONO, flexShrink: 0,
-              color:  nearbyKm > 0 && incident._distKm <= nearbyKm ? '#cc2222'
-                    : incident._distFallback ? '#7a7a55' : MUT,
-              border: `1px solid ${
-                nearbyKm > 0 && incident._distKm <= nearbyKm ? '#cc222255'
-                : incident._distFallback ? '#3a3a28' : '#2a2a2a'
-              }`,
-              borderRadius: 2, padding: '2px 5px',
-              fontStyle: incident._distFallback ? 'italic' : 'normal',
-            }}>
-            {incident._distFallback ? '~' : ''}📍 {incident._distKm.toFixed(1)}km
-          </span>
-        )}
-        {/* Expand chevron — visual affordance for the tap zone */}
-        <span style={{ fontSize: 13, color: MUT, flexShrink: 0, paddingLeft: 4 }}>{open ? '▲' : '▼'}</span>
-      </div>
-
-      {/* ── Row 2: address + map buttons — outside expand zone ── */}
-      {(addr || incident.corner) && (
-        <div style={{ padding: '0 12px 8px', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 12, fontWeight: 700, color: TXT, flex: 1, minWidth: 0 }}>
-            {addr || '—'}
-            {incident.corner && <span style={{ fontWeight: 400, color: MUT, fontSize: 10 }}> @ {incident.corner}</span>}
-          </span>
-          {mapsUrl && (
-            <a href={mapsUrl} target="_blank" rel="noopener noreferrer"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 9, color: '#6090b0', border: '1px solid #1e2e40', borderRadius: 3, padding: '4px 9px', textDecoration: 'none', background: '#080f18', flexShrink: 0 }}>
-              📍 Maps
-            </a>
+        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+        <span style={{ fontSize: 16, flexShrink: 0 }}>{EVENT_EMOJI[incident.event_type] || '🚨'}</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {/* Title row: label + alarm badge */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: colour, fontFamily: MONO, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+              {incident.is_cancelled ? '✓ ' : ''}{label}
+            </span>
+            {incident.alarm_level && (
+              <span style={{ fontSize: 8, fontWeight: 700, color: '#c87020', background: '#1a1000', border: '1px solid #3a2a00', padding: '2px 6px', fontFamily: MONO, borderRadius: 2 }}>
+                {incident.alarm_level}
+              </span>
+            )}
+          </div>
+          {/* Subtitle: address + cross street */}
+          {(addr || incident.corner) && (
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 2, flexWrap: 'wrap' }}>
+              {addr && <span style={{ fontSize: 8, color: MUT }}>{addr}</span>}
+              {addr && incident.corner && <span style={{ fontSize: 8, color: '#333' }}>@</span>}
+              {incident.corner && <span style={{ fontSize: 8, color: MUT }}>{incident.corner}</span>}
+            </div>
           )}
-          {svUrl && (
-            <a href={svUrl} target="_blank" rel="noopener noreferrer"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 9, color: '#708090', border: '1px solid #1e2830', borderRadius: 3, padding: '4px 9px', textDecoration: 'none', background: '#080c10', flexShrink: 0 }}>
-              🔭 Street View
-            </a>
+          {/* Collapsed mini-tags */}
+          {!open && (
+            <div style={{ marginTop: 3, display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
+              {ageMins != null && ageMins > 0 && (
+                <span style={{ fontSize: 7, color: ageMins > 60 ? MUT : ACC, border: `1px solid ${ageMins > 60 ? BRD : ACC + '44'}`, borderRadius: 2, padding: '1px 4px', fontFamily: MONO, fontWeight: 700 }}>
+                  ⏱ {ageMins < 60 ? `${ageMins}m` : `${Math.floor(ageMins/60)}h`}
+                </span>
+              )}
+              {incident._distKm != null && (
+                <span
+                  title={incident._distFallback ? 'Approx. — distance to responding station, not exact incident location' : undefined}
+                  style={{ fontSize: 7, fontWeight: 700, fontFamily: MONO, fontStyle: incident._distFallback ? 'italic' : 'normal',
+                    color: nearbyKm > 0 && incident._distKm <= nearbyKm ? '#cc2222' : incident._distFallback ? '#7a7a55' : MUT,
+                    border: `1px solid ${nearbyKm > 0 && incident._distKm <= nearbyKm ? '#cc222255' : incident._distFallback ? '#3a3a28' : '#2a2a2a'}`,
+                    borderRadius: 2, padding: '1px 4px' }}>
+                  {incident._distFallback ? '~' : ''}📍 {incident._distKm.toFixed(1)}km
+                </span>
+              )}
+              {incident.agency && (
+                <span style={{ fontSize: 7, fontWeight: 700, color: '#666', border: '1px solid #2a2a2a', borderRadius: 2, padding: '1px 4px', fontFamily: MONO }}>
+                  {incident.agency}
+                </span>
+              )}
+              {(() => {
+                const hits = findDepotsForAddress(incident.address || incident.corner || '')
+                if (!hits.length) return null
+                const region = hits[0].region
+                const st = REGION_STYLE[region]
+                const nums = [...new Set(hits.map(h => h.depot))].join(' / ')
+                return (
+                  <span style={{ fontSize: 7, fontWeight: 700, fontFamily: MONO, color: st.color,
+                                 border: `1px solid ${st.border}`, borderRadius: 2,
+                                 padding: '1px 5px', background: st.bg }}
+                        title={`ACC ${REGION_LABELS[region]} region`}>
+                    🏢 {nums}
+                  </span>
+                )
+              })()}
+              {units.slice(0, 3).map(u => (
+                <a key={u} href={stationMapsUrl(u)} target="_blank" rel="noopener noreferrer"
+                  onClick={e => e.stopPropagation()}
+                  style={{ fontSize: 7, color: '#6090c0', fontFamily: MONO, border: '1px solid #1a2a3a', borderRadius: 2, padding: '1px 4px', textDecoration: 'none', background: '#05101e' }}>
+                  {u}
+                </a>
+              ))}
+              {units.length > 3 && (
+                <span style={{ fontSize: 7, color: MUT, fontFamily: MONO }}>+{units.length - 3} more</span>
+              )}
+              {dispatch.fgds.map(f => <ChannelBadge key={f} fgd={f} />)}
+            </div>
           )}
         </div>
-      )}
-
-      {/* ── Row 3: dispatch badges — outside expand zone ── */}
-      <div style={{ padding: '0 12px 10px', display: 'flex', gap: 7, flexWrap: 'wrap', alignItems: 'center' }}>
-        {/* Agency — plain label, NOT a link */}
-        {incident.agency && (
-          <span style={{ fontSize: 8, fontWeight: 700, color: '#666', border: `1px solid #2a2a2a`, borderRadius: 3, padding: '3px 8px', fontFamily: MONO }}>
-            {incident.agency}
-          </span>
-        )}
-        {/* ACC depot badge */}
-        {(() => {
-          const hits = findDepotsForAddress(incident.address || incident.corner || '')
-          if (!hits.length) return null
-          const region = hits[0].region
-          const st = REGION_STYLE[region]
-          const nums = [...new Set(hits.map(h => h.depot))].join(' / ')
-          return (
-            <span style={{ fontSize: 8, fontWeight: 700, fontFamily: MONO, color: st.color,
-                           border: `1px solid ${st.border}`, borderRadius: 3,
-                           padding: '3px 8px', background: st.bg, flexShrink: 0 }}
-                  title={`ACC ${REGION_LABELS[region]} region`}>
-              🏢 {nums}
-            </span>
-          )
-        })()}
-        {/* Station units — links to Google Maps */}
-        {units.slice(0, 3).map(u => (
-          <a key={u} href={stationMapsUrl(u)} target="_blank" rel="noopener noreferrer"
-            style={{ fontSize: 9, color: '#6090c0', fontFamily: MONO, border: '1px solid #1a2a3a', borderRadius: 3, padding: '4px 9px', textDecoration: 'none', background: '#05101e' }}>
-            {u}
-          </a>
-        ))}
-        {units.length > 3 && (
-          <span style={{ fontSize: 8, color: MUT, fontFamily: MONO }}>+{units.length - 3} more</span>
-        )}
-        {dispatch.fgds.map(f => <ChannelBadge key={f} fgd={f} />)}
-        {/* Appliance badges — links to vehicle search */}
-        {dispatch.appliances.map(a => {
-          const name = labelAppliance(a)
-          return (
-            <a key={a} href={vehicleSearchUrl(name)} target="_blank" rel="noopener noreferrer"
-              style={{ fontSize: 9, color: '#8a8a7a', fontFamily: MONO, border: `1px solid #2a2a1e`, borderRadius: 3, padding: '4px 8px', textDecoration: 'none', background: '#0c0c08' }}>
-              🚒 {name}
-            </a>
-          )
-        })}
+        <span style={{ fontSize: 13, color: MUT, flexShrink: 0, paddingLeft: 4 }}>{open ? '▲' : '▼'}</span>
       </div>
 
       {/* ── Row 4: description — always visible, large + bold for at-a-glance ── */}
