@@ -18,18 +18,20 @@ const CORS = {
 const BBOX = { top: -37.55, bottom: -38.20, left: 144.50, right: 145.50 };
 const MAX_MONTHLY = 50;
 
-// Normalise OpenWebNinja alert shape → Waze native shape expected by AlertsTab
+// Normalise OpenWebNinja alert shape → shape expected by AlertsTab
 function normaliseOwn(a) {
   return {
     uuid:         a.alert_id,
     type:         a.type,
-    subtype:      a.subtype || null,
-    street:       a.street || null,
-    city:         a.city   || null,
+    subtype:      a.subtype       || null,
+    street:       a.street        || null,
+    city:         a.city          || null,
+    description:  a.description   || null,
     pubMillis:    a.publish_datetime_utc ? new Date(a.publish_datetime_utc).getTime() : null,
-    reliability:  null,
-    reportRating: null,
-    reportedBy:   a.reported_by || null,
+    reliability:  a.alert_reliability ?? null,
+    thumbsUp:     a.num_thumbs_up  || 0,
+    reportedBy:   a.reported_by   || null,
+    provider:     a.provider      || null,
     location:     { x: a.longitude, y: a.latitude },
   };
 }
