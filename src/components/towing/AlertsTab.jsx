@@ -52,11 +52,6 @@ function WazeCard({ alert }) {
           {/* Title row */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 11, fontWeight: 700, color: TXT }}>{wazeTitle(alert)}</span>
-            {alert.reportRating > 0 && (
-              <span style={{ fontSize: 7, fontWeight: 700, letterSpacing: '0.1em', padding: '1px 5px', border: `1px solid ${color}55`, borderRadius: 2, color, textTransform: 'uppercase' }}>
-                {alert.reportRating} confirm{alert.reportRating !== 1 ? 's' : ''}
-              </span>
-            )}
           </div>
           {/* Subtitle: street · suburb */}
           <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 2, flexWrap: 'wrap' }}>
@@ -72,9 +67,9 @@ function WazeCard({ alert }) {
                   ⏱ {ago}
                 </span>
               )}
-              {alert.reliability > 0 && (
+              {alert.reportedBy && (
                 <span style={{ fontSize: 7, color: MUT, border: '1px solid #2a2a2a', borderRadius: 2, padding: '1px 4px' }}>
-                  ★ {alert.reliability}/10
+                  {alert.reportedBy}
                 </span>
               )}
             </div>
@@ -87,9 +82,9 @@ function WazeCard({ alert }) {
           <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
             {[
               ['Type',        wazeTitle(alert)],
-              ['Reliability', `${alert.reliability ?? '—'}/10`],
-              ...(suburb          ? [['Suburb',   suburb]] : []),
-              ...(alert.pubMillis ? [['Reported', new Date(alert.pubMillis).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', hour12: true })]] : []),
+              ...(alert.reportedBy ? [['Reported By', alert.reportedBy]] : []),
+              ...(suburb           ? [['Suburb',      suburb]]           : []),
+              ...(alert.pubMillis  ? [['Time',        new Date(alert.pubMillis).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', hour12: true })]] : []),
             ].map(([label, val]) => (
               <div key={label} style={{ background: SURF, border: '1px solid ' + BRD, borderRadius: 2, padding: '5px 8px' }}>
                 <div style={{ fontSize: 7, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 1 }}>{label}</div>
