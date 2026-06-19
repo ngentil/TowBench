@@ -14,8 +14,27 @@ const CORS = {
   'Cache-Control': 'public, max-age=30',
 };
 
+// Melbourne metro bounding box
 const BBOX = { top: -37.55, bottom: -38.20, left: 144.50, right: 145.50 };
 const MAX_MONTHLY = 50;
+
+// Normalise OpenWebNinja alert shape → shape expected by AlertsTab
+function normaliseOwn(a) {
+  return {
+    uuid:         a.alert_id,
+    type:         a.type,
+    subtype:      a.subtype       || null,
+    street:       a.street        || null,
+    city:         a.city          || null,
+    description:  a.description   || null,
+    pubMillis:    a.publish_datetime_utc ? new Date(a.publish_datetime_utc).getTime() : null,
+    reliability:  a.alert_reliability ?? null,
+    thumbsUp:     a.num_thumbs_up  || 0,
+    reportedBy:   a.reported_by   || null,
+    provider:     a.provider      || null,
+    location:     { x: a.longitude, y: a.latitude },
+  };
+}
 
 const DIRECT_ENDPOINTS = [
   `https://www.waze.com/live-map/api/georss?top=${BBOX.top}&bottom=${BBOX.bottom}&left=${BBOX.left}&right=${BBOX.right}&env=row&types=alerts`,
@@ -58,7 +77,15 @@ exports.handler = async function () {
         };
       }
 
-      const url = `https://api.openwebninja.com/waze?top=${BBOX.top}&bottom=${BBOX.bottom}&left=${BBOX.left}&right=${BBOX.right}&types=alerts`;
+      // Endpoint: /waze/alerts-and-jams
+      // BBox: bottom_left=minLat,minLng  top_right=maxLat,maxLng
+      const params = new URLSearchParams({
+        bottom_left: `${BBOX.bottom},${BBOX.left}`,
+        top_right:   `${BBOX.top},${BBOX.right}`,
+        max_alerts:  '500',
+        max_jams:    '0',
+      });
+      const url = `https://api.openwebninja.com/waze/alerts-and-jams?${params}`;
       const res = await fetch(url, {
         headers: { 'x-api-key': process.env.OPENWEBNINJA_KEY },
         signal: AbortSignal.timeout(15000),
@@ -66,7 +93,9 @@ exports.handler = async function () {
 
       if (res.ok) {
         const data = await res.json();
-        const alerts = (data?.alerts ?? data?.data?.alerts ?? [])
+        const raw    = data?.data?.alerts ?? data?.alerts ?? [];
+        const alerts = raw
+          .map(normaliseOwn)
           .sort((a, b) => (b.pubMillis || 0) - (a.pubMillis || 0));
         const newCount = count + 1;
 

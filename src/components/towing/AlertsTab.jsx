@@ -52,9 +52,9 @@ function WazeCard({ alert }) {
           {/* Title row */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 11, fontWeight: 700, color: TXT }}>{wazeTitle(alert)}</span>
-            {alert.reportRating > 0 && (
-              <span style={{ fontSize: 7, fontWeight: 700, letterSpacing: '0.1em', padding: '1px 5px', border: `1px solid ${color}55`, borderRadius: 2, color, textTransform: 'uppercase' }}>
-                {alert.reportRating} confirm{alert.reportRating !== 1 ? 's' : ''}
+            {alert.thumbsUp > 0 && (
+              <span style={{ fontSize: 7, fontWeight: 700, padding: '1px 5px', border: `1px solid ${color}55`, borderRadius: 2, color, textTransform: 'uppercase' }}>
+                👍 {alert.thumbsUp}
               </span>
             )}
           </div>
@@ -77,6 +77,11 @@ function WazeCard({ alert }) {
                   ★ {alert.reliability}/10
                 </span>
               )}
+              {alert.reportedBy && (
+                <span style={{ fontSize: 7, color: '#444', border: '1px solid #1e1e1e', borderRadius: 2, padding: '1px 4px', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {alert.reportedBy}
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -84,16 +89,23 @@ function WazeCard({ alert }) {
       </div>
       {open && (
         <div style={{ borderTop: '1px solid #1a1a1a', padding: '0 12px 12px' }}>
-          <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+          {/* Description */}
+          {alert.description && (
+            <div style={{ margin: '10px 0 8px', fontFamily: MONO, fontSize: 10, color: '#c87020', lineHeight: 1.6 }}>
+              {alert.description}
+            </div>
+          )}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
             {[
               ['Type',        wazeTitle(alert)],
-              ['Reliability', `${alert.reliability ?? '—'}/10`],
-              ...(suburb          ? [['Suburb',   suburb]] : []),
-              ...(alert.pubMillis ? [['Reported', new Date(alert.pubMillis).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', hour12: true })]] : []),
+              ...(alert.reliability != null ? [['Reliability', `${alert.reliability}/10`]] : []),
+              ...(suburb              ? [['Suburb',      suburb]]           : []),
+              ...(alert.pubMillis     ? [['Time',        new Date(alert.pubMillis).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', hour12: true })]] : []),
+              ...(alert.reportedBy    ? [['Source',      alert.reportedBy]] : []),
             ].map(([label, val]) => (
               <div key={label} style={{ background: SURF, border: '1px solid ' + BRD, borderRadius: 2, padding: '5px 8px' }}>
                 <div style={{ fontSize: 7, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 1 }}>{label}</div>
-                <div style={{ fontSize: 10, color: TXT, fontFamily: MONO }}>{val}</div>
+                <div style={{ fontSize: 10, color: TXT, fontFamily: MONO, wordBreak: 'break-word' }}>{val}</div>
               </div>
             ))}
           </div>
