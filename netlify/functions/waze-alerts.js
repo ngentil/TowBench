@@ -1,10 +1,10 @@
-// Waze alert proxy — reads from Supabase cache populated by GitHub Action
-// (waze-poll.yml runs every 10 min from GitHub runner IPs, which Waze doesn't block).
+// Waze alert proxy — OpenWebNinja (when key configured) with Supabase budget tracking,
+// then falls back to Supabase cache (populated by GitHub Action every 10 min),
+// then Cloudflare Worker, then direct Waze.
 //
-// Fallback chain:
-//   1. Supabase cache   — instant, populated by GitHub Action every 10 min
-//   2. Cloudflare Worker — set WAZE_CF_WORKER_URL if deployed (cloudflare-worker/waze-proxy.js)
-//   3. Direct Waze      — almost certainly blocked from Lambda, but worth a shot
+// OpenWebNinja free plan: 50 req/month hard limit.
+// Budget is tracked server-side in waze_cache (month_key, month_count columns).
+// Schema: supabase/73_waze_budget.sql
 
 const { createClient } = require('@supabase/supabase-js');
 
@@ -15,6 +15,8 @@ const CORS = {
 };
 
 const BBOX = { top: -37.55, bottom: -38.20, left: 144.50, right: 145.50 };
+const MAX_MONTHLY = 50;
+
 const DIRECT_ENDPOINTS = [
   `https://www.waze.com/live-map/api/georss?top=${BBOX.top}&bottom=${BBOX.bottom}&left=${BBOX.left}&right=${BBOX.right}&env=row&types=alerts`,
   `https://www.waze.com/row-rtserver/web/TGeoRSS?tk=community&format=JSON&types=alerts&left=${BBOX.left}&right=${BBOX.right}&top=${BBOX.top}&bottom=${BBOX.bottom}&zoom=13`,
@@ -27,6 +29,72 @@ const WAZE_HEADERS = {
 };
 
 exports.handler = async function () {
+  // ── 0. OpenWebNinja — primary source when key is set ──────────────────────────
+  if (process.env.OPENWEBNINJA_KEY) {
+    const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+    const monthKey = new Date().toISOString().slice(0, 7); // 'YYYY-MM'
+
+    try {
+      const { data: cache } = await supabase
+        .from('waze_cache')
+        .select('alerts, fetched_at, month_key, month_count')
+        .eq('id', 1)
+        .maybeSingle();
+
+      const count = (cache?.month_key === monthKey ? (cache.month_count ?? 0) : 0);
+      const exhausted = count >= MAX_MONTHLY;
+
+      if (exhausted) {
+        return {
+          statusCode: 200,
+          headers: CORS,
+          body: JSON.stringify({
+            alerts: cache?.alerts || [],
+            cachedAt: cache?.fetched_at,
+            budgetCount: count,
+            budgetMax: MAX_MONTHLY,
+            budgetExhausted: true,
+          }),
+        };
+      }
+
+      const url = `https://api.openwebninja.com/waze?top=${BBOX.top}&bottom=${BBOX.bottom}&left=${BBOX.left}&right=${BBOX.right}&types=alerts`;
+      const res = await fetch(url, {
+        headers: { 'x-api-key': process.env.OPENWEBNINJA_KEY },
+        signal: AbortSignal.timeout(15000),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const alerts = (data?.alerts ?? data?.data?.alerts ?? [])
+          .sort((a, b) => (b.pubMillis || 0) - (a.pubMillis || 0));
+        const newCount = count + 1;
+
+        await supabase.from('waze_cache').upsert({
+          id: 1,
+          alerts,
+          fetched_at: new Date().toISOString(),
+          month_key: monthKey,
+          month_count: newCount,
+        });
+
+        return {
+          statusCode: 200,
+          headers: CORS,
+          body: JSON.stringify({
+            alerts,
+            budgetCount: newCount,
+            budgetMax: MAX_MONTHLY,
+            budgetExhausted: false,
+          }),
+        };
+      }
+      console.warn('OpenWebNinja returned', res.status);
+    } catch (e) {
+      console.warn('OpenWebNinja failed:', e.message);
+    }
+  }
+
   // ── 1. Supabase cache (populated by GitHub Action waze-poll.yml) ────────────
   try {
     const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
