@@ -26,18 +26,28 @@ jobs:
             Authorization: `Bearer ${key}`,
           }
 
-          // ── 1. Fetch all pager messages with a six-figure ref and address ──
-          const qs1 = new URLSearchParams({
-            select: 'parsed_six_figure,parsed_map_ref,parsed_address',
-            'parsed_six_figure': 'not.is.null',
-            order: 'received_at.desc',
-            limit: '10000',
-          })
-          const r1 = await fetch(`${url}/rest/v1/vicpagers_messages?${qs1}`, { headers: hdrs })
-          const msgs = await r1.json()
-          if (!Array.isArray(msgs)) {
-            console.error('Unexpected response from vicpagers_messages:', JSON.stringify(msgs).slice(0, 200))
-            process.exit(1)
+          // ── 1. Fetch all pager messages with a six-figure ref (paginated — PostgREST caps at 1000/page) ──
+          const msgs = []
+          let offset = 0
+          const PAGE = 1000
+          while (true) {
+            const qs1 = new URLSearchParams({
+              select: 'parsed_six_figure,parsed_map_ref,parsed_address',
+              'parsed_six_figure': 'not.is.null',
+              order: 'received_at.desc',
+              limit: String(PAGE),
+              offset: String(offset),
+            })
+            const r1 = await fetch(`${url}/rest/v1/vicpagers_messages?${qs1}`, { headers: hdrs })
+            const page = await r1.json()
+            if (!Array.isArray(page)) {
+              console.error('Unexpected response from vicpagers_messages:', JSON.stringify(page).slice(0, 200))
+              process.exit(1)
+            }
+            msgs.push(...page)
+            if (page.length < PAGE) break
+            offset += PAGE
+            if (msgs.length >= 100000) break  // safety cap
           }
           console.log(`Fetched ${msgs.length} pager messages with six-figure refs`)
 
@@ -75,14 +85,17 @@ jobs:
           console.log(`Geocode cache hits: ${geoMap.size}`)
 
           // ── 3. Build validated calibration pairs ──
+          // Melbourne metro bounds — excludes Geelong, Phillip Island, Ballarat, regional areas
+          // that have M-series Melway refs but use a different coordinate space in this grid
+          const METRO = { latMin: -38.4, latMax: -37.4, lngMin: 144.55, lngMax: 145.6 }
           const pairs = []
           for (const [addr, m] of byAddr) {
             const geo = geoMap.get(addr)
             if (!geo || geo.lat == null || geo.lng == null) continue
             const lat = Number(geo.lat)
             const lng = Number(geo.lng)
-            // Victoria bounds filter
-            if (lat < -39.5 || lat > -34.0 || lng < 141.0 || lng > 150.0) continue
+            // Metro bounds only — non-metro M-series refs break the affine fit
+            if (lat < METRO.latMin || lat > METRO.latMax || lng < METRO.lngMin || lng > METRO.lngMax) continue
             const sf = m.parsed_six_figure.replace(/\s/g, '').padStart(6, '0')
             if (!/^\d{6}$/.test(sf)) continue
             const x    = parseInt(sf.slice(0, 3), 10)
@@ -126,9 +139,11 @@ jobs:
           }
           console.log(`Upserted ${upserted} pairs into grid_calibration`)
 
-          // ── 5. Fetch ALL calibration pairs for fitting ──
+          // ── 5. Fetch metro-only calibration pairs for fitting ──
           const r4 = await fetch(
-            `${url}/rest/v1/grid_calibration?select=six_fig,grid_x,grid_y_raw,lat,lng&limit=10000`,
+            `${url}/rest/v1/grid_calibration?select=six_fig,grid_x,grid_y_raw,lat,lng` +
+            `&lat=gte.${METRO.latMin}&lat=lte.${METRO.latMax}` +
+            `&lng=gte.${METRO.lngMin}&lng=lte.${METRO.lngMax}&limit=10000`,
             { headers: hdrs }
           )
           const allPairs = await r4.json()
