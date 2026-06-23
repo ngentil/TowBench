@@ -345,6 +345,45 @@ function BridgeInfoCard({ rec, dist, onClose, pos }) {
   );
 }
 
+const PAGER_MAP_EMOJI = {
+  // Rescue
+  RESCC1: '🚗⛑️', RESCC2: '⛑️🔦', RESCC3: '⛑️🔦',
+  // Outside / no-structure / grass fire
+  NOSTC1: '🌿🔥', NOSTC2: '🌿🔥', NS: '🔥💨',
+  // Road / vehicle incident
+  NOSTC3: '🚗💥', INCIC3: '🚗💥', MVA: '🚗💥',
+  // Structure fire
+  SF: '🏠🔥', STRUC1: '🏠🔥', STRUC2: '🏠🔥', STRUC3: '🏠🔥',
+  // Grass & scrub
+  'G&SC1': '🌿🔥', 'G&SC2': '🌿🔥', 'G&SC3': '🌿🔥',
+  // Alarm
+  ALARC1: '🔔⚠️', ALARC2: '🔔⚠️', ALARC3: '🔔⚠️',
+  // General incident / assist
+  INCIC1: '⚠️🚨', INCIC2: '⚠️🚨', ASUPP: '🤝🚒',
+  // Medical
+  MR: '🚑💨',
+  // Hazmat / chemical
+  HZ: '☢️⚠️', HAZMA: '☢️⚠️', HAZM1: '☢️⚠️', CHEM: '☣️💧', CHEMA: '☣️💧',
+  // Misc
+  EXPLC: '💥🔥', COLPS: '🏚️⚠️', FLOOD: '🌊🏠', STORM: '🌩️🏠',
+}
+
+function pagerMapEmoji(eventType) {
+  if (!eventType) return '📟⚡'
+  if (PAGER_MAP_EMOJI[eventType]) return PAGER_MAP_EMOJI[eventType]
+  // Prefix fallbacks for numbered variants beyond the table
+  if (eventType.startsWith('RESCC')) return '🚗⛑️'
+  if (eventType.startsWith('STRUC')) return '🏠🔥'
+  if (eventType.startsWith('G&SC'))  return '🌿🔥'
+  if (eventType.startsWith('NOSTC')) return '🌿🔥'
+  if (eventType.startsWith('INCIC')) return '🚗💥'
+  if (eventType.startsWith('ALARC')) return '🔔⚠️'
+  if (eventType.startsWith('HAZM'))  return '☢️⚠️'
+  if (eventType.startsWith('CHEM'))  return '☣️💧'
+  if (eventType.startsWith('HZ'))    return '☢️⚠️'
+  return '📟⚡'
+}
+
 function pagerReducer(state, action) {
   if (action.type === 'SEED') return action.messages.reduce((acc, msg) => mergeMessage(acc, msg), state);
   if (action.type === 'MERGE') return mergeMessage(state, action.msg);
@@ -861,46 +900,7 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
       if (!key) return;
       const coords = pagerGeoCache.get(key);
       if (!coords) return;
-      const t = (inc.event_type || '').toLowerCase();
-      const incEmoji =
-        // Vehicle fire — check before generic fire or road incident
-        (t.includes('vehicle') && t.includes('fire'))                                        ? '🚗🔥'
-        // Fire — specific vegetation/structure types first
-        : t.includes('grass') || t.includes('scrub') || t.includes('vegetation')            ? '🌿🔥'
-        : t.includes('bush')  || t.includes('forest') || t.includes('wildfire')             ? '🌲🔥'
-        : t.includes('structure') || t.includes('building') || t.includes('house')          ? '🏠🔥'
-        : t.includes('industrial') || (t.includes('chemical') && t.includes('fire'))        ? '🏭🔥'
-        : t.includes('power') && t.includes('fire')                                          ? '⚡🔥'
-        : t.includes('fire') || t.includes('burn')                                           ? '🔥💨'
-        // Rescue — specific types first
-        : t.includes('water rescue') || t.includes('flood rescue')                          ? '🌊⛑️'
-        : t.includes('cliff') || t.includes('vertical') || t.includes('height')            ? '🏔️⛑️'
-        : (t.includes('road') && t.includes('rescue')) || t.includes('entrap')             ? '🚗⛑️'
-        : t.includes('animal')                                                               ? '🐾⛑️'
-        : t.includes('search')                                                               ? '🔍⛑️'
-        : t.includes('rescue') || t.includes('ses')                                         ? '⛑️🔦'
-        // Road incidents
-        : t.includes('truck') || t.includes('heavy vehicle')                                ? '🚛💥'
-        : t.includes('motorbike') || t.includes('motorcycle')                               ? '🏍️💥'
-        : t.includes('train') || t.includes('tram') || t.includes('rail')                  ? '🚂💥'
-        : t.includes('accident') || t.includes('crash') || t.includes('mva') || t.includes('mvc') || t.includes('rta') || t.includes('rtc') ? '🚗💥'
-        // Medical
-        : t.includes('cardiac') || t.includes('heart')                                      ? '❤️🚑'
-        : t.includes('medic') || t.includes('ambul')                                        ? '🚑💨'
-        // Storm / weather
-        : t.includes('flood')                                                                ? '🌊🏠'
-        : t.includes('tree')                                                                 ? '🌳⚠️'
-        : t.includes('power') || t.includes('wire') || t.includes('electr')               ? '⚡⚠️'
-        : t.includes('storm') || t.includes('wind')                                         ? '🌩️🏠'
-        // Hazmat
-        : t.includes('gas') || t.includes('fuel') || t.includes('petrol')                  ? '⛽💨'
-        : t.includes('spill') || (t.includes('chemical') && !t.includes('fire'))           ? '☣️💧'
-        : t.includes('hazmat') || t.includes('hazardous')                                   ? '☢️⚠️'
-        // Other
-        : t.includes('aircraft') || t.includes('plane') || t.includes('helicopter')        ? '✈️💥'
-        : t.includes('boat') || t.includes('vessel') || t.includes('marine')               ? '🚤💥'
-        : t.includes('police')                                                               ? '🚔🚨'
-        : '📟⚡';
+      const incEmoji = pagerMapEmoji(inc.event_type);
       const incHtml = `<div style="font-size:15px;line-height:1;white-space:nowrap;filter:drop-shadow(0 1px 3px #000)">${incEmoji}</div>`;
       const marker = L.marker([coords.lat, coords.lng], {
         icon: L.divIcon({ className: '', html: incHtml, iconSize: [32, 18], iconAnchor: [16, 9] }),
