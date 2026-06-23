@@ -4,7 +4,7 @@ import { useVicPagers, mergeMessage } from '../../lib/useVicPagers'
 import { getRecentVicPagers, dbRowToMessage } from '../../lib/db/incidents'
 import { BG, SURF, BRD, BRD2, TXT, MUT, ACC, GRN, RED } from '../../lib/styles'
 import { findDepotsForAddress, REGION_STYLE, REGION_LABELS } from '../../lib/towDepots'
-import { sixFigureToLatLng } from '../../lib/utils'
+import { useGridTransform } from '../../lib/useGridTransform'
 
 const MONO = "'IBM Plex Mono', monospace"
 
@@ -575,6 +575,8 @@ function incidentsReducer(state, action) {
 }
 
 export default function IncidentFeedTab({ userPos, companyId }) {
+  const gridToLatLng = useGridTransform()
+
   const [active,       setActive]       = useState(DEFAULT_FILTERS)
   const [sortBy,       setSortBy]       = useState('newest')
   const [nearbyKm, setNearbyKm] = useState(() => Number(localStorage.getItem('towbench_nearby_km') ?? 15))
@@ -696,18 +698,18 @@ export default function IncidentFeedTab({ userPos, companyId }) {
     [incidents],
   )
 
-  // Pre-populate six-figure grid ref coords immediately (no Nominatim, ~3km accuracy for M-series metro).
+  // Pre-populate six-figure grid ref coords immediately (uses fitted transform, ~3km accuracy for M-series metro).
   useEffect(() => {
     let changed = false
     for (const i of allIncidents) {
       const key = sixFigGeoKey(i)
       if (!key || geocodeCache.current.has(key)) continue
-      const coords = sixFigureToLatLng(i.six_figure, i.map_ref)
+      const coords = gridToLatLng(i.six_figure, i.map_ref)
       geocodeCache.current.set(key, coords || null)
       if (coords) changed = true
     }
     if (changed) setGeoRev(v => v + 1)
-  }, [allIncidents])
+  }, [allIncidents, gridToLatLng])
 
   // Geocode incident addresses whenever we have an effective position (for distance display + radius filter).
   // Priority: address/corner (exact) → six-figure grid ref (instant) → description text → responding station (fallback).

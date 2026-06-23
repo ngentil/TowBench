@@ -1,0 +1,238 @@
+name: Collect Grid Calibration Data
+
+# Joins vicpagers_messages with geocode_cache to collect (six_figure → lat/lng)
+# calibration pairs, upserts them into grid_calibration, then refits the affine
+# transform and stores the coefficients in grid_transform (id=1).
+
+on:
+  schedule:
+    - cron: '0 17 * * *'   # 03:00 AEST (UTC+10) = 17:00 UTC
+  workflow_dispatch:
+
+jobs:
+  calibrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Collect calibration pairs and refit transform
+        env:
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          node --input-type=module << 'EOF'
+          const url = process.env.SUPABASE_URL
+          const key = process.env.SUPABASE_SERVICE_KEY
+          const hdrs = {
+            apikey: key,
+            Authorization: `Bearer ${key}`,
+          }
+
+          // ── 1. Fetch all pager messages with a six-figure ref and address ──
+          const qs1 = new URLSearchParams({
+            select: 'parsed_six_figure,parsed_map_ref,parsed_address',
+            'parsed_six_figure': 'not.is.null',
+            order: 'received_at.desc',
+            limit: '10000',
+          })
+          const r1 = await fetch(`${url}/rest/v1/vicpagers_messages?${qs1}`, { headers: hdrs })
+          const msgs = await r1.json()
+          if (!Array.isArray(msgs)) {
+            console.error('Unexpected response from vicpagers_messages:', JSON.stringify(msgs).slice(0, 200))
+            process.exit(1)
+          }
+          console.log(`Fetched ${msgs.length} pager messages with six-figure refs`)
+
+          // Keep only M-series metro Melway refs with clean 5-6 digit refs and a non-empty address
+          const metro = msgs.filter(m => {
+            const sf   = (m.parsed_six_figure || '').replace(/\s/g, '')
+            const mr   = (m.parsed_map_ref    || '')
+            const addr = (m.parsed_address    || '').trim()
+            return /^\d{5,6}$/.test(sf) && /^M[\s\d]/.test(mr) && addr.length > 4
+          })
+          console.log(`M-series with address: ${metro.length}`)
+
+          // Deduplicate by address (keep first occurrence per unique address)
+          const byAddr = new Map()
+          for (const m of metro) {
+            const addr = m.parsed_address.trim()
+            if (!byAddr.has(addr)) byAddr.set(addr, m)
+          }
+          console.log(`Unique addresses: ${byAddr.size}`)
+
+          // ── 2. Look up each address in geocode_cache (batch 50 at a time) ──
+          const addrs = [...byAddr.keys()]
+          const geoMap = new Map()
+
+          for (let i = 0; i < addrs.length; i += 50) {
+            const batch = addrs.slice(i, i + 50)
+            const inList = batch.map(a => `"${a.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`).join(',')
+            const r2 = await fetch(
+              `${url}/rest/v1/geocode_cache?select=key,lat,lng&key=in.(${encodeURIComponent(inList)})`,
+              { headers: hdrs }
+            )
+            const rows = await r2.json()
+            if (Array.isArray(rows)) for (const row of rows) geoMap.set(row.key, row)
+          }
+          console.log(`Geocode cache hits: ${geoMap.size}`)
+
+          // ── 3. Build validated calibration pairs ──
+          const pairs = []
+          for (const [addr, m] of byAddr) {
+            const geo = geoMap.get(addr)
+            if (!geo || geo.lat == null || geo.lng == null) continue
+            const lat = Number(geo.lat)
+            const lng = Number(geo.lng)
+            // Victoria bounds filter
+            if (lat < -39.5 || lat > -34.0 || lng < 141.0 || lng > 150.0) continue
+            const sf = m.parsed_six_figure.replace(/\s/g, '').padStart(6, '0')
+            if (!/^\d{6}$/.test(sf)) continue
+            const x    = parseInt(sf.slice(0, 3), 10)
+            const rawY = parseInt(sf.slice(3),    10)
+            pairs.push({
+              six_fig:        sf,
+              map_ref:        m.parsed_map_ref || null,
+              grid_x:         x,
+              grid_y_raw:     rawY,
+              lat,
+              lng,
+              source_address: addr,
+            })
+          }
+          console.log(`Valid calibration pairs: ${pairs.length}`)
+
+          if (pairs.length === 0) {
+            console.log('No new calibration pairs found — exiting')
+            process.exit(0)
+          }
+
+          // ── 4. Upsert calibration pairs into grid_calibration (batch 50) ──
+          let upserted = 0
+          for (let i = 0; i < pairs.length; i += 50) {
+            const batch = pairs.slice(i, i + 50)
+            const r3 = await fetch(`${url}/rest/v1/grid_calibration`, {
+              method: 'POST',
+              headers: {
+                ...hdrs,
+                'Content-Type': 'application/json',
+                'Prefer': 'resolution=merge-duplicates',
+              },
+              body: JSON.stringify(batch),
+            })
+            if (!r3.ok) {
+              const text = await r3.text()
+              console.error(`Upsert batch ${i}-${i+batch.length} failed (${r3.status}): ${text.slice(0, 200)}`)
+            } else {
+              upserted += batch.length
+            }
+          }
+          console.log(`Upserted ${upserted} pairs into grid_calibration`)
+
+          // ── 5. Fetch ALL calibration pairs for fitting ──
+          const r4 = await fetch(
+            `${url}/rest/v1/grid_calibration?select=six_fig,grid_x,grid_y_raw,lat,lng&limit=10000`,
+            { headers: hdrs }
+          )
+          const allPairs = await r4.json()
+          if (!Array.isArray(allPairs)) {
+            console.error('Unexpected response from grid_calibration:', JSON.stringify(allPairs).slice(0, 200))
+            process.exit(1)
+          }
+          console.log(`Total calibration pairs in DB: ${allPairs.length}`)
+
+          if (allPairs.length < 10) {
+            console.log(`Only ${allPairs.length} pairs — need >= 10 to refit. Skipping fit.`)
+            process.exit(0)
+          }
+
+          // Build points array (unwrap y)
+          const pts = allPairs.map(p => {
+            const rawY = Number(p.grid_y_raw)
+            const y    = rawY > 500 ? rawY - 1000 : rawY
+            return { x: Number(p.grid_x), y, lat: Number(p.lat), lng: Number(p.lng) }
+          })
+
+          // ── 6. Least-squares affine fit (Gaussian elimination) ──
+          function solve(A, b) {
+            const n = A.length
+            const M = A.map((r, i) => [...r, b[i]])
+            for (let i = 0; i < n; i++) {
+              let max = i
+              for (let k = i + 1; k < n; k++) if (Math.abs(M[k][i]) > Math.abs(M[max][i])) max = k
+              ;[M[i], M[max]] = [M[max], M[i]]
+              for (let k = i + 1; k < n; k++) {
+                const f = M[k][i] / M[i][i]
+                for (let j = i; j <= n; j++) M[k][j] -= f * M[i][j]
+              }
+            }
+            const x = new Array(n).fill(0)
+            for (let i = n - 1; i >= 0; i--) {
+              x[i] = M[i][n] / M[i][i]
+              for (let k = i - 1; k >= 0; k--) M[k][n] -= M[k][i] * x[i]
+            }
+            return x
+          }
+
+          const ATA  = [[0,0,0],[0,0,0],[0,0,0]]
+          const ATbL = [0,0,0]
+          const ATbG = [0,0,0]
+          for (const p of pts) {
+            const r = [1, p.x, p.y]
+            for (let i = 0; i < 3; i++) {
+              for (let j = 0; j < 3; j++) ATA[i][j] += r[i] * r[j]
+              ATbL[i] += r[i] * p.lat
+              ATbG[i] += r[i] * p.lng
+            }
+          }
+          const lc = solve(ATA, ATbL)  // [lat_a, lat_b, lat_c]
+          const gc = solve(ATA, ATbG)  // [lng_a, lng_b, lng_c]
+
+          // ── 7. Compute residuals ──
+          const errs = pts.map(p => {
+            const pl = lc[0] + lc[1] * p.x + lc[2] * p.y
+            const pg = gc[0] + gc[1] * p.x + gc[2] * p.y
+            const km = Math.sqrt(((pl - p.lat) * 111) ** 2 + ((pg - p.lng) * 85.7) ** 2)
+            return { ...p, km }
+          }).sort((a, b) => b.km - a.km)
+
+          const rmse = Math.sqrt(errs.reduce((s, p) => s + p.km ** 2, 0) / errs.length)
+          const p90  = errs[Math.floor(errs.length * 0.90)].km
+
+          console.log('\n════ FIT RESULTS ════')
+          console.log(`n=${pts.length}  RMSE=${rmse.toFixed(3)}km  p90=${p90.toFixed(3)}km`)
+          console.log('\nWorst 5 residuals:')
+          errs.slice(0, 5).forEach(p => {
+            console.log(`  ${p.km.toFixed(2)}km  x=${p.x}  y=${p.y}`)
+          })
+
+          // ── 8. Upsert fitted coefficients into grid_transform (id=1) ──
+          const payload = {
+            id:       1,
+            lat_a:    lc[0],
+            lat_b:    lc[1],
+            lat_c:    lc[2],
+            lng_a:    gc[0],
+            lng_b:    gc[1],
+            lng_c:    gc[2],
+            n_pts:    pts.length,
+            rmse_km:  Number(rmse.toFixed(3)),
+            p90_km:   Number(p90.toFixed(3)),
+            fitted_at: new Date().toISOString(),
+          }
+
+          const r5 = await fetch(`${url}/rest/v1/grid_transform`, {
+            method: 'POST',
+            headers: {
+              ...hdrs,
+              'Content-Type': 'application/json',
+              'Prefer': 'resolution=merge-duplicates',
+            },
+            body: JSON.stringify(payload),
+          })
+          if (!r5.ok) {
+            const text = await r5.text()
+            console.error(`Failed to upsert grid_transform (${r5.status}): ${text.slice(0, 200)}`)
+            process.exit(1)
+          }
+          console.log('\nStored fitted coefficients in grid_transform (id=1)')
+          console.log(`  lat = ${lc[0].toFixed(9)} + (${lc[1].toFixed(10)}) * x + ${lc[2].toFixed(10)} * y`)
+          console.log(`  lng = ${gc[0].toFixed(9)} + ${gc[1].toFixed(10)}  * x + (${gc[2].toFixed(10)}) * y`)
+          EOF
