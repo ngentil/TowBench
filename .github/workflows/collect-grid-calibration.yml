@@ -1,8 +1,10 @@
 name: Collect Grid Calibration Data
 
-# Joins vicpagers_messages with geocode_cache to collect (six_figure → lat/lng)
-# calibration pairs, upserts them into grid_calibration, then refits the affine
-# transform and stores the coefficients in grid_transform (id=1).
+# Two calibration sources:
+#   1. vicpagers_messages + geocode_cache → nominatim-geocoded (six_figure, lat/lng) pairs
+#   2. tow_allocation_log + vicpagers_messages → exact VicRoads GPS joined on melway ref
+# Upserts merged pairs into grid_calibration, refits the affine transform,
+# and stores the coefficients in grid_transform (id=1).
 
 on:
   schedule:
@@ -25,6 +27,8 @@ jobs:
             apikey: key,
             Authorization: `Bearer ${key}`,
           }
+          const METRO      = { latMin: -38.4, latMax: -37.4, lngMin: 144.60, lngMax: 145.6 }
+          const normMelway = s => (s || '').replace(/\s+/g, '').toUpperCase()
 
           // ── 1. Fetch all pager messages with a six-figure ref (paginated — PostgREST caps at 1000/page) ──
           const msgs = []
@@ -50,6 +54,39 @@ jobs:
             if (msgs.length >= 100000) break  // safety cap
           }
           console.log(`Fetched ${msgs.length} pager messages with six-figure refs`)
+
+          // ── 1b. Fetch tow_allocation_log (exact VicRoads GPS + melway ref) ──
+          const allocs = []
+          let aOffset = 0
+          while (true) {
+            const rA = await fetch(
+              `${url}/rest/v1/tow_allocation_log?select=event_id,data&limit=${PAGE}&offset=${aOffset}`,
+              { headers: hdrs }
+            )
+            const aPage = await rA.json()
+            if (!Array.isArray(aPage)) {
+              console.error('Unexpected response from tow_allocation_log:', JSON.stringify(aPage).slice(0, 200))
+              break
+            }
+            allocs.push(...aPage)
+            if (aPage.length < PAGE) break
+            aOffset += PAGE
+            if (allocs.length >= 10000) break
+          }
+          console.log(`Fetched ${allocs.length} allocation log entries`)
+
+          // Build normalized melway → GPS map (first occurrence per melway ref)
+          const allocGps = new Map()
+          for (const a of allocs) {
+            const mel = (a.data?.properties?.melway || '').trim()
+            const geo = a.data?.geometry?.coordinates
+            if (!mel || !Array.isArray(geo) || geo.length < 2) continue
+            const key = normMelway(mel)
+            if (!key || allocGps.has(key)) continue
+            const lat = Number(geo[1]), lng = Number(geo[0])
+            if (!isNaN(lat) && !isNaN(lng)) allocGps.set(key, { lat, lng })
+          }
+          console.log(`Unique melway refs in allocations: ${allocGps.size}`)
 
           // Keep only M-series metro Melway refs with clean 5-6 digit refs and a non-empty address
           const metro = msgs.filter(m => {
@@ -84,12 +121,9 @@ jobs:
           }
           console.log(`Geocode cache hits: ${geoMap.size}`)
 
-          // ── 3. Build validated calibration pairs ──
-          // Melbourne metro bounds — excludes Geelong, Phillip Island, Ballarat, regional areas
-          // that have M-series Melway refs but use a different coordinate space in this grid
-          // lngMin 144.60 excludes the far-west wrapping zone (Hoppers Crossing, Wyndham Vale, Melton)
-          // where x values near 1000 break the linear model
-          const METRO = { latMin: -38.4, latMax: -37.4, lngMin: 144.60, lngMax: 145.6 }
+          // ── 3. Build nominatim-sourced calibration pairs ──
+          // Metro bounds at top of script; lngMin 144.60 excludes far-west wrapping zone
+          // (Hoppers Crossing x≈998, Wyndham Vale x≈916, Melton x≈877) where the linear model breaks
           const pairs = []
           for (const [addr, m] of byAddr) {
             const geo = geoMap.get(addr)
@@ -112,11 +146,47 @@ jobs:
               source_address: addr,
             })
           }
-          console.log(`Valid calibration pairs: ${pairs.length}`)
+          console.log(`Nominatim-sourced calibration pairs: ${pairs.length}`)
 
-          // Deduplicate by six_fig within this batch (same grid ref can appear with different addresses)
-          const dedupedPairs = [...new Map(pairs.map(p => [p.six_fig, p])).values()]
-          console.log(`After dedup by six_fig: ${dedupedPairs.length}`)
+          // ── 3b. Allocation-sourced calibration pairs (exact VicRoads GPS — higher quality) ──
+          // Build pager melway-ref → six_fig lookup (M-series only, no address required)
+          const pagerMelwayMap = new Map()
+          for (const m of msgs) {
+            const sf = (m.parsed_six_figure || '').replace(/\s/g, '')
+            const mr = (m.parsed_map_ref    || '').trim()
+            if (!sf || !/^\d{5,6}$/.test(sf)) continue
+            if (!/^M[\s\d]/.test(mr)) continue
+            const key = normMelway(mr)
+            if (!pagerMelwayMap.has(key)) pagerMelwayMap.set(key, { six_fig: sf, map_ref: mr })
+          }
+          console.log(`Pager melway→six_fig entries: ${pagerMelwayMap.size}`)
+
+          // Join: allocGps × pagerMelwayMap on normalized melway ref
+          const allocPairs = []
+          for (const [key, geo] of allocGps) {
+            const pg = pagerMelwayMap.get(key)
+            if (!pg) continue
+            const { lat, lng } = geo
+            if (lat < METRO.latMin || lat > METRO.latMax || lng < METRO.lngMin || lng > METRO.lngMax) continue
+            const sf = pg.six_fig.padStart(6, '0')
+            if (!/^\d{6}$/.test(sf)) continue
+            const x    = parseInt(sf.slice(0, 3), 10)
+            const rawY = parseInt(sf.slice(3),    10)
+            allocPairs.push({
+              six_fig:        sf,
+              map_ref:        pg.map_ref || null,
+              grid_x:         x,
+              grid_y_raw:     rawY,
+              lat,
+              lng,
+              source_address: `alloc:${key}`,
+            })
+          }
+          console.log(`Allocation-sourced calibration pairs: ${allocPairs.length}`)
+
+          // Merge — allocation-sourced overrides nominatim for the same six_fig (exact GPS wins)
+          const dedupedPairs = [...new Map([...pairs, ...allocPairs].map(p => [p.six_fig, p])).values()]
+          console.log(`Total after merge+dedup (nominatim=${pairs.length} alloc=${allocPairs.length}): ${dedupedPairs.length}`)
 
           if (dedupedPairs.length === 0) {
             console.log('No new calibration pairs found — exiting')
