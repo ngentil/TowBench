@@ -862,17 +862,48 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
       const coords = pagerGeoCache.get(key);
       if (!coords) return;
       const t = (inc.event_type || '').toLowerCase();
-      const incEmoji = t.includes('fire') || t.includes('burn')                            ? '🔥'
-                     : t.includes('accident') || t.includes('crash') || t.includes('mva') ? '🚗'
-                     : t.includes('medic') || t.includes('ambul')                          ? '🚑'
-                     : t.includes('rescue')                                                 ? '⛑️'
-                     : t.includes('storm') || t.includes('flood') || t.includes('tree')   ? '🌩️'
-                     : t.includes('hazmat') || t.includes('chemical') || t.includes('spill') ? '☢️'
-                     : t.includes('police')                                                 ? '🚓'
-                     : '📟';
-      const incHtml = `<div style="font-size:16px;line-height:1;filter:drop-shadow(0 1px 3px #000)">${incEmoji}</div>`;
+      const incEmoji =
+        // Vehicle fire — check before generic fire or road incident
+        (t.includes('vehicle') && t.includes('fire'))                                        ? '🚗🔥'
+        // Fire — specific vegetation/structure types first
+        : t.includes('grass') || t.includes('scrub') || t.includes('vegetation')            ? '🌿🔥'
+        : t.includes('bush')  || t.includes('forest') || t.includes('wildfire')             ? '🌲🔥'
+        : t.includes('structure') || t.includes('building') || t.includes('house')          ? '🏠🔥'
+        : t.includes('industrial') || (t.includes('chemical') && t.includes('fire'))        ? '🏭🔥'
+        : t.includes('power') && t.includes('fire')                                          ? '⚡🔥'
+        : t.includes('fire') || t.includes('burn')                                           ? '🔥💨'
+        // Rescue — specific types first
+        : t.includes('water rescue') || t.includes('flood rescue')                          ? '🌊⛑️'
+        : t.includes('cliff') || t.includes('vertical') || t.includes('height')            ? '🏔️⛑️'
+        : (t.includes('road') && t.includes('rescue')) || t.includes('entrap')             ? '🚗⛑️'
+        : t.includes('animal')                                                               ? '🐾⛑️'
+        : t.includes('search')                                                               ? '🔍⛑️'
+        : t.includes('rescue') || t.includes('ses')                                         ? '⛑️🔦'
+        // Road incidents
+        : t.includes('truck') || t.includes('heavy vehicle')                                ? '🚛💥'
+        : t.includes('motorbike') || t.includes('motorcycle')                               ? '🏍️💥'
+        : t.includes('train') || t.includes('tram') || t.includes('rail')                  ? '🚂💥'
+        : t.includes('accident') || t.includes('crash') || t.includes('mva') || t.includes('mvc') || t.includes('rta') || t.includes('rtc') ? '🚗💥'
+        // Medical
+        : t.includes('cardiac') || t.includes('heart')                                      ? '❤️🚑'
+        : t.includes('medic') || t.includes('ambul')                                        ? '🚑💨'
+        // Storm / weather
+        : t.includes('flood')                                                                ? '🌊🏠'
+        : t.includes('tree')                                                                 ? '🌳⚠️'
+        : t.includes('power') || t.includes('wire') || t.includes('electr')               ? '⚡⚠️'
+        : t.includes('storm') || t.includes('wind')                                         ? '🌩️🏠'
+        // Hazmat
+        : t.includes('gas') || t.includes('fuel') || t.includes('petrol')                  ? '⛽💨'
+        : t.includes('spill') || (t.includes('chemical') && !t.includes('fire'))           ? '☣️💧'
+        : t.includes('hazmat') || t.includes('hazardous')                                   ? '☢️⚠️'
+        // Other
+        : t.includes('aircraft') || t.includes('plane') || t.includes('helicopter')        ? '✈️💥'
+        : t.includes('boat') || t.includes('vessel') || t.includes('marine')               ? '🚤💥'
+        : t.includes('police')                                                               ? '🚔🚨'
+        : '📟⚡';
+      const incHtml = `<div style="font-size:15px;line-height:1;white-space:nowrap;filter:drop-shadow(0 1px 3px #000)">${incEmoji}</div>`;
       const marker = L.marker([coords.lat, coords.lng], {
-        icon: L.divIcon({ className: '', html: incHtml, iconSize: [18, 18], iconAnchor: [9, 9] }),
+        icon: L.divIcon({ className: '', html: incHtml, iconSize: [32, 18], iconAnchor: [16, 9] }),
         bubblingMouseEvents: false, zIndexOffset: 110,
       });
       marker.addTo(layer);
