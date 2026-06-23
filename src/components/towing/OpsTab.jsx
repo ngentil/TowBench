@@ -780,15 +780,10 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
       const lat = coords[1], lng = coords[0];
       const accepted  = acceptedJobs?.get(eventId);
       const isOverdue = accepted && (Date.now() - new Date(accepted.accepted_at).getTime()) >= 60 * 60 * 1000;
-      const dotColor  = isOverdue ? '#cc2222' : accepted ? '#cc4422' : GRN;
-      const sz = isOverdue ? 12 : 10;
-      const pulseHtml =
-        `<div style="position:relative;width:${sz}px;height:${sz}px">` +
-        `<div style="position:absolute;top:50%;left:50%;width:${sz}px;height:${sz}px;border-radius:50%;background:${dotColor};animation:ops-pulse 2s ease-out infinite"></div>` +
-        `<div style="position:absolute;top:50%;left:50%;width:${sz}px;height:${sz}px;border-radius:50%;background:${dotColor};transform:translate(-50%,-50%);opacity:0.95"></div>` +
-        `</div>`;
+      const allocEmoji = isOverdue ? '🔴' : accepted ? '🟡' : '✅';
+      const allocHtml  = `<div style="font-size:18px;line-height:1;filter:drop-shadow(0 1px 3px #000)">${allocEmoji}</div>`;
       const marker = L.marker([lat, lng], {
-        icon: L.divIcon({ className: '', html: pulseHtml, iconSize: [sz, sz], iconAnchor: [sz / 2, sz / 2] }),
+        icon: L.divIcon({ className: '', html: allocHtml, iconSize: [20, 20], iconAnchor: [10, 10] }),
         bubblingMouseEvents: false, zIndexOffset: 100,
       });
       marker.addTo(layer);
@@ -860,21 +855,24 @@ export default function OpsTab({ allFeatures, liveIds, loading, lastFetch, count
     const L = leafletRef.current, layer = pagerLayerRef.current;
     if (!L || !layer) return;
     layer.clearLayers();
-    const color = '#20a0c0';
-    const sz = 8;
     Object.values(pagerIncidents).forEach(inc => {
       if (inc.is_cancelled) return;
       const key = inc.address || inc.corner;
       if (!key) return;
       const coords = pagerGeoCache.get(key);
       if (!coords) return;
-      const dotHtml =
-        `<div style="position:relative;width:${sz}px;height:${sz}px">` +
-        `<div style="position:absolute;top:50%;left:50%;width:${sz}px;height:${sz}px;border-radius:50%;background:${color};animation:ops-pulse 2.5s ease-out infinite"></div>` +
-        `<div style="position:absolute;top:50%;left:50%;width:${sz}px;height:${sz}px;border-radius:50%;background:${color};transform:translate(-50%,-50%);opacity:0.9"></div>` +
-        `</div>`;
+      const t = (inc.event_type || '').toLowerCase();
+      const incEmoji = t.includes('fire') || t.includes('burn')                            ? '🔥'
+                     : t.includes('accident') || t.includes('crash') || t.includes('mva') ? '🚗'
+                     : t.includes('medic') || t.includes('ambul')                          ? '🚑'
+                     : t.includes('rescue')                                                 ? '⛑️'
+                     : t.includes('storm') || t.includes('flood') || t.includes('tree')   ? '🌩️'
+                     : t.includes('hazmat') || t.includes('chemical') || t.includes('spill') ? '☢️'
+                     : t.includes('police')                                                 ? '🚓'
+                     : '📟';
+      const incHtml = `<div style="font-size:16px;line-height:1;filter:drop-shadow(0 1px 3px #000)">${incEmoji}</div>`;
       const marker = L.marker([coords.lat, coords.lng], {
-        icon: L.divIcon({ className: '', html: dotHtml, iconSize: [sz, sz], iconAnchor: [sz / 2, sz / 2] }),
+        icon: L.divIcon({ className: '', html: incHtml, iconSize: [18, 18], iconAnchor: [9, 9] }),
         bubblingMouseEvents: false, zIndexOffset: 110,
       });
       marker.addTo(layer);
