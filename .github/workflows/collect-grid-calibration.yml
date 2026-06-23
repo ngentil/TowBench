@@ -114,7 +114,11 @@ jobs:
           }
           console.log(`Valid calibration pairs: ${pairs.length}`)
 
-          if (pairs.length === 0) {
+          // Deduplicate by six_fig within this batch (same grid ref can appear with different addresses)
+          const dedupedPairs = [...new Map(pairs.map(p => [p.six_fig, p])).values()]
+          console.log(`After dedup by six_fig: ${dedupedPairs.length}`)
+
+          if (dedupedPairs.length === 0) {
             console.log('No new calibration pairs found — exiting')
             process.exit(0)
           }
@@ -122,8 +126,8 @@ jobs:
           // ── 4. Upsert calibration pairs into grid_calibration (batch 50) ──
           // ?on_conflict=six_fig is required for PostgREST to resolve the UNIQUE constraint correctly
           let upserted = 0
-          for (let i = 0; i < pairs.length; i += 50) {
-            const batch = pairs.slice(i, i + 50)
+          for (let i = 0; i < dedupedPairs.length; i += 50) {
+            const batch = dedupedPairs.slice(i, i + 50)
             const r3 = await fetch(`${url}/rest/v1/grid_calibration?on_conflict=six_fig`, {
               method: 'POST',
               headers: {
