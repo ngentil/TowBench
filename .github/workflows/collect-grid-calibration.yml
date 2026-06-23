@@ -89,11 +89,6 @@ jobs:
             if (!isNaN(lat) && !isNaN(lng)) allocGps.set(key, { lat, lng })
           }
           console.log(`Unique melway refs in allocations: ${allocGps.size}`)
-          // Debug: show raw melway values from allocations
-          {
-            const samples = allocs.filter(a => a.data?.properties?.melway).slice(0, 5)
-            samples.forEach(a => console.log(`  alloc sample melway: "${a.data.properties.melway}" → key="${normMelway(a.data.properties.melway)}"`))
-          }
 
           // Keep only M-series metro Melway refs with clean 5-6 digit refs and a non-empty address
           const metro = msgs.filter(m => {
@@ -167,11 +162,6 @@ jobs:
             if (!pagerMelwayMap.has(key)) pagerMelwayMap.set(key, { six_fig: sf, map_ref: mr })
           }
           console.log(`Pager melway→six_fig entries: ${pagerMelwayMap.size}`)
-          // Debug: show pager melway keys
-          {
-            const samples = [...pagerMelwayMap.entries()].slice(0, 5)
-            samples.forEach(([k, v]) => console.log(`  pager sample key: "${k}" six_fig="${v.six_fig}" raw_mr="${v.map_ref}"`))
-          }
 
           // Join: allocGps × pagerMelwayMap on normalized melway ref
           const allocPairs = []
