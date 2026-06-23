@@ -1,0 +1,73 @@
+name: Export Pager Grid References
+
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: 'Number of recent pager messages to pull'
+        required: false
+        default: '500'
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch and export pager messages with grid refs
+        env:
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          LIMIT:                ${{ github.event.inputs.limit || '500' }}
+        run: |
+          node --input-type=module << 'EOF'
+          const url  = process.env.SUPABASE_URL
+          const key  = process.env.SUPABASE_SERVICE_KEY
+          const limit = parseInt(process.env.LIMIT, 10) || 500
+
+          const headers = {
+            apikey: key,
+            Authorization: `Bearer ${key}`,
+            'Content-Type': 'application/json',
+          }
+
+          // Fetch last N records, ordered newest first
+          const qs = new URLSearchParams({
+            select: 'id,received_at,agency,parsed_event_type,parsed_six_figure,parsed_map_ref,parsed_address,parsed_corner,parsed_description,message',
+            order: 'received_at.desc',
+            limit: String(limit),
+          })
+          const res = await fetch(`${url}/rest/v1/vicpagers_messages?${qs}`, { headers })
+          if (!res.ok) {
+            console.error('Supabase error:', res.status, await res.text())
+            process.exit(1)
+          }
+          const rows = await res.json()
+          console.log(`Fetched ${rows.length} rows`)
+
+          // Write CSV
+          const fs = await import('fs')
+          const cols = ['id','received_at','agency','parsed_event_type','parsed_six_figure','parsed_map_ref','parsed_address','parsed_corner','parsed_description','message']
+          const escape = v => {
+            if (v == null) return ''
+            const s = String(v).replace(/"/g, '""')
+            return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s}"` : s
+          }
+          const lines = [cols.join(',')]
+          for (const r of rows) lines.push(cols.map(c => escape(r[c])).join(','))
+          fs.writeFileSync('pager_refs.csv', lines.join('\n'))
+
+          // Summary stats
+          const withSix = rows.filter(r => r.parsed_six_figure).length
+          const withMap  = rows.filter(r => r.parsed_map_ref).length
+          const withAddr = rows.filter(r => r.parsed_address).length
+          console.log(`  with six-figure ref : ${withSix}`)
+          console.log(`  with Melway map ref : ${withMap}`)
+          console.log(`  with parsed address : ${withAddr}`)
+          console.log(`  CSV written to pager_refs.csv`)
+          EOF
+
+      - name: Upload CSV artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pager-refs-${{ github.run_number }}
+          path: pager_refs.csv
+          retention-days: 14
