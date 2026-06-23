@@ -87,7 +87,9 @@ jobs:
           // ── 3. Build validated calibration pairs ──
           // Melbourne metro bounds — excludes Geelong, Phillip Island, Ballarat, regional areas
           // that have M-series Melway refs but use a different coordinate space in this grid
-          const METRO = { latMin: -38.4, latMax: -37.4, lngMin: 144.55, lngMax: 145.6 }
+          // lngMin 144.60 excludes the far-west wrapping zone (Hoppers Crossing, Wyndham Vale, Melton)
+          // where x values near 1000 break the linear model
+          const METRO = { latMin: -38.4, latMax: -37.4, lngMin: 144.60, lngMax: 145.6 }
           const pairs = []
           for (const [addr, m] of byAddr) {
             const geo = geoMap.get(addr)
@@ -118,10 +120,11 @@ jobs:
           }
 
           // ── 4. Upsert calibration pairs into grid_calibration (batch 50) ──
+          // ?on_conflict=six_fig is required for PostgREST to resolve the UNIQUE constraint correctly
           let upserted = 0
           for (let i = 0; i < pairs.length; i += 50) {
             const batch = pairs.slice(i, i + 50)
-            const r3 = await fetch(`${url}/rest/v1/grid_calibration`, {
+            const r3 = await fetch(`${url}/rest/v1/grid_calibration?on_conflict=six_fig`, {
               method: 'POST',
               headers: {
                 ...hdrs,
@@ -200,19 +203,46 @@ jobs:
           const lc = solve(ATA, ATbL)  // [lat_a, lat_b, lat_c]
           const gc = solve(ATA, ATbG)  // [lng_a, lng_b, lng_c]
 
-          // ── 7. Compute residuals ──
-          const errs = pts.map(p => {
-            const pl = lc[0] + lc[1] * p.x + lc[2] * p.y
-            const pg = gc[0] + gc[1] * p.x + gc[2] * p.y
-            const km = Math.sqrt(((pl - p.lat) * 111) ** 2 + ((pg - p.lng) * 85.7) ** 2)
-            return { ...p, km }
-          }).sort((a, b) => b.km - a.km)
+          // ── 7. Two-pass fit with outlier rejection ──
+          // Pass 1: initial fit on all points
+          function residuals(pts, lc, gc) {
+            return pts.map(p => {
+              const pl = lc[0] + lc[1] * p.x + lc[2] * p.y
+              const pg = gc[0] + gc[1] * p.x + gc[2] * p.y
+              const km = Math.sqrt(((pl - p.lat) * 111) ** 2 + ((pg - p.lng) * 85.7) ** 2)
+              return { ...p, km }
+            })
+          }
 
+          const errs1   = residuals(pts, lc, gc)
+          const outliers = errs1.filter(p => p.km > 5).length
+          console.log(`Pass 1: n=${pts.length}  outliers >5km: ${outliers}`)
+
+          // Pass 2: refit with outliers removed
+          const clean = errs1.filter(p => p.km <= 5)
+          let lc2 = lc, gc2 = gc
+          if (clean.length >= 10 && outliers > 0) {
+            const ATA2 = [[0,0,0],[0,0,0],[0,0,0]]
+            const ATbL2 = [0,0,0], ATbG2 = [0,0,0]
+            for (const p of clean) {
+              const r = [1, p.x, p.y]
+              for (let i = 0; i < 3; i++) {
+                for (let j = 0; j < 3; j++) ATA2[i][j] += r[i] * r[j]
+                ATbL2[i] += r[i] * p.lat; ATbG2[i] += r[i] * p.lng
+              }
+            }
+            lc2 = solve(ATA2, ATbL2)
+            gc2 = solve(ATA2, ATbG2)
+          }
+
+          const finalLc = lc2, finalGc = gc2
+          const finalPts = clean.length >= 10 ? clean : pts
+          const errs = residuals(finalPts, finalLc, finalGc).sort((a, b) => b.km - a.km)
           const rmse = Math.sqrt(errs.reduce((s, p) => s + p.km ** 2, 0) / errs.length)
           const p90  = errs[Math.floor(errs.length * 0.90)].km
 
           console.log('\n════ FIT RESULTS ════')
-          console.log(`n=${pts.length}  RMSE=${rmse.toFixed(3)}km  p90=${p90.toFixed(3)}km`)
+          console.log(`n=${errs.length} (after outlier removal)  RMSE=${rmse.toFixed(3)}km  p90=${p90.toFixed(3)}km`)
           console.log('\nWorst 5 residuals:')
           errs.slice(0, 5).forEach(p => {
             console.log(`  ${p.km.toFixed(2)}km  x=${p.x}  y=${p.y}`)
@@ -221,12 +251,12 @@ jobs:
           // ── 8. Upsert fitted coefficients into grid_transform (id=1) ──
           const payload = {
             id:       1,
-            lat_a:    lc[0],
-            lat_b:    lc[1],
-            lat_c:    lc[2],
-            lng_a:    gc[0],
-            lng_b:    gc[1],
-            lng_c:    gc[2],
+            lat_a:    finalLc[0],
+            lat_b:    finalLc[1],
+            lat_c:    finalLc[2],
+            lng_a:    finalGc[0],
+            lng_b:    finalGc[1],
+            lng_c:    finalGc[2],
             n_pts:    pts.length,
             rmse_km:  Number(rmse.toFixed(3)),
             p90_km:   Number(p90.toFixed(3)),
@@ -248,6 +278,6 @@ jobs:
             process.exit(1)
           }
           console.log('\nStored fitted coefficients in grid_transform (id=1)')
-          console.log(`  lat = ${lc[0].toFixed(9)} + (${lc[1].toFixed(10)}) * x + ${lc[2].toFixed(10)} * y`)
-          console.log(`  lng = ${gc[0].toFixed(9)} + ${gc[1].toFixed(10)}  * x + (${gc[2].toFixed(10)}) * y`)
+          console.log(`  lat = ${finalLc[0].toFixed(9)} + (${finalLc[1].toFixed(10)}) * x + ${finalLc[2].toFixed(10)} * y`)
+          console.log(`  lng = ${finalGc[0].toFixed(9)} + ${finalGc[1].toFixed(10)}  * x + (${finalGc[2].toFixed(10)}) * y`)
           EOF
