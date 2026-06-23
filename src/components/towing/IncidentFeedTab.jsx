@@ -155,6 +155,14 @@ function stationGeoKey(incident) {
   return unit ? `~stn:${unit}` : null
 }
 
+// Fallback geocode key built from the incident description when no address/corner exists.
+// Strips leading event-type words (e.g. "CAR FIRE") leaving road + suburb text.
+function descGeoKey(incident) {
+  if (incident.address || incident.corner || !incident.description) return null
+  const text = incident.description.trim()
+  return `~desc:${text}`
+}
+
 // Broadcastify feed covering all FRV Melbourne Metro talkgroups (ESTA MMR network)
 const FGD_DEFAULT_FEED = 24820
 
@@ -679,16 +687,15 @@ export default function IncidentFeedTab({ userPos, companyId }) {
   )
 
   // Geocode incident addresses whenever we have an effective position (for distance display + radius filter).
-  // Primary key: address || corner. Fallback key: first recognisable station unit (~stn:…).
+  // Priority: address/corner (exact) → description text (good) → responding station (fallback).
   useEffect(() => {
     if (!effectivePos || geocodingRef.current) return
-    const cacheKey = i => i.address || i.corner || stationGeoKey(i)
+    const cacheKey = i => i.address || i.corner || descGeoKey(i) || stationGeoKey(i)
     const pending = allIncidents
       .filter(i => { const k = cacheKey(i); return k && !geocodeCache.current.has(k) })
       .sort((a, b) => {
-        const aReal = !!(a.address || a.corner)
-        const bReal = !!(b.address || b.corner)
-        return aReal === bReal ? 0 : aReal ? -1 : 1
+        const score = i => (i.address || i.corner) ? 0 : i.description ? 1 : 2
+        return score(a) - score(b)
       })
     if (!pending.length) return
 
@@ -706,6 +713,8 @@ export default function IncidentFeedTab({ userPos, companyId }) {
           if (geocodeCache.current.get(key) !== null) { setGeoRev(v => v + 1); continue }
           const searchTerm = key.startsWith('~stn:')
             ? key.replace('~stn:', '') + ' fire station, Victoria, Australia'
+            : key.startsWith('~desc:')
+            ? key.replace('~desc:', '') + ', Victoria, Australia'
             : key + ', Victoria, Australia'
           const q   = encodeURIComponent(searchTerm)
           const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1`, {
@@ -733,11 +742,13 @@ export default function IncidentFeedTab({ userPos, companyId }) {
   const withDistance = effectivePos
     ? allIncidents.map(i => {
         const realKey = i.address || i.corner
+        const dscKey  = !realKey ? descGeoKey(i) : null
         const stnKey  = stationGeoKey(i)
-        const key     = realKey || stnKey
+        const key     = realKey || dscKey || stnKey
         const coords  = key ? geocodeCache.current.get(key) : undefined
         const distKm  = coords ? kmBetween(effectivePos.lat, effectivePos.lng, coords.lat, coords.lng) : null
-        return { ...i, _distKm: distKm, _distFallback: !realKey && !!stnKey && distKm != null }
+        // ~fallback when using station coords only — desc-based is considered accurate enough
+        return { ...i, _distKm: distKm, _distFallback: !realKey && !dscKey && !!stnKey && distKm != null }
       })
     : allIncidents.map(i => ({ ...i, _distKm: null, _distFallback: false }))
 
