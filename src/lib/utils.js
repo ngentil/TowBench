@@ -49,6 +49,24 @@ export function fmtTimer(iso) {
     : `${m}:${String(s).padStart(2, '0')}`;
 }
 
+// Converts a CFA/MFB 6-figure Melway grid reference to approximate WGS84 coordinates.
+// Only valid for Melbourne metro M-series Melway pages — returns null for other series.
+// Accuracy: ~3 km RMSE within the Melbourne metropolitan area.
+// Fitted affine transform from known (six_figure, lat/lng) calibration pairs.
+export function sixFigureToLatLng(sixFig, mapRef) {
+  if (mapRef && !/^M[\s\d]/.test(mapRef)) return null;
+  const s = (sixFig || '').replace(/\s/g, '');
+  if (!/^\d{5,6}$/.test(s)) return null;
+  const p = s.padStart(6, '0');
+  const x = parseInt(p.slice(0, 3), 10);
+  const rawY = parseInt(p.slice(3), 10);
+  const y = rawY > 500 ? rawY - 1000 : rawY;
+  const lat = -37.939185 + (-0.0000071) * x + 0.0009726 * y;
+  const lng = 144.763386 + 0.0009672  * x + 0.0000420  * y;
+  if (lat < -39.5 || lat > -34.0 || lng < 141.0 || lng > 150.0) return null;
+  return { lat, lng };
+}
+
 // Haversine great-circle distance in kilometres
 export function haversineKm(lat1, lon1, lat2, lon2) {
   const R = 6371;
