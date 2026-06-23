@@ -4,6 +4,7 @@ import { useVicPagers, mergeMessage } from '../../lib/useVicPagers'
 import { getRecentVicPagers, dbRowToMessage } from '../../lib/db/incidents'
 import { BG, SURF, BRD, BRD2, TXT, MUT, ACC, GRN, RED } from '../../lib/styles'
 import { findDepotsForAddress, REGION_STYLE, REGION_LABELS } from '../../lib/towDepots'
+import { sixFigureToLatLng } from '../../lib/utils'
 
 const MONO = "'IBM Plex Mono', monospace"
 
@@ -161,6 +162,15 @@ function descGeoKey(incident) {
   if (incident.address || incident.corner || !incident.description) return null
   const text = incident.description.trim()
   return `~desc:${text}`
+}
+
+// Immediate geocode key from 6-figure Melway grid reference (M-series metro only, ~3km accuracy).
+function sixFigGeoKey(incident) {
+  if (incident.address || incident.corner) return null
+  const sf = (incident.six_figure || '').replace(/\s/g, '')
+  if (!/^\d{5,6}$/.test(sf)) return null
+  if (incident.map_ref && !/^M[\s\d]/.test(incident.map_ref)) return null
+  return `~6fig:${sf}`
 }
 
 // Broadcastify feed covering all FRV Melbourne Metro talkgroups (ESTA MMR network)
@@ -686,11 +696,24 @@ export default function IncidentFeedTab({ userPos, companyId }) {
     [incidents],
   )
 
+  // Pre-populate six-figure grid ref coords immediately (no Nominatim, ~3km accuracy for M-series metro).
+  useEffect(() => {
+    let changed = false
+    for (const i of allIncidents) {
+      const key = sixFigGeoKey(i)
+      if (!key || geocodeCache.current.has(key)) continue
+      const coords = sixFigureToLatLng(i.six_figure, i.map_ref)
+      geocodeCache.current.set(key, coords || null)
+      if (coords) changed = true
+    }
+    if (changed) setGeoRev(v => v + 1)
+  }, [allIncidents])
+
   // Geocode incident addresses whenever we have an effective position (for distance display + radius filter).
-  // Priority: address/corner (exact) → description text (good) → responding station (fallback).
+  // Priority: address/corner (exact) → six-figure grid ref (instant) → description text → responding station (fallback).
   useEffect(() => {
     if (!effectivePos || geocodingRef.current) return
-    const cacheKey = i => i.address || i.corner || descGeoKey(i) || stationGeoKey(i)
+    const cacheKey = i => i.address || i.corner || sixFigGeoKey(i) || descGeoKey(i) || stationGeoKey(i)
     const pending = allIncidents
       .filter(i => { const k = cacheKey(i); return k && !geocodeCache.current.has(k) })
       .sort((a, b) => {
@@ -742,13 +765,14 @@ export default function IncidentFeedTab({ userPos, companyId }) {
   const withDistance = effectivePos
     ? allIncidents.map(i => {
         const realKey = i.address || i.corner
-        const dscKey  = !realKey ? descGeoKey(i) : null
+        const sfKey   = !realKey ? sixFigGeoKey(i) : null
+        const dscKey  = !realKey && !sfKey ? descGeoKey(i) : null
         const stnKey  = stationGeoKey(i)
-        const key     = realKey || dscKey || stnKey
+        const key     = realKey || sfKey || dscKey || stnKey
         const coords  = key ? geocodeCache.current.get(key) : undefined
         const distKm  = coords ? kmBetween(effectivePos.lat, effectivePos.lng, coords.lat, coords.lng) : null
-        // ~fallback when using station coords only — desc-based is considered accurate enough
-        return { ...i, _distKm: distKm, _distFallback: !realKey && !dscKey && !!stnKey && distKm != null }
+        // ~fallback when using station coords only — desc-based and six-figure are considered accurate enough
+        return { ...i, _distKm: distKm, _distFallback: !realKey && !sfKey && !dscKey && !!stnKey && distKm != null }
       })
     : allIncidents.map(i => ({ ...i, _distKm: null, _distFallback: false }))
 
