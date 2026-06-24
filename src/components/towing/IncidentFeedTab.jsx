@@ -882,7 +882,7 @@ export default function IncidentFeedTab({ userPos, companyId }) {
       </div>
 
       {/* Filter badges */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 12 }}>
+      <div style={{ display: 'flex', flexWrap: 'nowrap', overflowX: 'auto', gap: 5, marginBottom: 8, paddingBottom: 2 }}>
         {FILTERS.map(f =>
           f.id === 'sep'
             ? <div key="sep" style={{ width: 1, background: BRD, margin: '0 2px' }} />
@@ -912,7 +912,7 @@ export default function IncidentFeedTab({ userPos, companyId }) {
       </div>
 
       {/* Nearby radius picker — identical to allocations tab */}
-      <div style={{ marginBottom: 12, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+      <div style={{ marginBottom: 8, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'nowrap', overflowX: 'auto' }}>
         <span style={{ fontSize: 8, color: MUT, letterSpacing: '0.08em', textTransform: 'uppercase', flexShrink: 0 }}>📍 Nearby pulse</span>
         {NEARBY_OPTS.map(km => (
           <button key={km} onClick={() => setRadius(km)}
@@ -936,7 +936,7 @@ export default function IncidentFeedTab({ userPos, companyId }) {
       </div>
 
       {/* Location source selector */}
-      <div style={{ marginBottom: 12, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+      <div style={{ marginBottom: 8, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'nowrap', overflowX: 'auto' }}>
         <span style={{ fontSize: 8, color: MUT, letterSpacing: '0.08em', textTransform: 'uppercase', flexShrink: 0 }}>📡 Source</span>
         <button
           onClick={() => setLocationSource('auto')}
@@ -972,7 +972,7 @@ export default function IncidentFeedTab({ userPos, companyId }) {
       </div>
 
       {/* Sort controls */}
-      <div style={{ marginBottom: 12, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+      <div style={{ marginBottom: 8, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'nowrap', overflowX: 'auto' }}>
         <span style={{ fontSize: 8, color: MUT, letterSpacing: '0.08em', textTransform: 'uppercase', flexShrink: 0 }}>↕ Sort</span>
         {SORT_OPTS.map(opt => (
           <button key={opt.id} onClick={() => setSortBy(opt.id)}
