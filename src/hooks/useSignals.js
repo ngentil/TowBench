@@ -29,6 +29,8 @@ export function useSignals(enabled) {
   const [vicEmMetrics, setVicEmMetrics] = useState(null);
   const [wazeMetrics,  setWazeMetrics]  = useState(null);
   const [wazeLagStats, setWazeLagStats] = useState({ samples: [], avg: null, min: null, max: null });
+  const [liveJobs,     setLiveJobs]     = useState([]);  // cross-referenced current jobs
+  const [liveEm,       setLiveEm]       = useState([]);  // EM road incidents not yet in VicRoads
 
   // ── VicRoads refs ───────────────────────────────────────────────────────────
   const historyRef      = useRef([]);
@@ -785,6 +787,46 @@ export function useSignals(enabled) {
 
     // Infrastructure correlation
     try { checkInfraCorrelation(vrResult, emResult, t); } catch { /* silent */ }
+
+    // Live view — rebuild every cycle (VicRoads always polled, refs always current)
+    if (vrResult) {
+      try {
+        const activeIds = vrResult.currIds;
+        const ROAD_CATS = ['ACCIDENT', 'CRASH', 'HAZMAT', 'INCIDENT', 'COLLISION'];
+
+        const unified = [...jobStateRef.current.values()]
+          .filter(j => activeIds.has(j.id))
+          .map(job => {
+            let emMatch = null, wazeMatch = null;
+            if (job.coords) {
+              const [jLng, jLat] = job.coords;
+              for (const [, inc] of vicEmIncRef.current) {
+                if (inc.lat == null || inc.lng == null) continue;
+                if (haversineKm(jLat, jLng, inc.lat, inc.lng) < 0.5) { emMatch = inc; break; }
+              }
+              for (const [, alert] of wazeAlertsRef.current) {
+                if (!alert.location) continue;
+                if (haversineKm(jLat, jLng, alert.location.y, alert.location.x) < 0.35) { wazeMatch = alert; break; }
+              }
+            }
+            const sources = ['vicroads'];
+            if (emMatch) sources.push('vicemergency');
+            if (wazeMatch) sources.push('waze');
+            return { ...job, emMatch, wazeMatch, sources };
+          })
+          .sort((a, b) => b.sources.length - a.sources.length || a.firstSeen - b.firstSeen);
+
+        setLiveJobs(unified);
+
+        // VicEmergency road incidents not matched to any active VicRoads job
+        const emOnly = [...vicEmIncRef.current.values()].filter(inc => {
+          if (!ROAD_CATS.some(k => inc.cat.toUpperCase().includes(k))) return false;
+          if (inc.lat == null || inc.lng == null) return true;
+          return !unified.some(j => j.emMatch?.id === inc.id);
+        });
+        setLiveEm(emOnly);
+      } catch { /* silent */ }
+    }
   }, [enabled, push, processVicRoadsPoll, processVicEmPoll, processWazePoll, runCorrelation, checkInfraCorrelation]);
 
   useEffect(() => {
@@ -796,7 +838,7 @@ export function useSignals(enabled) {
     return () => { clearInterval(pi); clearInterval(ri); };
   }, [enabled, poll, refreshPager]);
 
-  return { events, metrics, jobSignals, lagStats, vicEmMetrics, wazeMetrics, wazeLagStats };
+  return { events, metrics, jobSignals, lagStats, vicEmMetrics, wazeMetrics, wazeLagStats, liveJobs, liveEm };
 }
 
 function parseMaxAge(cacheControl) {
