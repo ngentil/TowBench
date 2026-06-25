@@ -227,29 +227,33 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, us
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* Low bridge proximity alert — shown across all tabs */}
-      {visibleBridgeAlert && (
-        <div style={{
-          background: '#3a0000', borderBottom: '2px solid #cc2222',
-          padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 10,
-          flexShrink: 0, fontFamily: "'IBM Plex Mono',monospace", animation: 'pulseRed 1s ease-in-out infinite',
-        }}>
-          <span style={{ fontSize: 18, flexShrink: 0 }}>⚠️</span>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: '#ff4444', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-              Low Bridge Ahead
+      {visibleBridgeAlert && (() => {
+        const lv = visibleBridgeAlert.level
+        return (
+          <div style={{
+            background: lv.bg, borderBottom: `2px solid ${lv.border}`,
+            padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 10,
+            flexShrink: 0, fontFamily: "'IBM Plex Mono',monospace",
+            ...(lv.pulse ? { animation: 'pulseRed 1s ease-in-out infinite' } : {}),
+          }}>
+            <span style={{ fontSize: 18, flexShrink: 0 }}>⚠️</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: lv.color, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                {lv.label} · Low Bridge
+              </div>
+              <div style={{ fontSize: 9, color: lv.color + 'aa', marginTop: 2 }}>
+                {visibleBridgeAlert.label} · {visibleBridgeAlert.height.toFixed(1)} m clearance · {(visibleBridgeAlert.dist * 1000).toFixed(0)} m away
+              </div>
             </div>
-            <div style={{ fontSize: 9, color: '#cc8888', marginTop: 2 }}>
-              {visibleBridgeAlert.label} · {visibleBridgeAlert.height.toFixed(1)} m clearance · {(visibleBridgeAlert.dist * 1000).toFixed(0)} m away
-            </div>
+            <button onClick={() => setDismissedBridge(visibleBridgeAlert.label)} title="Dismiss"
+              style={{ background: 'none', border: `1px solid ${lv.border}55`, borderRadius: 2,
+                color: lv.color, fontSize: 12, cursor: 'pointer', padding: '2px 8px',
+                fontFamily: "'IBM Plex Mono',monospace" }}>
+              ✕
+            </button>
           </div>
-          <button onClick={() => setDismissedBridge(visibleBridgeAlert.label)} title="Dismiss"
-            style={{ background: 'none', border: '1px solid #cc222255', borderRadius: 2,
-              color: '#cc6666', fontSize: 12, cursor: 'pointer', padding: '2px 8px',
-              fontFamily: "'IBM Plex Mono',monospace" }}>
-            ✕
-          </button>
-        </div>
-      )}
+        )
+      })()}
 
       <div style={{ background: SURF, borderBottom: '1px solid ' + BRD, overflowX: 'auto', overflowY: 'hidden', display: 'flex', scrollbarWidth: 'none' }}>
         {TABS.map(t => (
