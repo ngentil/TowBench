@@ -135,7 +135,7 @@ function BridgeCard({ rec, dist, nearbyKm }) {
   );
 }
 
-export default function BridgesTab({ userPos }) {
+export default function BridgesTab({ userPos, truckDims = {}, setTruckDims, effectiveAlertH = 0, totalH = 0, truckConfigured = false }) {
   const [bridges,    setBridges]    = useState([]);
   const [loading,    setLoading]    = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -202,6 +202,55 @@ export default function BridgesTab({ userPos }) {
 
   return (
     <div style={{ padding: 16, flex: 1, overflowY: 'auto' }}>
+
+      {/* Truck dimensions */}
+      <div style={{ background: '#0a0d10', border: '1px solid ' + BRD, borderRadius: 3, padding: '12px 14px', marginBottom: 16, fontFamily: "'IBM Plex Mono',monospace" }}>
+        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', color: MUT, textTransform: 'uppercase', marginBottom: 10 }}>
+          🚛 My Truck
+        </div>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          {[
+            { key: 'cabHeight',  label: 'Cab Height',  hint: 'unloaded' },
+            { key: 'deckHeight', label: 'Deck Height', hint: 'tray surface' },
+            { key: 'loadHeight', label: 'Load Height', hint: 'load on tray' },
+          ].map(({ key, label, hint }) => (
+            <label key={key} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <span style={{ fontSize: 8, color: MUT, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{label}</span>
+              <span style={{ fontSize: 7, color: '#444' }}>{hint}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                <input
+                  type="number" min="0" max="9" step="0.05"
+                  value={truckDims[key] ?? ''}
+                  onChange={e => setTruckDims && setTruckDims(d => ({ ...d, [key]: e.target.value }))}
+                  style={{ width: 62, background: '#161b22', border: '1px solid ' + BRD, borderRadius: 3,
+                    color: TXT, fontSize: 14, fontWeight: 700, padding: '5px 6px',
+                    fontFamily: "'IBM Plex Mono',monospace", textAlign: 'right', outline: 'none' }}
+                />
+                <span style={{ fontSize: 9, color: MUT }}>m</span>
+              </div>
+            </label>
+          ))}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <span style={{ fontSize: 8, color: MUT, letterSpacing: '0.06em', textTransform: 'uppercase' }}>Total (loaded)</span>
+            <span style={{ fontSize: 7, color: '#444' }}>deck + load</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+              <div style={{ width: 62, background: '#0d1117', border: `1px solid ${truckConfigured && totalH > 0 ? ACC + '66' : BRD}`, borderRadius: 3,
+                color: truckConfigured && totalH > 0 ? ACC : MUT, fontSize: 14, fontWeight: 700, padding: '5px 6px',
+                fontFamily: "'IBM Plex Mono',monospace", textAlign: 'right' }}>
+                {totalH > 0 ? totalH.toFixed(2) : '—'}
+              </div>
+              <span style={{ fontSize: 9, color: MUT }}>m</span>
+            </div>
+          </div>
+          {truckConfigured && (
+            <div style={{ fontSize: 8, color: '#556', alignSelf: 'flex-end', paddingBottom: 4, lineHeight: 1.6 }}>
+              Bridge alerts below<br />
+              <span style={{ color: ACC, fontWeight: 700 }}>{effectiveAlertH.toFixed(2)} m</span>
+              {totalH === 0 && effectiveAlertH > 0 && <span style={{ color: '#445' }}> (unloaded)</span>}
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
