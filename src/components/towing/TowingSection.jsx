@@ -86,11 +86,10 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, us
     return firstId || 'allocations';
   });
 
-  // Truck dimensions — persisted to localStorage
+  // Truck dimensions — persisted to localStorage; state lives here so the bridge alert hook can use it
   const [truckDims, setTruckDims] = useState(() => {
     try { return JSON.parse(localStorage.getItem('towbench_truck_dims') || '{}') } catch { return {} }
   })
-  const [showTruckConfig, setShowTruckConfig] = useState(false)
 
   useEffect(() => {
     localStorage.setItem('towbench_truck_dims', JSON.stringify(truckDims))
@@ -274,56 +273,6 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, us
         )
       })()}
 
-      {/* Truck dimensions config — collapsible panel */}
-      {showTruckConfig && (
-        <div style={{ background: '#0d1117', borderBottom: '1px solid ' + BRD, padding: '10px 16px', flexShrink: 0, fontFamily: "'IBM Plex Mono',monospace" }}>
-          <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', color: MUT, textTransform: 'uppercase', marginBottom: 8 }}>
-            Truck Dimensions
-          </div>
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-            {[
-              { key: 'cabHeight',  label: 'Cab Height',  hint: 'unloaded reference' },
-              { key: 'deckHeight', label: 'Deck Height', hint: 'tray surface from ground' },
-              { key: 'loadHeight', label: 'Load Height', hint: 'load sitting on tray'  },
-            ].map(({ key, label, hint }) => (
-              <label key={key} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                <span style={{ fontSize: 8, color: MUT, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{label}</span>
-                <span style={{ fontSize: 7, color: '#555', marginTop: -2 }}>{hint}</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <input
-                    type="number" min="0" max="9" step="0.05"
-                    value={truckDims[key] ?? ''}
-                    onChange={e => setTruckDims(d => ({ ...d, [key]: e.target.value }))}
-                    style={{ width: 60, background: '#161b22', border: '1px solid ' + BRD, borderRadius: 3,
-                      color: TXT, fontSize: 13, fontWeight: 700, padding: '4px 6px',
-                      fontFamily: "'IBM Plex Mono',monospace", textAlign: 'right' }}
-                  />
-                  <span style={{ fontSize: 9, color: MUT }}>m</span>
-                </div>
-              </label>
-            ))}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-              <span style={{ fontSize: 8, color: MUT, letterSpacing: '0.06em', textTransform: 'uppercase' }}>Total (loaded)</span>
-              <span style={{ fontSize: 7, color: '#555', marginTop: -2 }}>deck + load</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <div style={{ width: 60, background: '#0a0d10', border: '1px solid #333', borderRadius: 3,
-                  color: truckConfigured ? ACC : MUT, fontSize: 13, fontWeight: 700, padding: '4px 6px',
-                  fontFamily: "'IBM Plex Mono',monospace", textAlign: 'right' }}>
-                  {truckConfigured ? totalH.toFixed(2) : '—'}
-                </div>
-                <span style={{ fontSize: 9, color: MUT }}>m</span>
-              </div>
-            </div>
-            {truckConfigured && (
-              <div style={{ fontSize: 8, color: '#556', alignSelf: 'flex-end', paddingBottom: 6, lineHeight: 1.5 }}>
-                Alerts for bridges<br />below {effectiveAlertH.toFixed(2)} m
-                {totalH === 0 && cabH > 0 && <span><br />(unloaded)</span>}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
       <div style={{ background: SURF, borderBottom: '1px solid ' + BRD, overflowX: 'auto', overflowY: 'hidden', display: 'flex', scrollbarWidth: 'none' }}>
         {TABS.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
@@ -336,13 +285,8 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, us
               : t.label}
           </button>
         ))}
-        {/* Pinned right: truck dims + tab order */}
+        {/* Tab order settings — always visible, pinned to the right */}
         <div style={{ flex: 1 }} />
-        <button onClick={() => setShowTruckConfig(v => !v)}
-          title="Truck dimensions"
-          style={{ flexShrink: 0, padding: '13px 12px', minHeight: 44, fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: showTruckConfig ? ACC : truckConfigured ? '#88aa66' : MUT, cursor: 'pointer', border: 'none', background: 'none', borderBottom: showTruckConfig ? '2px solid ' + ACC : '2px solid transparent', fontFamily: "'IBM Plex Mono',monospace", whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-          🚛{truckConfigured && <span style={{ fontSize: 8 }}>{effectiveAlertH.toFixed(1)}m</span>}
-        </button>
         <button onClick={() => setTab('taborder')}
           style={{ flexShrink: 0, padding: '13px 16px', minHeight: 44, fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: tab === 'taborder' ? ACC : MUT, cursor: 'pointer', border: 'none', background: 'none', borderBottom: tab === 'taborder' ? '2px solid ' + ACC : '2px solid transparent', fontFamily: "'IBM Plex Mono',monospace", whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center' }}>
           ⇅ Tabs
@@ -373,7 +317,7 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, us
             userPos={userPos}
           />
         )}
-        {tab === 'bridges'    && <BridgesTab userPos={userPos} />}
+        {tab === 'bridges'    && <BridgesTab userPos={userPos} truckDims={truckDims} setTruckDims={setTruckDims} effectiveAlertH={effectiveAlertH} totalH={totalH} truckConfigured={truckConfigured} />}
         {tab === 'waze'       && <AlertsTab />}
         {tab === 'incidents'  && <IncidentFeedTab userPos={userPos} companyId={companyId} />}
         {tab === 'vessels'    && <VesselsTab />}
