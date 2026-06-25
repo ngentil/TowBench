@@ -2,32 +2,38 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { haversineKm } from '../lib/utils';
 import { supabase } from '../lib/supabase';
 
-const POLL_MS      = 30_000;   // tighter cadence for traffic analysis
-const MAX_EVENTS   = 300;
-const MAX_HISTORY  = 60;
-const GHOST_MS     = 2 * 60 * 60 * 1000;  // 2 hours
-const FLICKER_MS   = 5 * 60 * 1000;       // reappear within 5 min = flicker
-const LAG_WINDOW   = 30 * 60 * 1000;      // pager messages within 30 min
+const POLL_MS    = 30_000;
+const MAX_EVENTS = 300;
+const MAX_HISTORY = 60;
+const GHOST_MS   = 2 * 60 * 60 * 1000;   // 2 h
+const FLICKER_MS = 5 * 60 * 1000;        // 5 min
+const LAG_WINDOW = 30 * 60 * 1000;       // 30 min pager look-back
 
-// Fields present in the v3 schema — unknown keys trigger SCHEMA_CHANGE events
+// VicRoads v3 known schema fields
 const KNOWN_FIELDS = new Set([
   'eventId','closedRoadName','reference','eventType','eventSubType','description',
   'numberLanesImpacted','impact','lastUpdated','status','geometry','melway',
 ]);
 
+// VicEmergency severity order (lower index = more severe)
+const EM_SEV_ORDER = ['Emergency Warning', 'Watch and Act', 'Advice', 'No Rating', ''];
+
 let _evtId = 0;
 const eid = () => `e${++_evtId}`;
 
 export function useSignals(enabled) {
-  const [events,     setEvents]     = useState([]);
-  const [metrics,    setMetrics]    = useState(null);
-  const [jobSignals, setJobSignals] = useState({ ghosts: [], total: 0 });
-  const [lagStats,   setLagStats]   = useState({ samples: [], avg: null, min: null, max: null });
+  const [events,       setEvents]       = useState([]);
+  const [metrics,      setMetrics]      = useState(null);
+  const [jobSignals,   setJobSignals]   = useState({ ghosts: [], total: 0 });
+  const [lagStats,     setLagStats]     = useState({ samples: [], avg: null, min: null, max: null });
+  const [vicEmMetrics, setVicEmMetrics] = useState(null);
+  const [wazeMetrics,  setWazeMetrics]  = useState(null);
+  const [wazeLagStats, setWazeLagStats] = useState({ samples: [], avg: null, min: null, max: null });
 
-  // Mutable refs — no re-render cost
+  // ── VicRoads refs ───────────────────────────────────────────────────────────
   const historyRef      = useRef([]);
-  const jobStateRef     = useRef(new Map());   // eventId → job snapshot
-  const recentlyGoneRef = useRef(new Map());   // eventId → { ts, job } for flicker detection
+  const jobStateRef     = useRef(new Map());
+  const recentlyGoneRef = useRef(new Map());
   const prevHashRef     = useRef(null);
   const prevEncRef      = useRef(null);
   const prevStatusRef   = useRef(null);
@@ -36,12 +42,28 @@ export function useSignals(enabled) {
   const knownFieldsRef  = useRef(new Set(KNOWN_FIELDS));
   const pagerRef        = useRef([]);
   const lagSamplesRef   = useRef([]);
-  const pollCountRef    = useRef(0);
+
+  // ── VicEmergency refs ───────────────────────────────────────────────────────
+  const vicEmIncRef      = useRef(new Map());  // id → { id, name, cat, severity, suburb, lat, lng, firstSeen }
+  const prevVicEmHashRef = useRef(null);
+  const vicEmTtfbBuf     = useRef([]);
+  const prevVicEmStatus  = useRef(null);
+  const vicEmHistRef     = useRef([]);
+
+  // ── Waze refs ───────────────────────────────────────────────────────────────
+  const wazeAlertsRef  = useRef(new Map());  // uuid → alert object
+  const prevWazeStatus = useRef(null);
+  const wazeLagRef     = useRef([]);
+  const wazeHistRef    = useRef([]);
+
+  // ── Shared ──────────────────────────────────────────────────────────────────
+  const pollCountRef = useRef(0);
 
   const push = useCallback((ev) => {
     setEvents(prev => [ev, ...prev].slice(0, MAX_EVENTS));
   }, []);
 
+  // ── Pager refresh (for publication lag) ────────────────────────────────────
   const refreshPager = useCallback(async () => {
     try {
       const since = new Date(Date.now() - LAG_WINDOW).toISOString();
@@ -55,12 +77,10 @@ export function useSignals(enabled) {
     } catch { /* silent */ }
   }, []);
 
-  const processPoll = useCallback((raw, pollTs) => {
+  // ── VicRoads processing ─────────────────────────────────────────────────────
+  const processVicRoadsPoll = useCallback((raw, pollTs) => {
     const meta     = raw._meta || {};
     const features = raw.features || [];
-    pollCountRef.current++;
-
-    // ── PROTOCOL SIGNALS ──────────────────────────────────────
 
     // TTFB rolling buffer
     if (meta.ttfb != null) {
@@ -77,32 +97,32 @@ export function useSignals(enabled) {
       push({ id: eid(), ts: pollTs, type: 'HASH_CHANGED', severity: 'info',
         title: 'VicRoads feed updated',
         detail: `hash ${prevHashRef.current?.slice(0,8)} → ${meta.bodyHash?.slice(0,8)}`,
-        data: { hash: meta.bodyHash } });
+        data: { hash: meta.bodyHash, source: 'vicroads' } });
     }
     if (meta.bodyHash) prevHashRef.current = meta.bodyHash;
 
-    // Cadence estimate from hash change times
+    // Cadence estimate
     let cadenceMs = null;
     if (hashTimes.current.length >= 2) {
       const gaps = hashTimes.current.slice(1).map((t, i) => t - hashTimes.current[i]);
       cadenceMs = Math.round(gaps.reduce((a, b) => a + b, 0) / gaps.length);
     }
 
-    // Latency spike — only after we have a baseline
+    // Latency spike
     if (avgTtfb && meta.ttfb && meta.ttfb > avgTtfb * 2.5 && meta.ttfb > 1500) {
       push({ id: eid(), ts: pollTs, type: 'LATENCY_SPIKE', severity: 'warn',
         title: `Latency spike: ${meta.ttfb}ms TTFB`,
         detail: `${Math.round(meta.ttfb / avgTtfb)}× above rolling avg (${avgTtfb}ms)`,
-        data: { ttfb: meta.ttfb, avg: avgTtfb } });
+        data: { ttfb: meta.ttfb, avg: avgTtfb, source: 'vicroads' } });
     }
 
-    // Age header — CDN staleness before we even get the data
+    // CDN staleness
     const ageS = meta.headers?.['age'] != null ? parseInt(meta.headers['age']) : null;
     if (ageS !== null && ageS > 90) {
       push({ id: eid(), ts: pollTs, type: 'HIGH_CDN_AGE', severity: 'warn',
         title: `CDN serving ${ageS}s-old data`,
         detail: 'VicRoads CDN cached this response before serving it to us',
-        data: { age: ageS } });
+        data: { age: ageS, source: 'vicroads' } });
     }
 
     // Cache status change
@@ -116,7 +136,7 @@ export function useSignals(enabled) {
         detail: isHit
           ? 'CDN edge served this — VicRoads origin not queried this cycle'
           : 'Cache miss — VicRoads origin was queried directly',
-        data: { cacheStatus } });
+        data: { cacheStatus, source: 'vicroads' } });
     }
 
     // Transfer-encoding change
@@ -125,7 +145,7 @@ export function useSignals(enabled) {
       push({ id: eid(), ts: pollTs, type: 'ENCODING_CHANGE', severity: 'warn',
         title: `Encoding changed: ${prevEncRef.current} → ${enc}`,
         detail: 'VicRoads changed response delivery — possible CDN or backend reconfiguration',
-        data: { from: prevEncRef.current, to: enc } });
+        data: { from: prevEncRef.current, to: enc, source: 'vicroads' } });
     }
     prevEncRef.current = enc;
 
@@ -135,7 +155,7 @@ export function useSignals(enabled) {
       push({ id: eid(), ts: pollTs, type: 'API_WARNING', severity: 'alert',
         title: 'API deprecation/warning header detected',
         detail: warnHeader,
-        data: { header: warnHeader } });
+        data: { header: warnHeader, source: 'vicroads' } });
     }
 
     // Rate limit headers
@@ -144,7 +164,7 @@ export function useSignals(enabled) {
       push({ id: eid(), ts: pollTs, type: 'RATE_LIMIT_LOW', severity: 'warn',
         title: `Rate limit: ${rlRemaining} requests remaining`,
         detail: `Reset: ${meta.headers?.['x-ratelimit-reset'] || 'unknown'}`,
-        data: { remaining: rlRemaining } });
+        data: { remaining: rlRemaining, source: 'vicroads' } });
     }
 
     // Feed error / recovery
@@ -152,42 +172,40 @@ export function useSignals(enabled) {
       push({ id: eid(), ts: pollTs, type: 'FEED_ERROR', severity: 'alert',
         title: `Feed error: HTTP ${meta.status}`,
         detail: meta.status === 429 ? 'Rate limited by VicRoads' : 'Upstream returned an error',
-        data: { status: meta.status, retryAfter: meta.headers?.['retry-after'] } });
+        data: { status: meta.status, source: 'vicroads' } });
     }
     if (prevStatusRef.current >= 400 && meta.status === 200) {
       push({ id: eid(), ts: pollTs, type: 'FEED_RECOVERED', severity: 'info',
         title: 'Feed recovered',
         detail: `Back to HTTP 200 after ${prevStatusRef.current}`,
-        data: {} });
+        data: { source: 'vicroads' } });
     }
     prevStatusRef.current = meta.status;
 
-    // Schema change — new unknown property key
+    // Schema change
     for (const f of features.slice(0, 3)) {
       for (const k of Object.keys(f.properties || {})) {
         if (!knownFieldsRef.current.has(k)) {
           knownFieldsRef.current.add(k);
           push({ id: eid(), ts: pollTs, type: 'SCHEMA_CHANGE', severity: 'warn',
             title: `New API field: "${k}"`,
-            detail: `VicRoads added a property not seen before — schema may have changed`,
-            data: { field: k, sample: String(f.properties[k]).slice(0, 80) } });
+            detail: 'VicRoads added a property not seen before — schema may have changed',
+            data: { field: k, sample: String(f.properties[k]).slice(0, 80), source: 'vicroads' } });
         }
       }
     }
 
-    // ── JOB-LEVEL SIGNALS ─────────────────────────────────────
-
-    const currIds   = new Set();
-    const prevIds   = new Set(prevSnap?.jobIds || []);
-    const newJobs   = [];
-    const clearedJobs = [];
+    // ── Job-level signals ──────────────────────────────────────────────────────
+    const currIds = new Set();
+    const prevIds = new Set(prevSnap?.jobIds || []);
+    const newJobs = [];
 
     for (const f of features) {
-      const id      = f.properties?.eventId;
+      const id  = f.properties?.eventId;
       if (!id) continue;
       currIds.add(id);
 
-      const coords      = f.geometry?.coordinates;   // [lng, lat]
+      const coords      = f.geometry?.coordinates;
       const desc        = f.properties?.description  || '';
       const road        = f.properties?.closedRoadName || '';
       const suburb      = f.properties?.reference?.startIntersectionLocality || '';
@@ -201,7 +219,7 @@ export function useSignals(enabled) {
         jobStateRef.current.set(id, entry);
         newJobs.push(entry);
 
-        // Flicker check — did this job vanish recently and come back?
+        // Flicker check
         const gone = recentlyGoneRef.current.get(id);
         if (gone && pollTs - gone.ts < FLICKER_MS) {
           push({ id: eid(), ts: pollTs, type: 'JOB_FLICKERED', severity: 'warn',
@@ -211,7 +229,7 @@ export function useSignals(enabled) {
         }
         recentlyGoneRef.current.delete(id);
 
-        // Publication lag — check pager for a match
+        // Publication lag (pager → VicRoads)
         const matchedPager = pagerRef.current.find(p => {
           if (!p.timestamp) return false;
           const pTs = new Date(p.timestamp).getTime();
@@ -225,9 +243,7 @@ export function useSignals(enabled) {
           lagSamplesRef.current = [...lagSamplesRef.current, lagMs].slice(-50);
           const samples = lagSamplesRef.current;
           const avg = Math.round(samples.reduce((a, b) => a + b, 0) / samples.length);
-          const min = Math.min(...samples);
-          const max = Math.max(...samples);
-          setLagStats({ samples, avg, min, max });
+          setLagStats({ samples, avg, min: Math.min(...samples), max: Math.max(...samples) });
           push({ id: eid(), ts: pollTs, type: 'PUBLICATION_LAG', severity: 'info',
             title: `Publication lag: ${Math.round(lagMs / 1000)}s`,
             detail: `Pager → VicRoads for ${road}, ${suburb} (avg ${Math.round(avg / 1000)}s)`,
@@ -235,7 +251,7 @@ export function useSignals(enabled) {
         }
 
       } else {
-        existing.lastSeen  = pollTs;
+        existing.lastSeen    = pollTs;
         existing.lastUpdated = lastUpdated;
         existing.appearances++;
 
@@ -253,9 +269,9 @@ export function useSignals(enabled) {
           }
         }
 
-        // Description escalation — length increase + keyword
+        // Description escalation
         if (desc && existing.desc && desc.length > existing.desc.length + 15) {
-          const KEYS = ['ROLLOVER', 'FIRE', 'ENTRAPMENT', 'MULTI-VEHICLE', 'SERIOUS', 'FATAL', 'CLOSED', 'HAZMAT'];
+          const KEYS = ['ROLLOVER','FIRE','ENTRAPMENT','MULTI-VEHICLE','SERIOUS','FATAL','CLOSED','HAZMAT'];
           const newKw = KEYS.find(k => desc.toUpperCase().includes(k) && !existing.desc.toUpperCase().includes(k));
           push({ id: eid(), ts: pollTs, type: 'DESC_ESCALATION',
             severity: newKw ? 'alert' : 'warn',
@@ -282,7 +298,6 @@ export function useSignals(enabled) {
         const job = jobStateRef.current.get(prevId);
         if (job) {
           const durMs = pollTs - job.firstSeen;
-          clearedJobs.push({ ...job, durMs });
           recentlyGoneRef.current.set(prevId, { ts: pollTs, job });
           push({ id: eid(), ts: pollTs, type: 'JOB_CLEARED', severity: 'info',
             title: `Cleared: ${job.road || prevId}`,
@@ -293,7 +308,7 @@ export function useSignals(enabled) {
       }
     }
 
-    // New job events
+    // Batch flush or individual new job events
     if (newJobs.length >= 3) {
       push({ id: eid(), ts: pollTs, type: 'BATCH_FLUSH', severity: 'warn',
         title: `Batch flush: ${newJobs.length} new jobs`,
@@ -308,12 +323,12 @@ export function useSignals(enabled) {
       }
     }
 
-    // Surge detection — >2σ above recent baseline
+    // Surge detection
     const recentCounts = historyRef.current.slice(-12).map(s => s.activeCount);
     if (recentCounts.length >= 6) {
-      const avg  = recentCounts.reduce((a, b) => a + b, 0) / recentCounts.length;
-      const std  = Math.sqrt(recentCounts.reduce((a, b) => a + (b - avg) ** 2, 0) / recentCounts.length);
-      const now  = currIds.size;
+      const avg = recentCounts.reduce((a, b) => a + b, 0) / recentCounts.length;
+      const std = Math.sqrt(recentCounts.reduce((a, b) => a + (b - avg) ** 2, 0) / recentCounts.length);
+      const now = currIds.size;
       if (now > avg + 2 * std && now > avg + 4) {
         push({ id: eid(), ts: pollTs, type: 'SURGE', severity: 'alert',
           title: `Activity surge: ${now} active jobs`,
@@ -322,10 +337,10 @@ export function useSignals(enabled) {
       }
     }
 
-    // Duplicate coords detection
+    // Duplicate coordinates
     const coordBucket = new Map();
     for (const f of features) {
-      const c = f.geometry?.coordinates;
+      const c  = f.geometry?.coordinates;
       const id = f.properties?.eventId;
       if (!c || !id) continue;
       const key = `${c[0].toFixed(3)},${c[1].toFixed(3)}`;
@@ -351,55 +366,426 @@ export function useSignals(enabled) {
 
     // Update metrics
     setMetrics({
-      ts: pollTs,
-      ttfb: meta.ttfb,
-      totalTime: meta.totalTime,
-      transferTime: meta.transferTime,
-      bodyHash: meta.bodyHash,
+      ts:               pollTs,
+      ttfb:             meta.ttfb,
+      totalTime:        meta.totalTime,
+      transferTime:     meta.transferTime,
+      bodyHash:         meta.bodyHash,
       hashChanged,
-      compressedSize: meta.compressedSize,
+      compressedSize:   meta.compressedSize,
       uncompressedSize: meta.uncompressedSize,
       compressionRatio: meta.compressionRatio,
-      age: ageS,
+      age:              ageS,
       cacheStatus,
-      etag: meta.headers?.etag,
-      via: meta.headers?.via,
-      encoding: enc,
-      serverTiming: meta.headers?.['server-timing'],
-      traceId: meta.headers?.['x-request-id'] || meta.headers?.['x-correlation-id'],
-      hasWarning: !!warnHeader,
-      status: meta.status,
+      etag:             meta.headers?.etag,
+      via:              meta.headers?.via,
+      encoding:         enc,
+      serverTiming:     meta.headers?.['server-timing'],
+      traceId:          meta.headers?.['x-request-id'] || meta.headers?.['x-correlation-id'],
+      hasWarning:       !!warnHeader,
+      status:           meta.status,
       avgTtfb,
       cadenceMs,
-      pollCount: pollCountRef.current,
-      hashChangeCount: hashTimes.current.length,
+      pollCount:        pollCountRef.current,
+      hashChangeCount:  hashTimes.current.length,
       lastHashChangeTs: hashTimes.current[hashTimes.current.length - 1] || null,
-      activeJobs: currIds.size,
-      maxAge: parseMaxAge(meta.headers?.['cache-control']),
-      rlRemaining: rlRemaining != null ? parseInt(rlRemaining) : null,
+      activeJobs:       currIds.size,
+      maxAge:           parseMaxAge(meta.headers?.['cache-control']),
+      rlRemaining:      rlRemaining != null ? parseInt(rlRemaining) : null,
     });
 
-    // Job signals summary
-    const allJobs = [...jobStateRef.current.values()];
     setJobSignals({
-      ghosts: allJobs.filter(j => j.ghostFired && currIds.has(j.id)),
-      total: currIds.size,
+      ghosts: [...jobStateRef.current.values()].filter(j => j.ghostFired && currIds.has(j.id)),
+      total:  currIds.size,
     });
 
+    return { newJobs, currIds, ttfb: meta.ttfb, avgTtfb };
   }, [push]);
 
+  // ── VicEmergency processing ─────────────────────────────────────────────────
+  const processVicEmPoll = useCallback((raw, pollTs) => {
+    const meta      = raw._meta || {};
+    const incidents = raw.incidents || [];
+
+    // TTFB tracking
+    if (meta.ttfb != null) {
+      vicEmTtfbBuf.current = [...vicEmTtfbBuf.current, meta.ttfb].slice(-20);
+    }
+    const avgTtfb = vicEmTtfbBuf.current.length
+      ? Math.round(vicEmTtfbBuf.current.reduce((a, b) => a + b, 0) / vicEmTtfbBuf.current.length)
+      : null;
+
+    // Hash change
+    const hashChanged = !!meta.bodyHash && meta.bodyHash !== prevVicEmHashRef.current;
+    if (hashChanged && prevVicEmHashRef.current !== null) {
+      push({ id: eid(), ts: pollTs, type: 'VIC_EM_UPDATED', severity: 'info',
+        title: 'VicEmergency feed updated',
+        detail: 'Incident data changed since last check',
+        data: { hash: meta.bodyHash, source: 'vicemergency' } });
+    }
+    if (meta.bodyHash) prevVicEmHashRef.current = meta.bodyHash;
+
+    // Error / recovery
+    if (meta.status >= 400) {
+      push({ id: eid(), ts: pollTs, type: 'VIC_EM_ERROR', severity: 'alert',
+        title: `VicEmergency error: HTTP ${meta.status}`,
+        detail: 'VicEmergency feed returned an error',
+        data: { status: meta.status, source: 'vicemergency' } });
+    }
+    if (prevVicEmStatus.current !== null && prevVicEmStatus.current >= 400 && (meta.status || 200) === 200) {
+      push({ id: eid(), ts: pollTs, type: 'VIC_EM_RECOVERED', severity: 'info',
+        title: 'VicEmergency feed recovered',
+        detail: `Back to normal after HTTP ${prevVicEmStatus.current}`,
+        data: { source: 'vicemergency' } });
+    }
+    prevVicEmStatus.current = meta.status || 200;
+
+    // Track incidents
+    const currIds  = new Set();
+    const prevIds  = new Set(vicEmIncRef.current.keys());
+    const newIncs  = [];
+
+    for (const inc of incidents) {
+      const id = String(inc.id || inc.sourceId || '');
+      if (!id) continue;
+      currIds.add(id);
+
+      const lat      = inc.location?.latitude  ?? inc.lat  ?? null;
+      const lng      = inc.location?.longitude ?? inc.lng  ?? null;
+      const name     = inc.name || inc.title || '';
+      const cat      = inc.category1 || inc.category2 || 'OTHER';
+      const sev      = inc.severity || '';
+      const suburb   = inc.location?.suburb || '';
+      const existing = vicEmIncRef.current.get(id);
+
+      if (!existing) {
+        const entry = { id, name, cat, severity: sev, suburb, lat, lng, firstSeen: pollTs };
+        vicEmIncRef.current.set(id, entry);
+        newIncs.push(entry);
+      } else {
+        // Severity escalation (lower index in SEV_ORDER = more severe)
+        const prevIdx = EM_SEV_ORDER.indexOf(existing.severity);
+        const newIdx  = EM_SEV_ORDER.indexOf(sev);
+        if (newIdx >= 0 && prevIdx >= 0 && newIdx < prevIdx) {
+          push({ id: eid(), ts: pollTs, type: 'VIC_EM_ESCALATED', severity: 'alert',
+            title: `Incident escalated: ${name || cat}`,
+            detail: `${suburb} — ${existing.severity} → ${sev}`,
+            data: { id, name, suburb, from: existing.severity, to: sev, source: 'vicemergency' } });
+        }
+        existing.severity = sev;
+      }
+    }
+
+    // New incident events (only push ACCIDENT/CRASH/HAZMAT types to avoid noise from fire/storm)
+    for (const inc of newIncs) {
+      const catUp = inc.cat.toUpperCase();
+      const isRoadRelated = ['ACCIDENT','CRASH','HAZMAT','INCIDENT'].some(k => catUp.includes(k));
+      push({ id: eid(), ts: pollTs,
+        type: 'VIC_EM_NEW', severity: isRoadRelated ? 'warn' : 'info',
+        title: `VicEmergency: ${inc.name || inc.cat}`,
+        detail: [inc.suburb, inc.severity].filter(Boolean).join(' · '),
+        data: { id: inc.id, name: inc.name, cat: inc.cat, suburb: inc.suburb,
+          lat: inc.lat, lng: inc.lng, source: 'vicemergency' } });
+    }
+
+    // Cleared incidents (silent for most; notify for road-related only)
+    for (const prevId of prevIds) {
+      if (!currIds.has(prevId)) {
+        const inc = vicEmIncRef.current.get(prevId);
+        if (inc) {
+          const catUp = inc.cat.toUpperCase();
+          if (['ACCIDENT','CRASH','HAZMAT','INCIDENT'].some(k => catUp.includes(k))) {
+            push({ id: eid(), ts: pollTs, type: 'VIC_EM_CLEARED', severity: 'info',
+              title: `VicEmergency cleared: ${inc.name || prevId}`,
+              detail: inc.suburb || '',
+              data: { id: prevId, source: 'vicemergency' } });
+          }
+          vicEmIncRef.current.delete(prevId);
+        }
+      }
+    }
+
+    // Surge detection (relative to recent history)
+    const recentCounts = vicEmHistRef.current.slice(-6).map(s => s.count);
+    if (recentCounts.length >= 4) {
+      const avg = recentCounts.reduce((a, b) => a + b, 0) / recentCounts.length;
+      const std = Math.sqrt(recentCounts.reduce((a, b) => a + (b - avg) ** 2, 0) / recentCounts.length);
+      if (currIds.size > avg + 2 * std && currIds.size > avg + 3) {
+        push({ id: eid(), ts: pollTs, type: 'VIC_EM_SURGE', severity: 'alert',
+          title: `VicEmergency surge: ${currIds.size} active incidents`,
+          detail: `+${Math.round(currIds.size - avg)} above recent average — elevated state-wide activity`,
+          data: { count: currIds.size, avg: Math.round(avg), source: 'vicemergency' } });
+      }
+    }
+
+    vicEmHistRef.current = [...vicEmHistRef.current, { ts: pollTs, count: currIds.size }].slice(-MAX_HISTORY);
+
+    // Category breakdown for metrics
+    const catCounts = {};
+    for (const [, inc] of vicEmIncRef.current) {
+      const k = inc.cat.toUpperCase().split(' ')[0] || 'OTHER';
+      catCounts[k] = (catCounts[k] || 0) + 1;
+    }
+
+    // TTFB spike on VicEmergency
+    if (avgTtfb && meta.ttfb && meta.ttfb > avgTtfb * 2.5 && meta.ttfb > 1500) {
+      push({ id: eid(), ts: pollTs, type: 'VIC_EM_LATENCY', severity: 'warn',
+        title: `VicEmergency latency spike: ${meta.ttfb}ms`,
+        detail: `${Math.round(meta.ttfb / avgTtfb)}× above rolling avg (${avgTtfb}ms)`,
+        data: { ttfb: meta.ttfb, avg: avgTtfb, source: 'vicemergency' } });
+    }
+
+    setVicEmMetrics({
+      ts:               pollTs,
+      ttfb:             meta.ttfb,
+      avgTtfb,
+      bodyHash:         meta.bodyHash,
+      hashChanged,
+      uncompressedSize: meta.uncompressedSize,
+      status:           meta.status || 200,
+      activeIncidents:  currIds.size,
+      cacheStatus:      meta.headers?.['cf-cache-status'] || meta.headers?.['x-cache'] || null,
+      age:              meta.headers?.['age'] != null ? parseInt(meta.headers['age']) : null,
+      etag:             meta.headers?.etag,
+      catCounts,
+    });
+
+    return { newIncs, currIds, ttfb: meta.ttfb, avgTtfb };
+  }, [push]);
+
+  // ── Waze processing ─────────────────────────────────────────────────────────
+  const processWazePoll = useCallback((raw, pollTs) => {
+    const alerts = raw.alerts || [];
+
+    // Error / recovery
+    if (raw.error) {
+      push({ id: eid(), ts: pollTs, type: 'WAZE_ERROR', severity: 'warn',
+        title: 'Waze data unavailable',
+        detail: raw.error,
+        data: { source: 'waze' } });
+      prevWazeStatus.current = 'error';
+    } else if (prevWazeStatus.current === 'error') {
+      push({ id: eid(), ts: pollTs, type: 'WAZE_RECOVERED', severity: 'info',
+        title: 'Waze feed recovered',
+        detail: `${alerts.length} alerts now available`,
+        data: { source: 'waze' } });
+      prevWazeStatus.current = 'ok';
+    } else {
+      prevWazeStatus.current = 'ok';
+    }
+
+    // Budget warning
+    if (raw.budgetExhausted) {
+      // Only push once per session — check if we've already seen exhausted
+      const alreadyWarned = wazeHistRef.current.some(h => h.exhausted);
+      if (!alreadyWarned) {
+        push({ id: eid(), ts: pollTs, type: 'WAZE_BUDGET_EXHAUSTED', severity: 'warn',
+          title: `Waze budget exhausted (${raw.budgetCount}/${raw.budgetMax} this month)`,
+          detail: 'Waze data is now served from last-cached snapshot — may be stale',
+          data: { count: raw.budgetCount, max: raw.budgetMax, source: 'waze' } });
+      }
+    }
+
+    // Track alerts by uuid
+    const currUuids = new Set();
+    const prevUuids = new Set(wazeAlertsRef.current.keys());
+    const newAlerts = [];
+
+    for (const alert of alerts) {
+      const uuid = alert.uuid || alert.id;
+      if (!uuid) continue;
+      currUuids.add(uuid);
+      if (!wazeAlertsRef.current.has(uuid)) {
+        wazeAlertsRef.current.set(uuid, alert);
+        newAlerts.push(alert);
+      }
+    }
+
+    // Cleared alerts — only notify for ACCIDENT/HAZARD
+    for (const prevUuid of prevUuids) {
+      if (!currUuids.has(prevUuid)) {
+        const alert = wazeAlertsRef.current.get(prevUuid);
+        wazeAlertsRef.current.delete(prevUuid);
+        if (alert && ['ACCIDENT', 'HAZARD'].includes(alert.type)) {
+          push({ id: eid(), ts: pollTs, type: 'WAZE_CLEARED', severity: 'info',
+            title: `Waze cleared: ${alert.type}${alert.subtype ? '/' + alert.subtype : ''}`,
+            detail: alert.street || '',
+            data: { uuid: prevUuid, type: alert.type, source: 'waze' } });
+        }
+      }
+    }
+
+    // New ACCIDENT/HAZARD alerts
+    for (const alert of newAlerts) {
+      if (['ACCIDENT', 'HAZARD'].includes(alert.type)) {
+        push({ id: eid(), ts: pollTs, type: 'WAZE_NEW', severity: 'info',
+          title: `Waze: ${alert.type}${alert.subtype ? '/' + alert.subtype : ''}`,
+          detail: alert.street || alert.city || '',
+          data: { uuid: alert.uuid, type: alert.type, subtype: alert.subtype,
+            street: alert.street, location: alert.location, pubMillis: alert.pubMillis,
+            source: 'waze' } });
+      }
+    }
+
+    // Surge detection
+    const recentWazeCounts = wazeHistRef.current.slice(-4).map(h => h.count);
+    if (recentWazeCounts.length >= 3) {
+      const avg = recentWazeCounts.reduce((a, b) => a + b, 0) / recentWazeCounts.length;
+      if (currUuids.size > avg * 1.4 && currUuids.size > avg + 20) {
+        push({ id: eid(), ts: pollTs, type: 'WAZE_SURGE', severity: 'warn',
+          title: `Waze alert surge: ${currUuids.size} alerts`,
+          detail: `+${Math.round(currUuids.size - avg)} above recent average — elevated road reports`,
+          data: { count: currUuids.size, avg: Math.round(avg), source: 'waze' } });
+      }
+    }
+
+    // Type breakdown for metrics
+    const typeCounts = {};
+    for (const [, a] of wazeAlertsRef.current) {
+      const k = a.type || 'OTHER';
+      typeCounts[k] = (typeCounts[k] || 0) + 1;
+    }
+
+    wazeHistRef.current = [...wazeHistRef.current, {
+      ts: pollTs, count: currUuids.size, exhausted: !!raw.budgetExhausted,
+    }].slice(-MAX_HISTORY);
+
+    setWazeMetrics({
+      ts:              pollTs,
+      activeAlerts:    currUuids.size,
+      newAlerts:       newAlerts.length,
+      budgetCount:     raw.budgetCount ?? null,
+      budgetMax:       raw.budgetMax ?? null,
+      budgetExhausted: !!raw.budgetExhausted,
+      cachedAt:        raw.cachedAt ?? null,
+      typeCounts,
+    });
+
+    return { newAlerts, currUuids };
+  }, [push]);
+
+  // ── Cross-correlation ───────────────────────────────────────────────────────
+  const runCorrelation = useCallback((vrResult, emResult, wazeResult, pollTs) => {
+    // VicRoads × VicEmergency — new allocation near existing incident
+    if (vrResult && emResult) {
+      for (const job of vrResult.newJobs) {
+        if (!job.coords) continue;
+        const [jLng, jLat] = job.coords;
+        for (const [, inc] of vicEmIncRef.current) {
+          if (inc.lat == null || inc.lng == null) continue;
+          const km = haversineKm(jLat, jLng, inc.lat, inc.lng);
+          if (km < 0.5) {
+            push({ id: eid(), ts: pollTs, type: 'CROSS_CONFIRMED', severity: 'warn',
+              title: `Multi-source confirmed: ${job.road}`,
+              detail: `VicRoads allocation + VicEmergency "${inc.name || inc.cat}" within ${(km * 1000).toFixed(0)}m — scene verified by 2 agencies`,
+              data: { jobId: job.id, incId: inc.id, km, road: job.road, incName: inc.name } });
+            break;
+          }
+        }
+      }
+
+      // New VicEmergency incident near existing VicRoads job
+      for (const inc of emResult.newIncs) {
+        if (inc.lat == null || inc.lng == null) continue;
+        for (const [, job] of jobStateRef.current) {
+          if (!job.coords) continue;
+          const [jLng, jLat] = job.coords;
+          const km = haversineKm(inc.lat, inc.lng, jLat, jLng);
+          if (km < 0.5) {
+            push({ id: eid(), ts: pollTs, type: 'CROSS_CONFIRMED', severity: 'warn',
+              title: `Multi-source confirmed: ${job.road}`,
+              detail: `VicEmergency "${inc.name || inc.cat}" + VicRoads allocation within ${(km * 1000).toFixed(0)}m`,
+              data: { jobId: job.id, incId: inc.id, km, road: job.road, incName: inc.name } });
+            break;
+          }
+        }
+      }
+    }
+
+    // Waze × VicRoads — Waze alert before VicRoads allocation = Waze is a lead source
+    if (vrResult && wazeResult) {
+      for (const job of vrResult.newJobs) {
+        if (!job.coords) continue;
+        const [jLng, jLat] = job.coords;
+        for (const [, alert] of wazeAlertsRef.current) {
+          if (!alert.location || !alert.pubMillis) continue;
+          const km = haversineKm(jLat, jLng, alert.location.y, alert.location.x);
+          if (km < 0.35) {
+            const lagMs = pollTs - alert.pubMillis;
+            if (lagMs > 0 && lagMs < LAG_WINDOW) {
+              wazeLagRef.current = [...wazeLagRef.current, lagMs].slice(-50);
+              const samples = wazeLagRef.current;
+              const avg = Math.round(samples.reduce((a, b) => a + b, 0) / samples.length);
+              setWazeLagStats({ samples, avg, min: Math.min(...samples), max: Math.max(...samples) });
+              push({ id: eid(), ts: pollTs, type: 'WAZE_LEAD', severity: 'info',
+                title: `Waze lead: ${Math.round(lagMs / 1000)}s before VicRoads`,
+                detail: `"${alert.type}${alert.subtype ? '/' + alert.subtype : ''}" at ${alert.street || job.road}`,
+                data: { jobId: job.id, alertUuid: alert.uuid, lagMs,
+                  street: alert.street, road: job.road } });
+              break;
+            }
+          }
+        }
+      }
+    }
+  }, [push]);
+
+  // ── Infrastructure correlation ──────────────────────────────────────────────
+  const checkInfraCorrelation = useCallback((vrR, emR, pollTs) => {
+    if (!vrR || !emR) return;
+    const { ttfb: vrTtfb, avgTtfb: vrAvg } = vrR;
+    const { ttfb: emTtfb, avgTtfb: emAvg } = emR;
+    if (!vrTtfb || !emTtfb || !vrAvg || !emAvg) return;
+    if (vrTtfb > vrAvg * 2.5 && emTtfb > emAvg * 2 && vrTtfb > 800) {
+      push({ id: eid(), ts: pollTs, type: 'INFRA_CORR', severity: 'warn',
+        title: 'Simultaneous latency spike: VicRoads + VicEmergency',
+        detail: `VicRoads ${vrTtfb}ms (${Math.round(vrTtfb/vrAvg)}× avg) · VicEmergency ${emTtfb}ms — shared CDN or network event`,
+        data: { vrTtfb, emTtfb, vrAvg, emAvg } });
+    }
+  }, [push]);
+
+  // ── Main poll ───────────────────────────────────────────────────────────────
   const poll = useCallback(async () => {
     if (!enabled) return;
+    pollCountRef.current++;
+    const n = pollCountRef.current;
     const t = Date.now();
-    try {
-      const res  = await fetch('/.netlify/functions/vicroads-allocations');
-      const data = await res.json();
-      processPoll(data, t);
-    } catch (e) {
+
+    // VicEmergency every 2nd cycle (60s); Waze every 4th (120s); both on first poll
+    const doEm   = n === 1 || n % 2 === 0;
+    const doWaze = n === 1 || n % 4 === 0;
+
+    const safe = fn => fn().catch(e => ({ _error: e.message }));
+
+    const [vrRaw, emRaw, wazeRaw] = await Promise.all([
+      safe(() => fetch('/.netlify/functions/vicroads-allocations').then(r => r.json())),
+      doEm   ? safe(() => fetch('/.netlify/functions/vic-emergency').then(r => r.json()))   : Promise.resolve(null),
+      doWaze ? safe(() => fetch('/.netlify/functions/waze-alerts').then(r => r.json()))     : Promise.resolve(null),
+    ]);
+
+    let vrResult = null, emResult = null, wazeResult = null;
+
+    if (vrRaw && !vrRaw._error) {
+      try { vrResult = processVicRoadsPoll(vrRaw, t); } catch { /* silent */ }
+    } else if (vrRaw?._error) {
       push({ id: eid(), ts: t, type: 'POLL_FAILED', severity: 'alert',
-        title: 'Poll failed', detail: e.message, data: { error: e.message } });
+        title: 'VicRoads poll failed', detail: vrRaw._error, data: { error: vrRaw._error } });
     }
-  }, [enabled, processPoll, push]);
+
+    if (emRaw && !emRaw._error) {
+      try { emResult = processVicEmPoll(emRaw, t); } catch { /* silent */ }
+    }
+
+    if (wazeRaw && !wazeRaw._error) {
+      try { wazeResult = processWazePoll(wazeRaw, t); } catch { /* silent */ }
+    }
+
+    // Cross-source correlation
+    try { runCorrelation(vrResult, emResult, wazeResult, t); } catch { /* silent */ }
+
+    // Infrastructure correlation
+    try { checkInfraCorrelation(vrResult, emResult, t); } catch { /* silent */ }
+  }, [enabled, push, processVicRoadsPoll, processVicEmPoll, processWazePoll, runCorrelation, checkInfraCorrelation]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -410,7 +796,7 @@ export function useSignals(enabled) {
     return () => { clearInterval(pi); clearInterval(ri); };
   }, [enabled, poll, refreshPager]);
 
-  return { events, metrics, jobSignals, lagStats };
+  return { events, metrics, jobSignals, lagStats, vicEmMetrics, wazeMetrics, wazeLagStats };
 }
 
 function parseMaxAge(cacheControl) {
