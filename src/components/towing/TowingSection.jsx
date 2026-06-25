@@ -317,7 +317,7 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, us
             userPos={userPos}
           />
         )}
-        {tab === 'bridges'    && <BridgesTab userPos={userPos} truckDims={truckDims} setTruckDims={setTruckDims} effectiveAlertH={effectiveAlertH} totalH={totalH} truckConfigured={truckConfigured} />}
+        {tab === 'bridges'    && <BridgesTab userPos={userPos} effectiveAlertH={effectiveAlertH} truckConfigured={truckConfigured} />}
         {tab === 'waze'       && <AlertsTab />}
         {tab === 'incidents'  && <IncidentFeedTab userPos={userPos} companyId={companyId} />}
         {tab === 'vessels'    && <VesselsTab />}
@@ -342,7 +342,7 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, us
         )}
 
         {tab === 'depots'    && <DepotsTab isAdmin={isAdmin} companyId={companyId} />}
-        {tab === 'fleet'     && <FleetTab isAdmin={isAdmin} companyId={companyId} />}
+        {tab === 'fleet'     && <FleetTab isAdmin={isAdmin} companyId={companyId} truckDims={truckDims} setTruckDims={setTruckDims} effectiveAlertH={effectiveAlertH} totalH={totalH} truckConfigured={truckConfigured} />}
         {tab === 'pricing'   && <PricingTab companyConfig={companyConfig} setCompanyConfig={setCompanyConfig} companyId={companyId} userId={userId} />}
       </div>
     </div>
