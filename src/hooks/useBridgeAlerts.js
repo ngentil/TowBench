@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { haversineKm } from '../lib/utils';
 import { BRIDGE_URL } from '../lib/constants';
 
-const ALERT_HEIGHT_M = 4.6;
+const DEFAULT_ALERT_HEIGHT_M = 4.6;
+const LOAD_CUTOFF_M  = 5.5;   // generous upper bound; filter by truck height at alert time
 const WATCH_DIST_KM  = 2.0;
 const COOLDOWN_MS    = 5 * 60 * 1000;
 const GEO_POLL_MS    = 30_000; // Nominatim: safe at 1 req/30s
@@ -40,7 +41,10 @@ function roadMatches(bridgeLabel, currentRoad) {
   return words.some(w => road.includes(w))
 }
 
-export function useBridgeAlerts(userPos) {
+// truckHeight: effective vehicle height in metres; alerts suppressed for bridges the truck clears
+export function useBridgeAlerts(userPos, truckHeight) {
+  const alertHeight = truckHeight > 0 ? truckHeight : DEFAULT_ALERT_HEIGHT_M
+
   const [alert, setAlert] = useState(null)
   const bridgesRef        = useRef([])
   const prevDists         = useRef(new Map())
@@ -49,7 +53,7 @@ export function useBridgeAlerts(userPos) {
   const lastGeoTs         = useRef(0)
   const lastGeoPos        = useRef(null)
 
-  // Load bridge data once — only sub-ALERT_HEIGHT bridges, SERVICE rows excluded
+  // Load bridge data once — SERVICE rows excluded; generous height cutoff, refined at alert time
   useEffect(() => {
     if (!BRIDGE_URL) return
     fetch(BRIDGE_URL)
@@ -58,7 +62,7 @@ export function useBridgeAlerts(userPos) {
         bridgesRef.current = (data.r || [])
           .filter(rec => {
             const label = String(rec[3] || '').trim().toUpperCase()
-            return label !== 'SERVICE' && parseFloat(rec[2]) < ALERT_HEIGHT_M
+            return label !== 'SERVICE' && parseFloat(rec[2]) < LOAD_CUTOFF_M
           })
           .map(rec => ({
             lat:    parseFloat(rec[0]),
@@ -97,13 +101,16 @@ export function useBridgeAlerts(userPos) {
       .catch(() => {})
   }, [userPos])
 
-  // On every GPS fix: find closest approaching low bridge on current road
+  // On every GPS fix: find closest approaching low bridge that the truck can't clear
   useEffect(() => {
     if (!userPos || !bridgesRef.current.length) return
 
     let bestAlert = null
 
     for (const bridge of bridgesRef.current) {
+      // Skip bridges the current truck configuration can clear
+      if (bridge.height >= alertHeight) continue
+
       const currDist = haversineKm(userPos.lat, userPos.lng, bridge.lat, bridge.lng)
 
       if (currDist > WATCH_DIST_KM) {
@@ -147,7 +154,7 @@ export function useBridgeAlerts(userPos) {
     } else {
       setAlert(null)
     }
-  }, [userPos])
+  }, [userPos, alertHeight])
 
   return alert
 }
