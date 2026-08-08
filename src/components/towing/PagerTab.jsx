@@ -8,13 +8,10 @@ const WINDOW_MS      = 2 * 60 * 60 * 1000;
 const EMERGENCY_URL  = '/.netlify/functions/vic-emergency';
 
 const AGENCY_COLOR = {
-  CFS:     '#af6a2a',
-  MFS:     '#af2a2a',
-  SES:     '#a89a20',
-  SAAS:    '#2aaf5a',
-  AV:      '#1aaa55',
-  MEDSTAR: '#2a8faf',
-  VIC:     '#5a7aaf',
+  FRV: '#c0392b',
+  CFA: '#c46a10',
+  SES: '#a89a20',
+  VIC: '#5a7aaf',
 };
 
 function incidentIcon(sub = '') {
@@ -43,14 +40,15 @@ function normaliseEmergency(raw) {
 }
 
 function normalisePagerMsg(row) {
+  const eventType = row.parsed_event_type || '';
   return {
     id:       String(row.id),
     source:   'pager',
     agency:   row.agency || 'OTHER',
-    title:    row.incident_type || row.agency || 'Pager Message',
-    location: row.address || '',
-    subType:  row.incident_type || '',
-    status:   '',
+    title:    eventType || row.parsed_description?.slice(0, 50) || row.alias || 'Pager Message',
+    location: row.parsed_address || '',
+    subType:  eventType,
+    status:   row.parsed_is_cancellation ? 'CANCEL' : (row.parsed_alarm_level || ''),
     message:  row.message,
     time:     new Date(row.received_at),
     geometry: null,
@@ -66,7 +64,7 @@ function PagerCard({ item }) {
     <div style={{ background: '#0d0d0d', border: '1px solid #252525', borderLeft: `3px solid ${color}`, borderRadius: 2, marginBottom: 6, overflow: 'hidden' }}>
       <div onClick={() => setOpen(o => !o)} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '9px 12px', cursor: 'pointer' }}>
         <span style={{ fontSize: 15, flexShrink: 0, marginTop: 1 }}>
-          {item.source === 'vic' ? incidentIcon(item.subType) : item.agency === 'AV' ? '🚑' : '📟'}
+          {item.source === 'vic' ? incidentIcon(item.subType) : '📟'}
         </span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
@@ -113,14 +111,11 @@ function PagerCard({ item }) {
 }
 
 const FILTERS = [
-  { id: 'all',     label: 'All' },
-  { id: 'VIC',     label: '🔥 VIC' },
-  { id: 'AV',      label: '🚑 Ambul.' },
-  { id: 'CFS',     label: 'CFS' },
-  { id: 'MFS',     label: 'MFS' },
-  { id: 'SES',     label: 'SES' },
-  { id: 'SAAS',    label: 'SAAS' },
-  { id: 'MEDSTAR', label: 'MedStar' },
+  { id: 'all', label: 'All' },
+  { id: 'VIC', label: '🔥 VicEmerg' },
+  { id: 'FRV', label: '🚒 FRV' },
+  { id: 'CFA', label: '🔥 CFA' },
+  { id: 'SES', label: '⛑ SES' },
 ];
 
 export default function PagerTab() {
@@ -138,7 +133,7 @@ export default function PagerTab() {
 
       const [pagerRes, emergencyRes] = await Promise.allSettled([
         supabase
-          .from('pager_messages')
+          .from('vicpagers_messages')
           .select('*')
           .gte('received_at', since)
           .order('received_at', { ascending: false })
