@@ -12,6 +12,7 @@ const AGENCY_COLOR = {
   MFS:     '#af2a2a',
   SES:     '#a89a20',
   SAAS:    '#2aaf5a',
+  AV:      '#1aaa55',
   MEDSTAR: '#2a8faf',
   VIC:     '#5a7aaf',
 };
@@ -65,7 +66,7 @@ function PagerCard({ item }) {
     <div style={{ background: '#0d0d0d', border: '1px solid #252525', borderLeft: `3px solid ${color}`, borderRadius: 2, marginBottom: 6, overflow: 'hidden' }}>
       <div onClick={() => setOpen(o => !o)} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '9px 12px', cursor: 'pointer' }}>
         <span style={{ fontSize: 15, flexShrink: 0, marginTop: 1 }}>
-          {item.source === 'vic' ? incidentIcon(item.subType) : '📟'}
+          {item.source === 'vic' ? incidentIcon(item.subType) : item.agency === 'AV' ? '🚑' : '📟'}
         </span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
@@ -112,12 +113,13 @@ function PagerCard({ item }) {
 }
 
 const FILTERS = [
-  { id: 'all', label: 'All' },
-  { id: 'VIC', label: '🔥 VIC' },
-  { id: 'CFS', label: 'CFS' },
-  { id: 'MFS', label: 'MFS' },
-  { id: 'SES', label: 'SES' },
-  { id: 'SAAS', label: 'SAAS' },
+  { id: 'all',     label: 'All' },
+  { id: 'VIC',     label: '🔥 VIC' },
+  { id: 'AV',      label: '🚑 Ambul.' },
+  { id: 'CFS',     label: 'CFS' },
+  { id: 'MFS',     label: 'MFS' },
+  { id: 'SES',     label: 'SES' },
+  { id: 'SAAS',    label: 'SAAS' },
   { id: 'MEDSTAR', label: 'MedStar' },
 ];
 

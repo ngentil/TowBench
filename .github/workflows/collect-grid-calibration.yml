@@ -14,6 +14,7 @@ on:
 jobs:
   calibrate:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Collect calibration pairs and refit transform
         env:
@@ -26,6 +27,11 @@ jobs:
           const hdrs = {
             apikey: key,
             Authorization: `Bearer ${key}`,
+          }
+          const tFetch = (u, o, ms = 30_000) => {
+            const c = new AbortController()
+            setTimeout(() => c.abort(), ms)
+            return fetch(u, { ...o, signal: c.signal })
           }
           const METRO      = { latMin: -38.4, latMax: -37.4, lngMin: 144.60, lngMax: 145.6 }
           // Strip spaces and uppercase; also strip a leading 'M' that precedes a digit
@@ -44,7 +50,7 @@ jobs:
               limit: String(PAGE),
               offset: String(offset),
             })
-            const r1 = await fetch(`${url}/rest/v1/vicpagers_messages?${qs1}`, { headers: hdrs })
+            const r1 = await tFetch(`${url}/rest/v1/vicpagers_messages?${qs1}`, { headers: hdrs })
             const page = await r1.json()
             if (!Array.isArray(page)) {
               console.error('Unexpected response from vicpagers_messages:', JSON.stringify(page).slice(0, 200))
@@ -61,7 +67,7 @@ jobs:
           const allocs = []
           let aOffset = 0
           while (true) {
-            const rA = await fetch(
+            const rA = await tFetch(
               `${url}/rest/v1/tow_allocation_log?select=event_id,data&limit=${PAGE}&offset=${aOffset}`,
               { headers: hdrs }
             )
@@ -114,7 +120,7 @@ jobs:
           for (let i = 0; i < addrs.length; i += 50) {
             const batch = addrs.slice(i, i + 50)
             const inList = batch.map(a => `"${a.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`).join(',')
-            const r2 = await fetch(
+            const r2 = await tFetch(
               `${url}/rest/v1/geocode_cache?select=key,lat,lng&key=in.(${encodeURIComponent(inList)})`,
               { headers: hdrs }
             )
@@ -200,7 +206,7 @@ jobs:
           let upserted = 0
           for (let i = 0; i < dedupedPairs.length; i += 50) {
             const batch = dedupedPairs.slice(i, i + 50)
-            const r3 = await fetch(`${url}/rest/v1/grid_calibration?on_conflict=six_fig`, {
+            const r3 = await tFetch(`${url}/rest/v1/grid_calibration?on_conflict=six_fig`, {
               method: 'POST',
               headers: {
                 ...hdrs,
@@ -219,7 +225,7 @@ jobs:
           console.log(`Upserted ${upserted} pairs into grid_calibration`)
 
           // ── 5. Fetch metro-only calibration pairs for fitting ──
-          const r4 = await fetch(
+          const r4 = await tFetch(
             `${url}/rest/v1/grid_calibration?select=six_fig,grid_x,grid_y_raw,lat,lng` +
             `&lat=gte.${METRO.latMin}&lat=lte.${METRO.latMax}` +
             `&lng=gte.${METRO.lngMin}&lng=lte.${METRO.lngMax}&limit=10000`,
@@ -339,7 +345,7 @@ jobs:
             fitted_at: new Date().toISOString(),
           }
 
-          const r5 = await fetch(`${url}/rest/v1/grid_transform`, {
+          const r5 = await tFetch(`${url}/rest/v1/grid_transform`, {
             method: 'POST',
             headers: {
               ...hdrs,
