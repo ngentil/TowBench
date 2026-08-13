@@ -4,54 +4,54 @@
 
 const DEPOTS = [
   // ── Southern ─────────────────────────────────────────────────────────────
-  { depot: 604, region: 'S', suburbs: ['Highett','Beaumaris','Mentone','Dingley Village','Braeside','Aspendale'] },
-  { depot: 776, region: 'S', suburbs: ['Highett','Beaumaris','Mentone','Dingley Village','Braeside','Aspendale'] },
-  { depot: 605, region: 'S', suburbs: ['Clayton','Clayton South','Mulgrave','Clarinda','Springvale'] },
-  { depot: 607, region: 'S', suburbs: ['Frankston','Frankston South','Seaford','Sandhurst','Langwarrin'] },
-  { depot: 736, region: 'S', suburbs: ['Mornington','Safety Beach','Merricks Beach','Balnarring'] },
-  { depot: 758, region: 'S', suburbs: ['Cranbourne','Warneet','Clyde','Botanic Ridge'] },
-  { depot: 765, region: 'S', suburbs: ['Somerville','Pearcedale','Somers'] },
-  { depot: 767, region: 'S', suburbs: ['Portsea','St Andrews Beach','Rosebud','Arthurs Seat','Flinders','Point Leo'] },
-  { depot: 802, region: 'S', suburbs: ['Heatherton','Moorabbin Airport','Mordialloc','Aspendale'] },
-  { depot: 839, region: 'S', suburbs: ['Melbourne','Toorak','Elwood','Southbank'] },
-  { depot: 842, region: 'S', suburbs: ['Carrum Downs','Chelsea','Aspendale','Bangholme'] },
-  { depot: 861, region: 'S', suburbs: ['Ormond','Beaumaris','Hampton','Brighton'] },
+  { depot: 604, region: 'S', company: null, suburbs: ['Highett','Beaumaris','Mentone','Dingley Village','Braeside','Aspendale'] },
+  { depot: 776, region: 'S', company: null, suburbs: ['Highett','Beaumaris','Mentone','Dingley Village','Braeside','Aspendale'] },
+  { depot: 605, region: 'S', company: 'Allcar Towing Group', suburbs: ['Clayton','Clayton South','Mulgrave','Clarinda','Springvale'] },
+  { depot: 607, region: 'S', company: 'Sheen Group', suburbs: ['Frankston','Frankston South','Seaford','Sandhurst','Langwarrin'] },
+  { depot: 736, region: 'S', company: null, suburbs: ['Mornington','Safety Beach','Merricks Beach','Balnarring'] },
+  { depot: 758, region: 'S', company: null, suburbs: ['Cranbourne','Warneet','Clyde','Botanic Ridge'] },
+  { depot: 765, region: 'S', company: 'Allcar Towing Group', suburbs: ['Somerville','Pearcedale','Somers'] },
+  { depot: 767, region: 'S', company: 'Allcar Towing Group', suburbs: ['Portsea','St Andrews Beach','Rosebud','Arthurs Seat','Flinders','Point Leo'] },
+  { depot: 802, region: 'S', company: null, suburbs: ['Heatherton','Moorabbin Airport','Mordialloc','Aspendale'] },
+  { depot: 839, region: 'S', company: 'Melbourne Towing Service', suburbs: ['Melbourne','Toorak','Elwood','Southbank'] },
+  { depot: 842, region: 'S', company: null, suburbs: ['Carrum Downs','Chelsea','Aspendale','Bangholme'] },
+  { depot: 861, region: 'S', company: null, suburbs: ['Ormond','Beaumaris','Hampton','Brighton'] },
   // ── Eastern ──────────────────────────────────────────────────────────────
-  { depot: 606, region: 'E', suburbs: ['Montrose','Ringwood East','Warranwood','Mooroolbark','Upper Ferntree Gully','Scoresby','Rowville','Belgrave'] },
-  { depot: 699, region: 'E', suburbs: ['Berwick','Lang Lang','Bunyip','Pakenham'] },
-  { depot: 709, region: 'E', suburbs: ['Berwick','Officer','Cranbourne North','Narre Warren'] },
-  { depot: 741, region: 'E', suburbs: ['Oakleigh','Clarinda','Springvale','Mulgrave'] },
-  { depot: 743, region: 'E', suburbs: ['Cockatoo','Gembrook'] },
-  { depot: 747, region: 'E', suburbs: ['Chadstone','Notting Hill','Oakleigh South','Hughesdale'] },
-  { depot: 764, region: 'E', suburbs: ['Emerald','Selby'] },
-  { depot: 814, region: 'E', suburbs: ['Doncaster','Forest Hill','Burwood','Box Hill'] },
-  { depot: 820, region: 'E', suburbs: ['Mount Waverley','Glen Waverley','Scoresby','Noble Park','Clayton'] },
-  { depot: 825, region: 'E', suburbs: ['Lysterfield','Hallam','Lynbrook','Bangholme','Keysborough','Dandenong'] },
-  { depot: 844, region: 'E', suburbs: ['Kooyong','Balwyn','Kew'] },
-  { depot: 864, region: 'E', suburbs: ['Mount Waverley','Clarinda','Ormond','Malvern'] },
-  { depot: 879, region: 'E', suburbs: ['Doncaster','Doncaster East','Box Hill','Burwood','Balwyn'] },
+  { depot: 606, region: 'E', company: null, suburbs: ['Montrose','Ringwood East','Warranwood','Mooroolbark','Upper Ferntree Gully','Scoresby','Rowville','Belgrave'] },
+  { depot: 699, region: 'E', company: null, suburbs: ['Berwick','Lang Lang','Bunyip','Pakenham'] },
+  { depot: 709, region: 'E', company: 'Allcar Towing Group', suburbs: ['Berwick','Officer','Cranbourne North','Narre Warren'] },
+  { depot: 741, region: 'E', company: null, suburbs: ['Oakleigh','Clarinda','Springvale','Mulgrave'] },
+  { depot: 743, region: 'E', company: null, suburbs: ['Cockatoo','Gembrook'] },
+  { depot: 747, region: 'E', company: null, suburbs: ['Chadstone','Notting Hill','Oakleigh South','Hughesdale'] },
+  { depot: 764, region: 'E', company: null, suburbs: ['Emerald','Selby'] },
+  { depot: 814, region: 'E', company: 'Box Hill Towing', suburbs: ['Doncaster','Forest Hill','Burwood','Box Hill'] },
+  { depot: 820, region: 'E', company: null, suburbs: ['Mount Waverley','Glen Waverley','Scoresby','Noble Park','Clayton'] },
+  { depot: 825, region: 'E', company: 'Allcar Towing Group', suburbs: ['Lysterfield','Hallam','Lynbrook','Bangholme','Keysborough','Dandenong'] },
+  { depot: 844, region: 'E', company: null, suburbs: ['Kooyong','Balwyn','Kew'] },
+  { depot: 864, region: 'E', company: null, suburbs: ['Mount Waverley','Clarinda','Ormond','Malvern'] },
+  { depot: 879, region: 'E', company: 'Box Hill Towing', suburbs: ['Doncaster','Doncaster East','Box Hill','Burwood','Balwyn'] },
   // ── Northern ─────────────────────────────────────────────────────────────
-  { depot: 703, region: 'N', suburbs: ['Whittlesea','Doreen','Plenty','Reservoir','Lalor','Wollert'] },
-  { depot: 704, region: 'N', suburbs: ['Melbourne Airport','Essendon','Albion','Cairnlea','Keilor'] },
-  { depot: 719, region: 'N', suburbs: ['Fairfield','Kew','Fitzroy'] },
-  { depot: 792, region: 'N', suburbs: ['Fairfield','Kew','Fitzroy'] },
-  { depot: 744, region: 'N', suburbs: ['Yuroke','Craigieburn','Somerton','Jacana','Greenvale'] },
-  { depot: 745, region: 'N', suburbs: ['Brunswick','Flemington','Coburg','Essendon'] },
-  { depot: 781, region: 'N', suburbs: ['Watsonia','Rosanna','Ivanhoe','Bellfield'] },
-  { depot: 799, region: 'N', suburbs: ['Reservoir','Preston','Fawkner'] },
-  { depot: 805, region: 'N', suburbs: ['Fawkner','Coburg','Essendon'] },
-  { depot: 807, region: 'N', suburbs: ['Essendon','Melbourne Airport','Westmeadows','Tullamarine','Mickleham'] },
-  { depot: 815, region: 'N', suburbs: ['Gowanbrae','Strathmore','Moonee Ponds','Aberfeldie','Avondale Heights','Keilor East','Tullamarine'] },
-  { depot: 834, region: 'N', suburbs: ['Doreen','Wattle Glen','Warrandyte','Rosanna','Bundoora','Yarrambat'] },
+  { depot: 703, region: 'N', company: null, suburbs: ['Whittlesea','Doreen','Plenty','Reservoir','Lalor','Wollert'] },
+  { depot: 704, region: 'N', company: null, suburbs: ['Melbourne Airport','Essendon','Albion','Cairnlea','Keilor'] },
+  { depot: 719, region: 'N', company: 'Garden State Towing', suburbs: ['Fairfield','Kew','Fitzroy'] },
+  { depot: 792, region: 'N', company: null, suburbs: ['Fairfield','Kew','Fitzroy'] },
+  { depot: 744, region: 'N', company: null, suburbs: ['Yuroke','Craigieburn','Somerton','Jacana','Greenvale'] },
+  { depot: 745, region: 'N', company: null, suburbs: ['Brunswick','Flemington','Coburg','Essendon'] },
+  { depot: 781, region: 'N', company: null, suburbs: ['Watsonia','Rosanna','Ivanhoe','Bellfield'] },
+  { depot: 799, region: 'N', company: null, suburbs: ['Reservoir','Preston','Fawkner'] },
+  { depot: 805, region: 'N', company: null, suburbs: ['Fawkner','Coburg','Essendon'] },
+  { depot: 807, region: 'N', company: null, suburbs: ['Essendon','Melbourne Airport','Westmeadows','Tullamarine','Mickleham'] },
+  { depot: 815, region: 'N', company: null, suburbs: ['Gowanbrae','Strathmore','Moonee Ponds','Aberfeldie','Avondale Heights','Keilor East','Tullamarine'] },
+  { depot: 834, region: 'N', company: null, suburbs: ['Doreen','Wattle Glen','Warrandyte','Rosanna','Bundoora','Yarrambat'] },
   // ── Western ──────────────────────────────────────────────────────────────
-  { depot: 700, region: 'W', suburbs: ['Melton','Harkness','Aintree','Plumpton','Mount Cottrell','Brookfield'] },
-  { depot: 762, region: 'W', suburbs: ['Hillside','Kealba','Albion','Ravenhall','Rockbank'] },
-  { depot: 803, region: 'W', suburbs: ['Werribee','Werribee South','Little River','Quandong'] },
-  { depot: 804, region: 'W', suburbs: ['Braybrook'] },
-  { depot: 857, region: 'W', suburbs: ['Braybrook','Spotswood','Williamstown','Altona','Truganina','Derrimut'] },
-  { depot: 870, region: 'W', suburbs: ['Quandong','Williams Landing','Point Cook','Little River'] },
-  { depot: 872, region: 'W', suburbs: ['Brooklyn','Newport','Seaholme','Laverton','Derrimut','Altona North'] },
-  { depot: 874, region: 'W', suburbs: ['Sunbury','Diggers Rest','Bulla'] },
+  { depot: 700, region: 'W', company: 'Nationwide Group', suburbs: ['Melton','Harkness','Aintree','Plumpton','Mount Cottrell','Brookfield'] },
+  { depot: 762, region: 'W', company: null, suburbs: ['Hillside','Kealba','Albion','Ravenhall','Rockbank'] },
+  { depot: 803, region: 'W', company: null, suburbs: ['Werribee','Werribee South','Little River','Quandong'] },
+  { depot: 804, region: 'W', company: null, suburbs: ['Braybrook'] },
+  { depot: 857, region: 'W', company: null, suburbs: ['Braybrook','Spotswood','Williamstown','Altona','Truganina','Derrimut'] },
+  { depot: 870, region: 'W', company: null, suburbs: ['Quandong','Williams Landing','Point Cook','Little River'] },
+  { depot: 872, region: 'W', company: 'Altona Towing', suburbs: ['Brooklyn','Newport','Seaholme','Laverton','Derrimut','Altona North'] },
+  { depot: 874, region: 'W', company: null, suburbs: ['Sunbury','Diggers Rest','Bulla'] },
 ]
 
 export const REGION_LABELS = { S: 'Southern', E: 'Eastern', N: 'Northern', W: 'Western' }
@@ -77,6 +77,14 @@ for (const { depot, region, suburbs } of DEPOTS) {
 const SUBURB_INDEX = Array.from(_map.entries())
   .map(([suburb, depots]) => ({ suburb, depots }))
   .sort((a, b) => b.suburb.length - a.suburb.length)
+
+/**
+ * Returns the company name for a depot number, or null if unknown.
+ */
+export function getCompanyForDepot(depotNum) {
+  const d = DEPOTS.find(d => d.depot === Number(depotNum));
+  return d?.company ?? null;
+}
 
 /**
  * Returns [{depot, region}] for the suburb found in `text` (an address string
