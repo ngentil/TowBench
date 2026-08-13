@@ -80,7 +80,7 @@ jobs:
               headers: {
                 ...hdrs,
                 'Content-Type': 'application/json',
-                'Prefer': 'resolution=merge-duplicates',
+                'Prefer': 'resolution=merge-duplicates,return=minimal',
               },
               body: JSON.stringify(batch),
             })
@@ -111,7 +111,7 @@ jobs:
               `${url}/rest/v1/tow_allocation_log?event_id=in.(${encodeURIComponent(inList)})&cleared_at=is.null`,
               {
                 method: 'PATCH',
-                headers: { ...hdrs, 'Content-Type': 'application/json' },
+                headers: { ...hdrs, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
                 body: JSON.stringify({ cleared_at: now }),
               }
             )
