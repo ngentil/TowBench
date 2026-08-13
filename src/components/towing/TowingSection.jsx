@@ -16,14 +16,11 @@ import PricingTab from '../admin/PricingTab';
 import MyTowsTab from './MyTowsTab';
 import BridgesTab from './BridgesTab';
 import AlertsTab from './AlertsTab';
-import VesselsTab from './VesselsTab';
-import AircraftTab from './AircraftTab';
 import IncidentFeedTab from './IncidentFeedTab';
 import TabOrderSettings from '../settings/TabOrderSettings';
 import { applyTabOrder } from '../../lib/tabOrder';
 import useDriverLocation from '../../hooks/useDriverLocation';
 import { useBridgeAlerts } from '../../hooks/useBridgeAlerts';
-import SignalsTab from './SignalsTab';
 
 const POLL_MS = 60_000;
 
@@ -33,8 +30,6 @@ const STATE_PROXIES = {
 };
 
 export default function TowingSection({ role, isAdmin, isDispatch, userEmail, userId, companyId, companyConfig, setCompanyConfig, profile, setProfile }) {
-
-  const isSignalsAdmin = userEmail?.toLowerCase() === 'nathan.gentil@gmail.com';
 
   const ALL_TABS = [
     { id: 'allocations',   label: '🚦 Tow Allocations'  },
@@ -48,12 +43,9 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, us
     { id: 'ops',           label: '📍 Map'               },
     { id: 'bridges',       label: '🌉 Bridges'           },
     { id: 'waze',          label: '🧭 Waze'              },
-    { id: 'vessels',       label: '⛵ Vessels'            },
-    { id: 'aircraft',      label: '✈ Aircraft'           },
     { id: 'mytows',        label: '📋 My Tows'           },
     { id: 'analytics',     label: '📊 Analytics'         },
     { id: 'pricing',       label: '💰 Pricing'           },
-    ...(isSignalsAdmin ? [{ id: 'signals', label: '📡 Signals' }] : []),
   ];
 
   // All tabs visible — no role filtering
@@ -323,8 +315,6 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, us
         {tab === 'bridges'    && <BridgesTab userPos={userPos} effectiveAlertH={effectiveAlertH} truckConfigured={truckConfigured} />}
         {tab === 'waze'       && <AlertsTab />}
         {tab === 'incidents'  && <IncidentFeedTab userPos={userPos} companyId={companyId} />}
-        {tab === 'vessels'    && <VesselsTab />}
-        {tab === 'aircraft'   && <AircraftTab />}
         {tab === 'mytows'     && <MyTowsTab userEmail={userEmail} />}
         {tab === 'dispatch'   && <ManualDispatchTab companyId={companyId} companyConfig={companyConfig} userEmail={userEmail} />}
         {tab === 'activetows'    && <ActiveTowsTab companyId={companyId} companyConfig={companyConfig} userEmail={userEmail} />}
@@ -347,7 +337,6 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, us
         {tab === 'depots'    && <DepotsTab isAdmin={isAdmin} companyId={companyId} />}
         {tab === 'fleet'     && <FleetTab isAdmin={isAdmin} companyId={companyId} truckDims={truckDims} setTruckDims={setTruckDims} effectiveAlertH={effectiveAlertH} totalH={totalH} truckConfigured={truckConfigured} />}
         {tab === 'pricing'   && <PricingTab companyConfig={companyConfig} setCompanyConfig={setCompanyConfig} companyId={companyId} userId={userId} />}
-        {tab === 'signals'   && isSignalsAdmin && <SignalsTab />}
       </div>
     </div>
   );
