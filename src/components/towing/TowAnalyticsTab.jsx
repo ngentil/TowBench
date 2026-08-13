@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { ACC, MUT, BRD, TXT, GRN, SURF } from '../../lib/styles';
 import { getRecentAllocations } from '../../lib/db/towing';
-import { findDepotsForAddress, REGION_LABELS, REGION_STYLE } from '../../lib/towDepots';
+import { findDepotsForAddress } from '../../lib/towDepots';
 
 const ORANGE = '#e8870a';
 const RED    = '#cc3333';
@@ -382,19 +382,18 @@ export default function TowAnalyticsTab({ liveIds }) {
 
   // ── Depot proximity ───────────────────────────────────────────────────────
 
-  const regionActivity = useMemo(() => {
+  const depotActivity = useMemo(() => {
     const data = {};
     features.forEach(f => {
       const sub = f.properties?.reference?.startIntersectionLocality || '';
       if (!sub) return;
-      [...new Set(findDepotsForAddress(sub).map(h => h.region))].forEach(region => {
-        if (!data[region]) data[region] = {};
-        data[region][sub] = (data[region][sub] || 0) + 1;
+      [...new Set(findDepotsForAddress(sub).map(h => h.depot))].forEach(depot => {
+        data[depot] = (data[depot] || 0) + 1;
       });
     });
-    return Object.fromEntries(
-      Object.entries(data).map(([r, subs]) => [r, Object.entries(subs).sort((a, b) => b[1] - a[1])])
-    );
+    return Object.entries(data)
+      .map(([depot, count]) => [depot, count])
+      .sort((a, b) => b[1] - a[1]);
   }, [features]);
 
   const periodLabel = PERIODS.find(p => p.ms === periodMs)?.label || '31d';
@@ -508,29 +507,14 @@ export default function TowAnalyticsTab({ liveIds }) {
 
       {/* Depot activity */}
       <div style={{ background: SURF, border: '1px solid ' + BRD, borderRadius: 2, padding: '10px 12px' }}>
-        <div style={{ fontSize: 8, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 4 }}>Depot Activity — Nearby Suburbs by Region</div>
+        <div style={{ fontSize: 8, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 4 }}>Depot Activity by Depot Number</div>
         <div style={{ fontSize: 7, color: MUT, marginBottom: 12, lineHeight: 1.6, borderLeft: '2px solid #2a2a2a', paddingLeft: 8 }}>
-          Suburb proximity match — leading indicator of which regions are busiest, not confirmed job assignment.
+          Suburb proximity match — leading indicator of which depots are busiest, not confirmed job assignment.
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 16 }}>
-          {['S', 'N', 'E', 'W'].map(region => {
-            const suburbs = regionActivity[region] || [];
-            const total   = suburbs.reduce((s, [, v]) => s + v, 0);
-            const st      = REGION_STYLE[region];
-            return (
-              <div key={region}>
-                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <span style={{ fontSize: 9, fontWeight: 700, color: st.color, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{REGION_LABELS[region]}</span>
-                  {total > 0 && <span style={{ fontSize: 8, color: MUT, fontFamily: "'IBM Plex Mono',monospace" }}>{total} nearby</span>}
-                </div>
-                {suburbs.length === 0
-                  ? <div style={{ fontSize: 8, color: MUT }}>No data</div>
-                  : <BarList data={suburbs} color={st.color} maxBars={15} labelWidth={110} />
-                }
-              </div>
-            );
-          })}
-        </div>
+        {depotActivity.length === 0
+          ? <div style={{ fontSize: 9, color: MUT }}>No data yet</div>
+          : <BarList data={depotActivity} color={ORANGE} maxBars={30} labelWidth={50} />
+        }
       </div>
 
     </div>
