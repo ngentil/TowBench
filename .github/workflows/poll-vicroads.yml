@@ -1,0 +1,120 @@
+name: Poll VicRoads Allocations
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'   # every 5 minutes
+  workflow_dispatch:
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Fetch VicRoads and upsert to tow_allocation_log
+        env:
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          VICROADS_KEY:         ${{ secrets.VICROADS_KEY }}
+        run: |
+          node --input-type=module << 'EOF'
+          const url = process.env.SUPABASE_URL
+          const key = process.env.SUPABASE_SERVICE_KEY
+          const vrKey = process.env.VICROADS_KEY
+
+          if (!vrKey) { console.error('VICROADS_KEY not set'); process.exit(1) }
+
+          const hdrs = {
+            apikey: key,
+            Authorization: `Bearer ${key}`,
+          }
+
+          const tFetch = (u, o, ms = 20_000) => {
+            return fetch(u, { ...o, signal: AbortSignal.timeout(ms) })
+          }
+
+          // ── 1. Fetch live VicRoads disruptions ──────────────────────────────
+          const vrRes = await tFetch(
+            'https://api.opendata.transport.vic.gov.au/api/opendata/roads/disruptions/unplanned/v3',
+            { headers: { KeyID: vrKey } }
+          )
+          if (!vrRes.ok) {
+            console.error(`VicRoads API ${vrRes.status}`)
+            process.exit(1)
+          }
+          const vrData = await vrRes.json()
+          const features = vrData.features || []
+          console.log(`VicRoads: ${features.length} live disruptions`)
+
+          if (!features.length) {
+            console.log('No disruptions — skipping upsert')
+            process.exit(0)
+          }
+
+          // ── 2. Build upsert rows ─────────────────────────────────────────────
+          const now = new Date().toISOString()
+          const seen = new Set()
+          const rows = []
+          for (const f of features) {
+            const p = f.properties || {}
+            const id = String(p.eventId || '')
+            if (!id || seen.has(id)) continue
+            seen.add(id)
+            rows.push({
+              event_id:         id,
+              road_name:        p.closedRoadName || null,
+              suburb:           p.reference?.startIntersectionLocality || null,
+              status:           p.status || null,
+              description:      p.description || null,
+              data:             f,
+              event_created_at: p.lastUpdated || p.created || null,
+              last_seen:        now,
+            })
+          }
+          console.log(`Upserting ${rows.length} rows`)
+
+          // Upsert in batches of 100
+          for (let i = 0; i < rows.length; i += 100) {
+            const batch = rows.slice(i, i + 100)
+            const r = await tFetch(`${url}/rest/v1/tow_allocation_log?on_conflict=event_id`, {
+              method: 'POST',
+              headers: {
+                ...hdrs,
+                'Content-Type': 'application/json',
+                'Prefer': 'resolution=merge-duplicates,return=minimal',
+              },
+              body: JSON.stringify(batch),
+            })
+            if (!r.ok) console.error(`Upsert batch ${i}: ${r.status} ${await r.text()}`)
+          }
+          console.log('Upsert complete')
+
+          // ── 3. Mark cleared — events no longer in the feed ───────────────────
+          // Fetch events that were last seen within the past 10 minutes and not yet cleared
+          const cutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString()
+          const activeRes = await tFetch(
+            `${url}/rest/v1/tow_allocation_log?select=event_id&cleared_at=is.null&last_seen=gte.${cutoff}`,
+            { headers: hdrs }
+          )
+          const active = await activeRes.json()
+          if (!Array.isArray(active)) {
+            console.warn('Could not fetch active events:', JSON.stringify(active).slice(0, 200))
+            process.exit(0)
+          }
+          const liveIds = new Set(rows.map(r => r.event_id))
+          const tooClear = active.filter(r => !liveIds.has(r.event_id)).map(r => r.event_id)
+          console.log(`${active.length} active in DB, ${liveIds.size} live, ${tooClear.length} to clear`)
+
+          if (tooClear.length > 0) {
+            // PostgREST IN filter
+            const inList = tooClear.map(id => `"${id}"`).join(',')
+            const clrRes = await tFetch(
+              `${url}/rest/v1/tow_allocation_log?event_id=in.(${encodeURIComponent(inList)})&cleared_at=is.null`,
+              {
+                method: 'PATCH',
+                headers: { ...hdrs, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+                body: JSON.stringify({ cleared_at: now }),
+              }
+            )
+            console.log(`Cleared ${tooClear.length} events: ${clrRes.status}`)
+          }
+          EOF
