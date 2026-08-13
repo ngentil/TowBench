@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { ACC, MUT, BRD, TXT, GRN, SURF } from '../../lib/styles';
 import { getRecentAllocations } from '../../lib/db/towing';
-import { findDepotsForAddress } from '../../lib/towDepots';
+import { findDepotsForAddress, getCompanyForDepot } from '../../lib/towDepots';
 
 const ORANGE = '#e8870a';
 const RED    = '#cc3333';
@@ -392,7 +392,10 @@ export default function TowAnalyticsTab({ liveIds }) {
       });
     });
     return Object.entries(data)
-      .map(([depot, count]) => [depot, count])
+      .map(([depot, count]) => {
+        const company = getCompanyForDepot(depot);
+        return [company ? `${depot} · ${company}` : depot, count];
+      })
       .sort((a, b) => b[1] - a[1]);
   }, [features]);
 
@@ -513,7 +516,7 @@ export default function TowAnalyticsTab({ liveIds }) {
         </div>
         {depotActivity.length === 0
           ? <div style={{ fontSize: 9, color: MUT }}>No data yet</div>
-          : <BarList data={depotActivity} color={ORANGE} maxBars={30} labelWidth={50} />
+          : <BarList data={depotActivity} color={ORANGE} maxBars={30} labelWidth={160} />
         }
       </div>
 
