@@ -4,8 +4,8 @@
 
 const DEPOTS = [
   // ── Southern ─────────────────────────────────────────────────────────────
-  { depot: 604, region: 'S', company: null, suburbs: ['Highett','Beaumaris','Mentone','Dingley Village','Braeside','Aspendale'] },
-  { depot: 776, region: 'S', company: null, suburbs: ['Highett','Beaumaris','Mentone','Dingley Village','Braeside','Aspendale'] },
+  { depot: 604, region: 'S', company: 'Code 12 Towing Pty Ltd', suburbs: ['Highett','Beaumaris','Mentone','Dingley Village','Braeside','Aspendale'] },
+  { depot: 776, region: 'S', company: 'BTS Towing Service Pty Ltd', suburbs: ['Highett','Beaumaris','Mentone','Dingley Village','Braeside','Aspendale'] },
   { depot: 605, region: 'S', company: 'Allcar Towing Group', suburbs: ['Clayton','Clayton South','Mulgrave','Clarinda','Springvale'] },
   { depot: 607, region: 'S', company: 'Sheen Group', suburbs: ['Frankston','Frankston South','Seaford','Sandhurst','Langwarrin'] },
   { depot: 736, region: 'S', company: 'Seaside Towing Pty Ltd', suburbs: ['Mornington','Safety Beach','Merricks Beach','Balnarring'] },
@@ -37,7 +37,7 @@ const DEPOTS = [
   { depot: 792, region: 'N', company: 'Richmond Tow Trucks', suburbs: ['Fairfield','Kew','Fitzroy'] },
   { depot: 744, region: 'N', company: null, suburbs: ['Yuroke','Craigieburn','Somerton','Jacana','Greenvale'] },
   { depot: 745, region: 'N', company: 'Allocated Towing Service', suburbs: ['Brunswick','Flemington','Coburg','Essendon'] },
-  { depot: 781, region: 'N', company: null, suburbs: ['Watsonia','Rosanna','Ivanhoe','Bellfield'] },
+  { depot: 781, region: 'N', company: 'Ivanhoe Panel Works & Towing Pty Ltd', suburbs: ['Watsonia','Rosanna','Ivanhoe','Bellfield'] },
   { depot: 799, region: 'N', company: 'Preston Towing', suburbs: ['Reservoir','Preston','Fawkner'] },
   { depot: 805, region: 'N', company: null, suburbs: ['Fawkner','Coburg','Essendon'] },
   { depot: 807, region: 'N', company: null, suburbs: ['Essendon','Melbourne Airport','Westmeadows','Tullamarine','Mickleham'] },
@@ -49,7 +49,7 @@ const DEPOTS = [
   { depot: 803, region: 'W', company: 'Werribee Specialised Towing', suburbs: ['Werribee','Werribee South','Little River','Quandong'] },
   { depot: 804, region: 'W', company: null, suburbs: ['Braybrook'] },
   { depot: 857, region: 'W', company: 'Atlas Towing Service', suburbs: ['Braybrook','Spotswood','Williamstown','Altona','Truganina','Derrimut'] },
-  { depot: 870, region: 'W', company: null, suburbs: ['Quandong','Williams Landing','Point Cook','Little River'] },
+  { depot: 870, region: 'W', company: "Mend'em Towing Service Pty Ltd", suburbs: ['Quandong','Williams Landing','Point Cook','Little River'] },
   { depot: 872, region: 'W', company: 'Altona Towing', suburbs: ['Brooklyn','Newport','Seaholme','Laverton','Derrimut','Altona North'] },
   { depot: 874, region: 'W', company: 'Sunbury Towing', suburbs: ['Sunbury','Diggers Rest','Bulla'] },
 ]
