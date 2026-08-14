@@ -81,6 +81,7 @@ function AddrSearch({ label, value, onChange, onPick, results, onClearResults, p
         style={{ ...inp, width: '100%', boxSizing: 'border-box' }}
         value={value}
         onChange={onChange}
+        onBlur={() => setTimeout(onClearResults, 150)}
         placeholder={placeholder || 'Search address…'}
         autoComplete="off"
       />

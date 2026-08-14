@@ -326,7 +326,7 @@ export function DispatchModal({ feature, trucks, depots, companyConfig, companyI
           <div style={{ position: 'relative' }}>
             <div style={{ fontSize: 8, color: MUT, letterSpacing: '0.08em', marginBottom: 4 }}>A — Pickup</div>
             <input value={searchA}
-              onChange={e => { setSearchA(e.target.value); if (!e.target.value) setPointA(null); }}
+              onChange={e => { setSearchA(e.target.value); setPointA(null); }}
               onBlur={() => setTimeout(() => setSearchAResults([]), 150)}
               placeholder="Search address or suburb…"
               style={traceInp} />
