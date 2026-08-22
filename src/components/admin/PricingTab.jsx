@@ -38,6 +38,27 @@ export default function PricingTab({ companyConfig, setCompanyConfig, companyId,
   // Track existing row IDs so we can update vs insert
   const [storageIds, setStorageIds] = useState({});
 
+  // Perceived Value config
+  const initPv = (cfg) => {
+    const pv = cfg?.pv_config || {};
+    return {
+      markupEnabled:  pv.markup_enabled  ?? false,
+      markupPct:      String(pv.markup_pct ?? '20'),
+      itemsEnabled:   pv.items_enabled   ?? false,
+      items:          pv.items           ?? [{ name: 'Priority dispatch fee', amount: '25' }, { name: 'Fuel levy', amount: '15' }],
+      managerEnabled: pv.manager_enabled ?? false,
+      managerLabel:   pv.manager_label   ?? 'Manager approved',
+      sliderEnabled:  pv.slider_enabled  ?? false,
+    };
+  };
+  const [pvMarkupEnabled,  setPvMarkupEnabled]  = useState(() => initPv(companyConfig).markupEnabled);
+  const [pvMarkupPct,      setPvMarkupPct]      = useState(() => initPv(companyConfig).markupPct);
+  const [pvItemsEnabled,   setPvItemsEnabled]   = useState(() => initPv(companyConfig).itemsEnabled);
+  const [pvItems,          setPvItems]          = useState(() => initPv(companyConfig).items);
+  const [pvManagerEnabled, setPvManagerEnabled] = useState(() => initPv(companyConfig).managerEnabled);
+  const [pvManagerLabel,   setPvManagerLabel]   = useState(() => initPv(companyConfig).managerLabel);
+  const [pvSliderEnabled,  setPvSliderEnabled]  = useState(() => initPv(companyConfig).sliderEnabled);
+
   const [saving, setSaving] = useState(false);
   const [saved,  setSaved]  = useState(false);
   const [err,    setErr]    = useState('');
@@ -55,6 +76,14 @@ export default function PricingTab({ companyConfig, setCompanyConfig, companyId,
     setAhEndWD(companyConfig.after_hours_end_weekday     ?? '06:00');
     setAhStartWE(companyConfig.after_hours_start_weekend ?? '18:00');
     setAhEndWE(companyConfig.after_hours_end_weekend     ?? '06:00');
+    const pv = companyConfig.pv_config || {};
+    setPvMarkupEnabled(pv.markup_enabled   ?? false);
+    setPvMarkupPct(String(pv.markup_pct    ?? '20'));
+    setPvItemsEnabled(pv.items_enabled     ?? false);
+    setPvItems(pv.items                    ?? [{ name: 'Priority dispatch fee', amount: '25' }, { name: 'Fuel levy', amount: '15' }]);
+    setPvManagerEnabled(pv.manager_enabled ?? false);
+    setPvManagerLabel(pv.manager_label     ?? 'Manager approved');
+    setPvSliderEnabled(pv.slider_enabled   ?? false);
   }, [companyConfig.user_id, companyConfig.company_id]); // re-run only when a real config row arrives
 
   // Load storage types — RLS scopes to current user automatically
@@ -92,6 +121,15 @@ export default function PricingTab({ companyConfig, setCompanyConfig, companyId,
       after_hours_end_weekday:   ahEndWD,
       after_hours_start_weekend: ahStartWE,
       after_hours_end_weekend:   ahEndWE,
+      pv_config: {
+        markup_enabled:  pvMarkupEnabled,
+        markup_pct:      parseFloat(pvMarkupPct) || 20,
+        items_enabled:   pvItemsEnabled,
+        items:           pvItems.map(it => ({ name: it.name, amount: parseFloat(it.amount) || 0 })),
+        manager_enabled: pvManagerEnabled,
+        manager_label:   pvManagerLabel.trim() || 'Manager approved',
+        slider_enabled:  pvSliderEnabled,
+      },
       updated_at:                new Date().toISOString(),
     };
     const existingId = companyConfig?.id;
@@ -225,6 +263,87 @@ export default function PricingTab({ companyConfig, setCompanyConfig, companyId,
           </div>
           <div style={{ fontSize: 8, color: MUT, marginBottom: 12 }}>Daily rate per vehicle — top item is the default</div>
           {STORAGE_PRESETS.map((name, i) => rateRow(name, i === 0))}
+        </div>
+
+        {/* Perceived Value */}
+        <div style={{ borderTop: '1px solid ' + BRD, paddingTop: 16, marginBottom: 14 }}>
+          <div style={{ fontSize: 8, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>Perceived Value Pricing</div>
+          <div style={{ fontSize: 8, color: MUT, marginBottom: 12, lineHeight: 1.6 }}>
+            Display-only tools for quoting customers. The actual saved fee is always the real calculated price.
+          </div>
+
+          {/* Markup */}
+          <div style={{ marginBottom: 10 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 6 }}>
+              <input type="checkbox" checked={pvMarkupEnabled} onChange={e => setPvMarkupEnabled(e.target.checked)} style={{ accentColor: ACC }} />
+              <span style={{ fontSize: 9, color: TXT }}>List price markup</span>
+            </label>
+            {pvMarkupEnabled && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 20 }}>
+                <span style={{ fontSize: 8, color: MUT }}>Inflate quoted price by</span>
+                <input type="number" min="0" max="200" step="1" value={pvMarkupPct}
+                  onChange={e => setPvMarkupPct(e.target.value)}
+                  style={{ ...inp, width: 52, padding: '3px 6px', fontSize: 9 }} />
+                <span style={{ fontSize: 8, color: MUT }}>%</span>
+              </div>
+            )}
+          </div>
+
+          {/* Droppable line items */}
+          <div style={{ marginBottom: 10 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 6 }}>
+              <input type="checkbox" checked={pvItemsEnabled} onChange={e => setPvItemsEnabled(e.target.checked)} style={{ accentColor: ACC }} />
+              <span style={{ fontSize: 9, color: TXT }}>Droppable line items</span>
+            </label>
+            {pvItemsEnabled && (
+              <div style={{ marginLeft: 20 }}>
+                {pvItems.map((item, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                    <input type="text" value={item.name}
+                      onChange={e => setPvItems(prev => prev.map((it, j) => j === i ? { ...it, name: e.target.value } : it))}
+                      placeholder="Fee name"
+                      style={{ ...inp, flex: 1, padding: '3px 6px', fontSize: 9 }} />
+                    <span style={{ fontSize: 8, color: MUT }}>$</span>
+                    <input type="number" min="0" step="0.01" value={item.amount}
+                      onChange={e => setPvItems(prev => prev.map((it, j) => j === i ? { ...it, amount: e.target.value } : it))}
+                      style={{ ...inp, width: 56, padding: '3px 6px', fontSize: 9 }} />
+                    <button onClick={() => setPvItems(prev => prev.filter((_, j) => j !== i))}
+                      style={{ fontSize: 9, color: RED, background: 'transparent', border: 'none', cursor: 'pointer', padding: '0 2px' }}>✕</button>
+                  </div>
+                ))}
+                <button onClick={() => setPvItems(prev => [...prev, { name: '', amount: '0' }])}
+                  style={{ fontSize: 8, color: ACC, background: 'transparent', border: `1px solid ${ACC}44`, borderRadius: 2, padding: '3px 8px', cursor: 'pointer' }}>
+                  + Add item
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Manager Rate button */}
+          <div style={{ marginBottom: 10 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 6 }}>
+              <input type="checkbox" checked={pvManagerEnabled} onChange={e => setPvManagerEnabled(e.target.checked)} style={{ accentColor: ACC }} />
+              <span style={{ fontSize: 9, color: TXT }}>Manager rate button</span>
+            </label>
+            {pvManagerEnabled && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 20 }}>
+                <span style={{ fontSize: 8, color: MUT }}>Button label</span>
+                <input type="text" value={pvManagerLabel}
+                  onChange={e => setPvManagerLabel(e.target.value)}
+                  placeholder="Manager approved"
+                  style={{ ...inp, flex: 1, padding: '3px 6px', fontSize: 9 }} />
+              </div>
+            )}
+          </div>
+
+          {/* Sliding scale */}
+          <div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+              <input type="checkbox" checked={pvSliderEnabled} onChange={e => setPvSliderEnabled(e.target.checked)} style={{ accentColor: ACC }} />
+              <span style={{ fontSize: 9, color: TXT }}>Sliding scale</span>
+              <span style={{ fontSize: 8, color: MUT }}>(requires markup)</span>
+            </label>
+          </div>
         </div>
 
         {/* Save */}

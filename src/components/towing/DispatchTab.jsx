@@ -214,6 +214,37 @@ export function DispatchModal({ feature, trucks, depots, companyConfig, companyI
   const totalFee = price == null ? null
     : (typeof price === 'number' ? price : (price.accident ?? 0) + (price.trade ?? 0));
 
+  // Perceived value — display only, totalFee is always what gets saved
+  const pvConfig      = companyConfig?.pv_config || {};
+  const pvAnyEnabled  = !!(pvConfig.markup_enabled || pvConfig.items_enabled || pvConfig.manager_enabled || pvConfig.slider_enabled);
+  const pvItemCount   = (pvConfig.items || []).length;
+  const [pvItemsChecked,  setPvItemsChecked]  = useState(() => Array(pvItemCount).fill(true));
+  const [pvManagerApplied, setPvManagerApplied] = useState(false);
+  const [pvSliderVal,     setPvSliderVal]     = useState(100); // 100 = full markup applied
+
+  const displayTotal = (() => {
+    if (totalFee == null || !pvAnyEnabled) return totalFee;
+    if (pvManagerApplied) return totalFee;
+    let d = totalFee;
+    if (pvConfig.markup_enabled) {
+      const markupPct   = parseFloat(pvConfig.markup_pct) || 20;
+      const sliderFactor = pvConfig.slider_enabled ? pvSliderVal / 100 : 1;
+      d += totalFee * (markupPct / 100) * sliderFactor;
+    }
+    if (pvConfig.items_enabled) {
+      (pvConfig.items || []).forEach((item, i) => {
+        if (pvItemsChecked[i] !== false) d += parseFloat(item.amount) || 0;
+      });
+    }
+    return d;
+  })();
+
+  const pvResetToDefault = () => {
+    setPvManagerApplied(false);
+    setPvSliderVal(100);
+    setPvItemsChecked(Array(pvItemCount).fill(true));
+  };
+
   const traceInp = { background: '#0a0a0a', border: '1px solid #252525', color: TXT, fontFamily: "'IBM Plex Mono',monospace", fontSize: 10, padding: '5px 7px', borderRadius: 2, outline: 'none', width: '100%', boxSizing: 'border-box' };
 
   const dispatch = async () => {
@@ -488,18 +519,93 @@ export function DispatchModal({ feature, trucks, depots, companyConfig, companyI
             {calculating ? (
               <span style={{ fontSize: 9, color: MUT }}>Calculating…</span>
             ) : route ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#cc4444' }}>{route.km.toFixed(1)} km · ~{route.min} min</span>
-                {price != null && (
-                  typeof price === 'number' ? (
-                    <span style={{ fontSize: 11, fontWeight: 700, color: GRN }}>${price.toFixed(2)}</span>
-                  ) : (
-                    <span style={{ fontSize: 9, color: GRN }}>
-                      {price.accident != null && `Acc $${price.accident.toFixed(2)}`}
-                      {price.accident != null && price.trade != null && ' · '}
-                      {price.trade != null && `Trade $${price.trade.toFixed(2)}`}
-                    </span>
-                  )
+              <div>
+                {/* Distance + price header */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#cc4444' }}>{route.km.toFixed(1)} km · ~{route.min} min</span>
+                  {price != null && !pvAnyEnabled && (
+                    typeof price === 'number' ? (
+                      <span style={{ fontSize: 11, fontWeight: 700, color: GRN }}>${price.toFixed(2)}</span>
+                    ) : (
+                      <span style={{ fontSize: 9, color: GRN }}>
+                        {price.accident != null && `Acc $${price.accident.toFixed(2)}`}
+                        {price.accident != null && price.trade != null && ' · '}
+                        {price.trade != null && `Trade $${price.trade.toFixed(2)}`}
+                      </span>
+                    )
+                  )}
+                  {price != null && pvAnyEnabled && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: pvManagerApplied ? ACC : GRN }}>
+                        ${(displayTotal ?? totalFee).toFixed(2)}
+                      </span>
+                      {pvManagerApplied && (
+                        <span style={{ fontSize: 7, color: ACC, border: `1px solid ${ACC}44`, borderRadius: 2, padding: '1px 5px' }}>
+                          ✓ {pvConfig.manager_label || 'Manager approved'}
+                        </span>
+                      )}
+                      {!pvManagerApplied && displayTotal != null && totalFee != null && displayTotal > totalFee + 0.01 && (
+                        <span style={{ fontSize: 7, color: MUT }}>
+                          floor ${totalFee.toFixed(2)}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Perceived value controls */}
+                {pvAnyEnabled && price != null && (
+                  <div style={{ marginTop: 8, borderTop: '1px solid #1a1a1a', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 7 }}>
+
+                    {/* Droppable line items */}
+                    {pvConfig.items_enabled && (pvConfig.items || []).length > 0 && !pvManagerApplied && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                        {(pvConfig.items || []).map((item, i) => (
+                          <label key={i} style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', userSelect: 'none' }}>
+                            <input type="checkbox"
+                              checked={pvItemsChecked[i] !== false}
+                              onChange={e => setPvItemsChecked(prev => { const n = [...prev]; n[i] = e.target.checked; return n; })}
+                              style={{ accentColor: ORANGE, width: 11, height: 11, flexShrink: 0 }} />
+                            <span style={{ fontSize: 8, color: pvItemsChecked[i] !== false ? TXT : '#444' }}>
+                              {item.name}
+                            </span>
+                            <span style={{ fontSize: 8, color: ORANGE }}>+${parseFloat(item.amount).toFixed(2)}</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Sliding scale */}
+                    {pvConfig.slider_enabled && pvConfig.markup_enabled && !pvManagerApplied && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 7, color: MUT, whiteSpace: 'nowrap' }}>Standard rate</span>
+                        <input type="range" min={0} max={100} value={pvSliderVal}
+                          onChange={e => setPvSliderVal(Number(e.target.value))}
+                          style={{ flex: 1, accentColor: ORANGE, cursor: 'pointer' }} />
+                        <span style={{ fontSize: 7, color: MUT, whiteSpace: 'nowrap' }}>Preferred</span>
+                      </div>
+                    )}
+
+                    {/* Manager rate button */}
+                    {pvConfig.manager_enabled && !pvManagerApplied && (
+                      <button
+                        onClick={() => { setPvManagerApplied(true); setPvSliderVal(0); setPvItemsChecked(Array(pvItemCount).fill(false)); }}
+                        style={{ alignSelf: 'flex-start', fontSize: 8, padding: '4px 10px',
+                          background: ACC + '15', border: `1px solid ${ACC}55`, color: ACC,
+                          borderRadius: 2, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace" }}>
+                        📞 {pvConfig.manager_label || 'Manager approved'}
+                      </button>
+                    )}
+
+                    {pvManagerApplied && (
+                      <button onClick={pvResetToDefault}
+                        style={{ alignSelf: 'flex-start', fontSize: 7, padding: '2px 8px',
+                          background: 'transparent', border: '1px solid #2a2a2a', color: '#555',
+                          borderRadius: 2, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace" }}>
+                        Reset
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             ) : (
