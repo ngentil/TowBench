@@ -632,50 +632,53 @@ export default function ManualDispatchTab({ companyId, companyConfig, userEmail 
                 {/* Perceived value quoted price */}
                 {pvAnyEnabled && totalFee != null && (
                   <div style={{ marginTop: 10, borderTop: '1px solid #252525', paddingTop: 10 }}>
-                    <div style={{ fontSize: 7, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 8, fontFamily: "'IBM Plex Mono',monospace" }}>
+                    <div style={{ fontSize: 7, color: ORANGE, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 8, fontFamily: "'IBM Plex Mono',monospace", fontWeight: 700 }}>
                       Quoted Price
                     </div>
 
-                    {/* Current quoted price */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                      <span style={{ fontSize: 18, fontWeight: 700, color: pvManagerApplied ? ACC : GRN, fontFamily: "'IBM Plex Mono',monospace" }}>
-                        ${(displayTotal ?? totalFee).toFixed(2)}
-                      </span>
-                      {pvManagerApplied && (
-                        <span style={{ fontSize: 7, color: ACC, border: `1px solid ${ACC}44`, borderRadius: 2, padding: '1px 6px', fontFamily: "'IBM Plex Mono',monospace" }}>
-                          ✓ {pvConfig.manager_label || 'Manager approved'}
-                        </span>
-                      )}
-                      {!pvManagerApplied && displayTotal != null && displayTotal > totalFee + 0.01 && (
-                        <span style={{ fontSize: 8, color: '#444', fontFamily: "'IBM Plex Mono',monospace" }}>
-                          floor ${totalFee.toFixed(2)}
-                        </span>
-                      )}
-                    </div>
+                    {/* Itemized breakdown */}
+                    {!pvManagerApplied && (() => {
+                      const markupPct    = parseFloat(pvConfig.markup_pct) || 20;
+                      const sliderFactor = pvConfig.slider_enabled ? pvSliderVal / 100 : 1;
+                      const markupAmt    = pvConfig.markup_enabled ? totalFee * (markupPct / 100) * sliderFactor : 0;
+                      const row = (label, amount, color = MUT, checked, onChk) => (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 9, fontFamily: "'IBM Plex Mono',monospace", marginBottom: 3 }}>
+                          {onChk != null ? (
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', userSelect: 'none' }}>
+                              <input type="checkbox" checked={checked} onChange={onChk}
+                                style={{ accentColor: ORANGE, width: 11, height: 11, flexShrink: 0 }} />
+                              <span style={{ color: checked ? TXT : '#444' }}>{label}</span>
+                            </label>
+                          ) : (
+                            <span style={{ color }}>{label}</span>
+                          )}
+                          <span style={{ color: checked === false ? '#333' : color, textDecoration: checked === false ? 'line-through' : 'none' }}>
+                            {amount >= 0 ? '+' : ''}${Math.abs(amount).toFixed(2)}
+                          </span>
+                        </div>
+                      );
+                      return (
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                          {row('Real cost', totalFee, '#444')}
+                          {pvConfig.markup_enabled && markupAmt > 0 && row(
+                            pvConfig.slider_enabled
+                              ? `List markup (${Math.round(markupPct * sliderFactor)}%)`
+                              : `List markup (${markupPct}%)`,
+                            markupAmt, ORANGE
+                          )}
+                          {pvConfig.items_enabled && (pvConfig.items || []).map((item, i) =>
+                            row(item.name, parseFloat(item.amount) || 0, ORANGE,
+                              pvItemsChecked[i] !== false,
+                              e => setPvItemsChecked(prev => { const n = [...prev]; n[i] = e.target.checked; return n; })
+                            )
+                          )}
+                        </div>
+                      );
+                    })()}
 
-                    {/* Droppable line items */}
-                    {pvConfig.items_enabled && (pvConfig.items || []).length > 0 && !pvManagerApplied && (
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
-                        {(pvConfig.items || []).map((item, i) => (
-                          <label key={i} style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', userSelect: 'none' }}>
-                            <input type="checkbox"
-                              checked={pvItemsChecked[i] !== false}
-                              onChange={e => setPvItemsChecked(prev => { const n = [...prev]; n[i] = e.target.checked; return n; })}
-                              style={{ accentColor: ORANGE, width: 12, height: 12, flexShrink: 0 }} />
-                            <span style={{ fontSize: 8, color: pvItemsChecked[i] !== false ? TXT : '#444', fontFamily: "'IBM Plex Mono',monospace" }}>
-                              {item.name}
-                            </span>
-                            <span style={{ fontSize: 8, color: ORANGE, fontFamily: "'IBM Plex Mono',monospace" }}>
-                              +${parseFloat(item.amount).toFixed(2)}
-                            </span>
-                          </label>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Sliding scale */}
+                    {/* Slider */}
                     {pvConfig.slider_enabled && pvConfig.markup_enabled && !pvManagerApplied && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '8px 0' }}>
                         <span style={{ fontSize: 7, color: MUT, whiteSpace: 'nowrap', fontFamily: "'IBM Plex Mono',monospace" }}>Standard</span>
                         <input type="range" min={0} max={100} value={pvSliderVal}
                           onChange={e => setPvSliderVal(Number(e.target.value))}
@@ -684,25 +687,42 @@ export default function ManualDispatchTab({ companyId, companyConfig, userEmail 
                       </div>
                     )}
 
-                    {/* Manager rate button */}
-                    {pvConfig.manager_enabled && !pvManagerApplied && (
-                      <button
-                        onClick={() => { setPvManagerApplied(true); setPvSliderVal(0); setPvItemsChecked(Array(pvItemCount).fill(false)); }}
-                        style={{ fontSize: 8, padding: '5px 12px', background: ACC + '15',
-                          border: `1px solid ${ACC}55`, color: ACC, borderRadius: 2, cursor: 'pointer',
-                          fontFamily: "'IBM Plex Mono',monospace" }}>
-                        📞 {pvConfig.manager_label || 'Manager approved'}
-                      </button>
-                    )}
+                    {/* Total line */}
+                    <div style={{ borderTop: '1px solid #2a2a2a', paddingTop: 6, marginTop: 4,
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 9, color: MUT, fontFamily: "'IBM Plex Mono',monospace" }}>Total</span>
+                        {pvManagerApplied && (
+                          <span style={{ fontSize: 7, color: ACC, border: `1px solid ${ACC}44`, borderRadius: 2, padding: '1px 5px', fontFamily: "'IBM Plex Mono',monospace" }}>
+                            ✓ {pvConfig.manager_label || 'Manager approved'}
+                          </span>
+                        )}
+                      </div>
+                      <span style={{ fontSize: 16, fontWeight: 700, color: pvManagerApplied ? ACC : GRN, fontFamily: "'IBM Plex Mono',monospace" }}>
+                        ${(displayTotal ?? totalFee).toFixed(2)}
+                      </span>
+                    </div>
 
-                    {pvManagerApplied && (
-                      <button onClick={pvReset}
-                        style={{ fontSize: 7, padding: '3px 8px', background: 'transparent',
-                          border: '1px solid #2a2a2a', color: '#555', borderRadius: 2, cursor: 'pointer',
-                          fontFamily: "'IBM Plex Mono',monospace" }}>
-                        Reset
-                      </button>
-                    )}
+                    {/* Controls */}
+                    <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                      {pvConfig.manager_enabled && !pvManagerApplied && (
+                        <button
+                          onClick={() => { setPvManagerApplied(true); setPvSliderVal(0); setPvItemsChecked(Array(pvItemCount).fill(false)); }}
+                          style={{ fontSize: 8, padding: '5px 12px', background: ACC + '15',
+                            border: `1px solid ${ACC}55`, color: ACC, borderRadius: 2, cursor: 'pointer',
+                            fontFamily: "'IBM Plex Mono',monospace" }}>
+                          📞 {pvConfig.manager_label || 'Manager approved'}
+                        </button>
+                      )}
+                      {pvManagerApplied && (
+                        <button onClick={pvReset}
+                          style={{ fontSize: 7, padding: '3px 8px', background: 'transparent',
+                            border: '1px solid #2a2a2a', color: '#555', borderRadius: 2, cursor: 'pointer',
+                            fontFamily: "'IBM Plex Mono',monospace" }}>
+                          Reset
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
               </>
