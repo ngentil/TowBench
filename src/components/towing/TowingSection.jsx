@@ -35,15 +35,15 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, us
     { id: 'allocations',   label: '🚦 Tow Allocations'  },
     { id: 'incidents',     label: '📟 Pager'             },
     { id: 'dispatch',      label: '🚨 Dispatch'          },
-    { id: 'activetows',    label: '🚛 Active Tows'       },
-    { id: 'completedtows', label: '✅ Completed Tows'    },
-    { id: 'towins',        label: '🏭 Tow Ins'           },
+    // { id: 'activetows',    label: '🚛 Active Tows'       },  // disabled
+    // { id: 'completedtows', label: '✅ Completed Tows'    },  // disabled
+    // { id: 'towins',        label: '🏭 Tow Ins'           },  // disabled
     { id: 'depots',        label: '🏢 Depots'            },
     { id: 'fleet',         label: '🚚 My Vehicles'       },
     { id: 'ops',           label: '📍 Map'               },
     { id: 'bridges',       label: '🌉 Bridges'           },
     { id: 'waze',          label: '🧭 Waze'              },
-    { id: 'mytows',        label: '📋 My Tows'           },
+    // { id: 'mytows',        label: '📋 My Tows'           },  // disabled
     { id: 'analytics',     label: '📊 Analytics'         },
     { id: 'pricing',       label: '💰 Pricing'           },
   ];
