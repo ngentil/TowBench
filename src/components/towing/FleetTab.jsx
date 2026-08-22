@@ -685,6 +685,22 @@ function AssetPickerModal({ truck, catalogue: initialCatalogue, onCatalogueChang
     setEditItem(null);
   };
 
+  const handleDelete = async (item) => {
+    if (!confirm(`Delete "${item.name}" from the catalogue? This cannot be undone.`)) return;
+    try {
+      if (activeTab === 'tool')        await deleteTool(item.id);
+      else if (activeTab === 'equipment')  await deleteEquipment(item.id);
+      else if (activeTab === 'consumable') await deleteConsumable(item.id);
+      setCatalogue(prev => {
+        const list = prev[activeTab].filter(x => x.id !== item.id);
+        onCatalogueChange(activeTab, list);
+        return { ...prev, [activeTab]: list };
+      });
+      setAssignments(prev => prev.filter(a => a.asset_id !== item.id));
+      onAssigned();
+    } catch (e) { setErr(e.message); }
+  };
+
   return (
     <>
     <div style={ovly} onClick={e => e.target === e.currentTarget && onClose()}>
@@ -749,11 +765,13 @@ function AssetPickerModal({ truck, catalogue: initialCatalogue, onCatalogueChang
                 </div>
                 <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
                   <button onClick={() => setEditItem(item)} style={{ ...btnG, ...sm, fontSize: 8 }}>Edit</button>
+                  <button onClick={() => handleDelete(item)}
+                    style={{ ...btnD, ...sm, fontSize: 8 }}>Delete</button>
                   <button
                     disabled={isBusy}
                     onClick={() => isAssigned ? handleUnassign(item) : handleAssign(item)}
                     style={{ ...isAssigned ? btnD : btnA, ...sm, fontSize: 8, opacity: isBusy ? 0.4 : 1 }}>
-                    {isBusy ? '…' : isAssigned ? 'Remove' : 'Assign'}
+                    {isBusy ? '…' : isAssigned ? 'Unassign' : 'Assign'}
                   </button>
                 </div>
               </div>
