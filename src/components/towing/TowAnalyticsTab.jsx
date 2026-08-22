@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { ACC, MUT, BRD, TXT, GRN, SURF } from '../../lib/styles';
 import { getRecentAllocations } from '../../lib/db/towing';
-import { findDepotsForAddress, getCompanyForDepot } from '../../lib/towDepots';
+import { findDepotsForAddress, getCompanyForDepot, getWebsiteForDepot } from '../../lib/towDepots';
 
 const ORANGE = '#e8870a';
 const RED    = '#cc3333';
@@ -93,6 +93,32 @@ function DurationBarList({ data, maxBars = 12 }) {
           <div style={{ width: 72, fontSize: 8, color: TXT, fontFamily: "'IBM Plex Mono',monospace", flexShrink: 0, textAlign: 'right' }}>
             {fmtDuration(avgMins)} <span style={{ color: '#444' }}>×{count}</span>
           </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DepotBarList({ data, color = ORANGE, maxBars = 30 }) {
+  const max = Math.max(...data.map(d => d.count), 1);
+  if (!data.length) return <div style={{ fontSize: 9, color: MUT, padding: '10px 0' }}>No data yet</div>;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      {data.slice(0, maxBars).map(({ depot, label, count, logoUrl }) => (
+        <div key={depot} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ width: 170, display: 'flex', alignItems: 'center', gap: 5, justifyContent: 'flex-end', flexShrink: 0 }}>
+            <div style={{ fontSize: 8, color: MUT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'right' }} title={label}>{label}</div>
+            {logoUrl
+              ? <img src={logoUrl} alt="" width={14} height={14}
+                  style={{ borderRadius: 2, flexShrink: 0, objectFit: 'contain', imageRendering: 'auto' }}
+                  onError={e => { e.target.style.display = 'none'; }} />
+              : <div style={{ width: 14, flexShrink: 0 }} />
+            }
+          </div>
+          <div style={{ flex: 1, background: '#1a1a1a', borderRadius: 1, height: 12, overflow: 'hidden' }}>
+            <div style={{ width: `${(count / max) * 100}%`, height: '100%', background: color, borderRadius: 1, transition: 'width 0.4s ease' }} />
+          </div>
+          <div style={{ width: 28, fontSize: 8, color: TXT, fontFamily: "'IBM Plex Mono',monospace", flexShrink: 0 }}>{count}</div>
         </div>
       ))}
     </div>
@@ -394,9 +420,14 @@ export default function TowAnalyticsTab({ liveIds }) {
     return Object.entries(data)
       .map(([depot, count]) => {
         const company = getCompanyForDepot(depot);
-        return [company ? `${depot} · ${company}` : depot, count];
+        const website = getWebsiteForDepot(Number(depot));
+        const label = company ? `${depot} · ${company}` : String(depot);
+        const logoUrl = website
+          ? `https://www.google.com/s2/favicons?domain=${website}&sz=32`
+          : null;
+        return { depot, label, count, logoUrl };
       })
-      .sort((a, b) => b[1] - a[1]);
+      .sort((a, b) => b.count - a.count);
   }, [features]);
 
   const periodLabel = PERIODS.find(p => p.ms === periodMs)?.label || '31d';
@@ -516,7 +547,7 @@ export default function TowAnalyticsTab({ liveIds }) {
         </div>
         {depotActivity.length === 0
           ? <div style={{ fontSize: 9, color: MUT }}>No data yet</div>
-          : <BarList data={depotActivity} color={ORANGE} maxBars={30} labelWidth={160} />
+          : <DepotBarList data={depotActivity} color={ORANGE} maxBars={30} />
         }
       </div>
 
