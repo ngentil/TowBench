@@ -6,6 +6,7 @@ import { getDepots, upsertDepot, deleteDepot } from '../../lib/db/towing';
 function DepotForm({ depot, onSave, onCancel }) {
   const [name,           setName]           = useState(depot?.name    || '');
   const [suburb,         setSuburb]         = useState(depot?.suburb  || '');
+  const [suburbResults,  setSuburbResults]  = useState([]);
   const [address,        setAddress]        = useState(depot?.address || '');
   const [addrResults,    setAddrResults]    = useState([]);
   const [pickedCoords,   setPickedCoords]   = useState(depot?.lat != null ? { lat: depot.lat, lng: depot.lng } : null);
@@ -13,6 +14,32 @@ function DepotForm({ depot, onSave, onCancel }) {
   const [err,            setErr]            = useState('');
   const fld = { background: '#0a0a0a', border: '1px solid #252525', color: TXT, fontFamily: "'IBM Plex Mono',monospace", fontSize: 11, padding: '6px 8px', borderRadius: 2, outline: 'none', boxSizing: 'border-box', width: '100%' };
 
+  // Suburb autocomplete
+  useEffect(() => {
+    if (suburb.length < 2) { setSuburbResults([]); return; }
+    const t = setTimeout(async () => {
+      try {
+        const res  = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(suburb)}&countrycodes=au&limit=6&addressdetails=1`);
+        const data = await res.json();
+        const seen = new Set();
+        const results = [];
+        for (const r of data) {
+          const a    = r.address || {};
+          const name = a.suburb || a.quarter || a.neighbourhood || a.town || a.village || a.city_district || a.city || r.name;
+          const state = a.state_code || a.state || '';
+          if (!name) continue;
+          const key = `${name}|${state}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          results.push({ display: state ? `${name}, ${state}` : name, value: name });
+        }
+        setSuburbResults(results);
+      } catch { setSuburbResults([]); }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [suburb]);
+
+  // Address autocomplete
   useEffect(() => {
     if (pickedCoords || address.length < 3) { setAddrResults([]); return; }
     const t = setTimeout(async () => {
@@ -25,14 +52,14 @@ function DepotForm({ depot, onSave, onCancel }) {
     return () => clearTimeout(t);
   }, [address, pickedCoords]);
 
-  const pickResult = (r) => {
+  const pickAddress = (r) => {
     setAddress(r.label.split(',').slice(0, 2).join(',').trim());
     setPickedCoords({ lat: r.lat, lng: r.lng });
     setAddrResults([]);
   };
 
   const save = async () => {
-    if (!name.trim()) { setErr('Name required'); return; }
+    if (!name.trim()) { setErr('Depot number required'); return; }
     setSaving(true); setErr('');
     try {
       let lat = pickedCoords?.lat ?? depot?.lat ?? null;
@@ -49,6 +76,9 @@ function DepotForm({ depot, onSave, onCancel }) {
     setSaving(false);
   };
 
+  const dropdown = { position: 'absolute', left: 0, right: 0, top: '100%', zIndex: 500, background: '#0d0d0d', border: '1px solid #2a2a2a', borderRadius: 2, maxHeight: 110, overflowY: 'auto', marginTop: 2 };
+  const dropItem = { padding: '6px 8px', fontSize: 9, color: '#bbb', cursor: 'pointer', borderBottom: '1px solid #1a1a1a', lineHeight: 1.5, fontFamily: "'IBM Plex Mono',monospace" };
+
   return (
     <div style={ovly} onClick={e => e.target === e.currentTarget && onCancel()}>
       <div style={{ ...mdl, maxWidth: 400 }}>
@@ -57,8 +87,46 @@ function DepotForm({ depot, onSave, onCancel }) {
           <button style={{ ...btnG, ...sm }} onClick={onCancel}>✕</button>
         </div>
         <div style={{ ...mdlB, display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div><FL t="Depot Name *" /><input style={fld} value={name} onChange={e => setName(e.target.value)} placeholder="e.g. North Depot" autoFocus /></div>
-          <div><FL t="Suburb" /><input style={fld} value={suburb} onChange={e => setSuburb(e.target.value)} placeholder="e.g. Campbellfield" /></div>
+
+          {/* Depot Number */}
+          <div>
+            <FL t="Depot Number *" />
+            <input
+              style={fld}
+              value={name}
+              onChange={e => setName(e.target.value.replace(/\D/g, ''))}
+              placeholder="e.g. 709"
+              inputMode="numeric"
+              autoFocus
+            />
+          </div>
+
+          {/* Suburb with autocomplete */}
+          <div style={{ position: 'relative' }}>
+            <FL t="Suburb" />
+            <input
+              style={fld}
+              value={suburb}
+              onChange={e => setSuburb(e.target.value)}
+              onBlur={() => setTimeout(() => setSuburbResults([]), 150)}
+              placeholder="e.g. Officer"
+              autoComplete="off"
+            />
+            {suburbResults.length > 0 && (
+              <div style={dropdown}>
+                {suburbResults.map((r, i) => (
+                  <div key={i} onMouseDown={e => { e.preventDefault(); setSuburb(r.value); setSuburbResults([]); }}
+                    style={dropItem}
+                    onMouseEnter={e => e.currentTarget.style.background = '#1a1a1a'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                    {r.display}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Address with autocomplete */}
           <div style={{ position: 'relative' }}>
             <FL t="Address (for map routing)" />
             <input
@@ -66,13 +134,13 @@ function DepotForm({ depot, onSave, onCancel }) {
               value={address}
               onChange={e => { setAddress(e.target.value); setPickedCoords(null); }}
               onBlur={() => setTimeout(() => setAddrResults([]), 150)}
-              placeholder="e.g. 123 Example St, Campbellfield VIC"
+              placeholder="e.g. 420 Princes Highway, Officer VIC"
             />
             {addrResults.length > 0 && (
-              <div style={{ position: 'absolute', left: 0, right: 0, top: '100%', zIndex: 500, background: '#0d0d0d', border: '1px solid #2a2a2a', borderRadius: 2, maxHeight: 110, overflowY: 'auto', marginTop: 2 }}>
+              <div style={dropdown}>
                 {addrResults.map((r, i) => (
-                  <div key={i} onMouseDown={e => { e.preventDefault(); pickResult(r); }}
-                    style={{ padding: '6px 8px', fontSize: 9, color: '#bbb', cursor: 'pointer', borderBottom: '1px solid #1a1a1a', lineHeight: 1.5, fontFamily: "'IBM Plex Mono',monospace" }}
+                  <div key={i} onMouseDown={e => { e.preventDefault(); pickAddress(r); }}
+                    style={dropItem}
                     onMouseEnter={e => e.currentTarget.style.background = '#1a1a1a'}
                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                     {r.label}
@@ -87,6 +155,7 @@ function DepotForm({ depot, onSave, onCancel }) {
               <div style={{ fontSize: 7, color: '#3a3a3a', marginTop: 3 }}>📍 {depot.lat.toFixed(5)}, {depot.lng.toFixed(5)}</div>
             )}
           </div>
+
           {err && <div style={{ fontSize: 9, color: RED }}>{err}</div>}
         </div>
         <div style={mdlF}>
