@@ -32,6 +32,7 @@ const STATE_PROXIES = {
 export default function TowingSection({ role, isAdmin, isDispatch, userEmail, userId, companyId, companyConfig, setCompanyConfig, profile, setProfile }) {
 
   const ALL_TABS = [
+    { id: 'waze',          label: '🧭 Waze'              },
     { id: 'allocations',   label: '🚦 Tow Allocations'  },
     { id: 'incidents',     label: '📟 Pager'             },
     { id: 'dispatch',      label: '🚨 Dispatch'          },
@@ -42,7 +43,6 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, us
     { id: 'fleet',         label: '🚚 My Vehicles'       },
     { id: 'ops',           label: '📍 Map'               },
     { id: 'bridges',       label: '🌉 Bridges'           },
-    { id: 'waze',          label: '🧭 Waze'              },
     // { id: 'mytows',        label: '📋 My Tows'           },  // disabled
     { id: 'analytics',     label: '📊 Analytics'         },
     { id: 'pricing',       label: '💰 Pricing'           },
