@@ -3,7 +3,6 @@ import { MUT, TXT } from '../../lib/styles';
 import ActiveTowsTab    from './ActiveTowsTab';
 import CompletedTowsTab from './CompletedTowsTab';
 import TowInsTab        from './TowInsTab';
-import MyTowsTab        from './MyTowsTab';
 
 const ORANGE = '#e8870a';
 
@@ -11,7 +10,6 @@ const SUB_TABS = [
   { id: 'activetows',    label: '🚛 Active'     },
   { id: 'completedtows', label: '✅ Completed'  },
   { id: 'towins',        label: '🏭 Tow Ins'    },
-  { id: 'mytows',        label: '📋 My Tows'    },
 ];
 
 export default function RecordsTab({ companyId, companyConfig, userEmail, isDispatch }) {
@@ -51,7 +49,6 @@ export default function RecordsTab({ companyId, companyConfig, userEmail, isDisp
         {sub === 'activetows'    && <ActiveTowsTab    companyId={companyId} companyConfig={companyConfig} userEmail={userEmail} />}
         {sub === 'completedtows' && <CompletedTowsTab companyId={companyId} />}
         {sub === 'towins'        && <TowInsTab        companyId={companyId} userEmail={userEmail} isDispatch={isDispatch} companyConfig={companyConfig} />}
-        {sub === 'mytows'        && <MyTowsTab        userEmail={userEmail} />}
       </div>
     </div>
   );
