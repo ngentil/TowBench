@@ -18,6 +18,7 @@ import BridgesTab from './BridgesTab';
 import AlertsTab from './AlertsTab';
 import IncidentFeedTab from './IncidentFeedTab';
 import TabOrderSettings from '../settings/TabOrderSettings';
+import RecordsTab from './RecordsTab';
 import { applyTabOrder } from '../../lib/tabOrder';
 import useDriverLocation from '../../hooks/useDriverLocation';
 import { useBridgeAlerts } from '../../hooks/useBridgeAlerts';
@@ -36,14 +37,11 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, us
     { id: 'allocations',   label: '🚦 Tow Allocations'  },
     { id: 'incidents',     label: '📟 Pager'             },
     { id: 'dispatch',      label: '🚨 Dispatch'          },
-    // { id: 'activetows',    label: '🚛 Active Tows'       },  // disabled
-    // { id: 'completedtows', label: '✅ Completed Tows'    },  // disabled
-    // { id: 'towins',        label: '🏭 Tow Ins'           },  // disabled
+    { id: 'records',       label: '🗂 Records'           },
     { id: 'depots',        label: '🏢 Depots'            },
     { id: 'fleet',         label: '🚚 My Vehicles'       },
     { id: 'ops',           label: '📍 Map'               },
     { id: 'bridges',       label: '🌉 Bridges'           },
-    // { id: 'mytows',        label: '📋 My Tows'           },  // disabled
     { id: 'analytics',     label: '📊 Analytics'         },
     { id: 'pricing',       label: '💰 Pricing'           },
   ];
@@ -314,6 +312,7 @@ export default function TowingSection({ role, isAdmin, isDispatch, userEmail, us
         )}
         {tab === 'bridges'    && <BridgesTab userPos={userPos} effectiveAlertH={effectiveAlertH} truckConfigured={truckConfigured} />}
         {tab === 'waze'       && <AlertsTab />}
+        {tab === 'records'    && <RecordsTab companyId={companyId} companyConfig={companyConfig} userEmail={userEmail} isDispatch={isDispatch} />}
         {tab === 'incidents'  && <IncidentFeedTab userPos={userPos} companyId={companyId} />}
         {tab === 'mytows'     && <MyTowsTab userEmail={userEmail} />}
         {tab === 'dispatch'   && <ManualDispatchTab companyId={companyId} companyConfig={companyConfig} userEmail={userEmail} />}
