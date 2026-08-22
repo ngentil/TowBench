@@ -241,6 +241,37 @@ export default function ManualDispatchTab({ companyId, companyConfig, userEmail 
     : null;
   const totalFee  = breakdown ? ((breakdown.accident?.total ?? 0) + (breakdown.trade?.total ?? 0)) || null : null;
 
+  // Perceived value — display only, totalFee is always what gets saved
+  const pvConfig      = companyConfig?.pv_config || {};
+  const pvAnyEnabled  = !!(pvConfig.markup_enabled || pvConfig.items_enabled || pvConfig.manager_enabled || pvConfig.slider_enabled);
+  const pvItemCount   = (pvConfig.items || []).length;
+  const [pvItemsChecked,   setPvItemsChecked]   = useState(() => Array(pvItemCount).fill(true));
+  const [pvManagerApplied, setPvManagerApplied] = useState(false);
+  const [pvSliderVal,      setPvSliderVal]      = useState(100);
+
+  const displayTotal = (() => {
+    if (totalFee == null || !pvAnyEnabled) return totalFee;
+    if (pvManagerApplied) return totalFee;
+    let d = totalFee;
+    if (pvConfig.markup_enabled) {
+      const markupPct    = parseFloat(pvConfig.markup_pct) || 20;
+      const sliderFactor = pvConfig.slider_enabled ? pvSliderVal / 100 : 1;
+      d += totalFee * (markupPct / 100) * sliderFactor;
+    }
+    if (pvConfig.items_enabled) {
+      (pvConfig.items || []).forEach((item, i) => {
+        if (pvItemsChecked[i] !== false) d += parseFloat(item.amount) || 0;
+      });
+    }
+    return d;
+  })();
+
+  const pvReset = () => {
+    setPvManagerApplied(false);
+    setPvSliderVal(100);
+    setPvItemsChecked(Array(pvItemCount).fill(true));
+  };
+
   const reset = () => {
     setTruckId(''); setTowType('accident'); setTwoUpTrade(false); setTwoUpAccident(false);
     setCustomAccident(true); setCustomTrade(false);
@@ -251,6 +282,7 @@ export default function ManualDispatchTab({ companyId, companyConfig, userEmail 
     setDestEnabled(false); setSearchB(''); setResultsB([]); setPointB(null);
     setReturnDepot(true); setReturnDepotId(''); setReturnDepotPoint(null);
     setExtraStops([]); setRoute(null); setErr('');
+    pvReset();
   };
 
   const dispatch = async () => {
@@ -594,6 +626,83 @@ export default function ManualDispatchTab({ companyId, companyConfig, userEmail 
                 {!breakdown && companyConfig && (
                   <div style={{ marginTop: 8, fontSize: 8, color: '#333', fontFamily: "'IBM Plex Mono',monospace" }}>
                     No pricing configured — set fees in Settings
+                  </div>
+                )}
+
+                {/* Perceived value quoted price */}
+                {pvAnyEnabled && totalFee != null && (
+                  <div style={{ marginTop: 10, borderTop: '1px solid #252525', paddingTop: 10 }}>
+                    <div style={{ fontSize: 7, color: MUT, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 8, fontFamily: "'IBM Plex Mono',monospace" }}>
+                      Quoted Price
+                    </div>
+
+                    {/* Current quoted price */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                      <span style={{ fontSize: 18, fontWeight: 700, color: pvManagerApplied ? ACC : GRN, fontFamily: "'IBM Plex Mono',monospace" }}>
+                        ${(displayTotal ?? totalFee).toFixed(2)}
+                      </span>
+                      {pvManagerApplied && (
+                        <span style={{ fontSize: 7, color: ACC, border: `1px solid ${ACC}44`, borderRadius: 2, padding: '1px 6px', fontFamily: "'IBM Plex Mono',monospace" }}>
+                          ✓ {pvConfig.manager_label || 'Manager approved'}
+                        </span>
+                      )}
+                      {!pvManagerApplied && displayTotal != null && displayTotal > totalFee + 0.01 && (
+                        <span style={{ fontSize: 8, color: '#444', fontFamily: "'IBM Plex Mono',monospace" }}>
+                          floor ${totalFee.toFixed(2)}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Droppable line items */}
+                    {pvConfig.items_enabled && (pvConfig.items || []).length > 0 && !pvManagerApplied && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+                        {(pvConfig.items || []).map((item, i) => (
+                          <label key={i} style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', userSelect: 'none' }}>
+                            <input type="checkbox"
+                              checked={pvItemsChecked[i] !== false}
+                              onChange={e => setPvItemsChecked(prev => { const n = [...prev]; n[i] = e.target.checked; return n; })}
+                              style={{ accentColor: ORANGE, width: 12, height: 12, flexShrink: 0 }} />
+                            <span style={{ fontSize: 8, color: pvItemsChecked[i] !== false ? TXT : '#444', fontFamily: "'IBM Plex Mono',monospace" }}>
+                              {item.name}
+                            </span>
+                            <span style={{ fontSize: 8, color: ORANGE, fontFamily: "'IBM Plex Mono',monospace" }}>
+                              +${parseFloat(item.amount).toFixed(2)}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Sliding scale */}
+                    {pvConfig.slider_enabled && pvConfig.markup_enabled && !pvManagerApplied && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                        <span style={{ fontSize: 7, color: MUT, whiteSpace: 'nowrap', fontFamily: "'IBM Plex Mono',monospace" }}>Standard</span>
+                        <input type="range" min={0} max={100} value={pvSliderVal}
+                          onChange={e => setPvSliderVal(Number(e.target.value))}
+                          style={{ flex: 1, accentColor: ORANGE, cursor: 'pointer' }} />
+                        <span style={{ fontSize: 7, color: MUT, whiteSpace: 'nowrap', fontFamily: "'IBM Plex Mono',monospace" }}>Preferred</span>
+                      </div>
+                    )}
+
+                    {/* Manager rate button */}
+                    {pvConfig.manager_enabled && !pvManagerApplied && (
+                      <button
+                        onClick={() => { setPvManagerApplied(true); setPvSliderVal(0); setPvItemsChecked(Array(pvItemCount).fill(false)); }}
+                        style={{ fontSize: 8, padding: '5px 12px', background: ACC + '15',
+                          border: `1px solid ${ACC}55`, color: ACC, borderRadius: 2, cursor: 'pointer',
+                          fontFamily: "'IBM Plex Mono',monospace" }}>
+                        📞 {pvConfig.manager_label || 'Manager approved'}
+                      </button>
+                    )}
+
+                    {pvManagerApplied && (
+                      <button onClick={pvReset}
+                        style={{ fontSize: 7, padding: '3px 8px', background: 'transparent',
+                          border: '1px solid #2a2a2a', color: '#555', borderRadius: 2, cursor: 'pointer',
+                          fontFamily: "'IBM Plex Mono',monospace" }}>
+                        Reset
+                      </button>
+                    )}
                   </div>
                 )}
               </>
