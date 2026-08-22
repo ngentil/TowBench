@@ -97,11 +97,11 @@ export default function PricingTab({ companyConfig, setCompanyConfig, companyId,
       allow_accident_twoup:      allowAccidentTwoUp,
       updated_at:                new Date().toISOString(),
     };
-    const { data: cfgData, error: cfgErr } = await supabase
-      .from('company_config')
-      .upsert(payload, { onConflict: 'user_id' })
-      .select().single();
-    if (cfgErr) { console.error('company_config upsert error:', cfgErr); setErr(cfgErr.message); setSaving(false); return; }
+    const existingId = companyConfig?.id;
+    const { data: cfgData, error: cfgErr } = existingId
+      ? await supabase.from('company_config').update(payload).eq('id', existingId).select().single()
+      : await supabase.from('company_config').insert(payload).select().single();
+    if (cfgErr) { setErr(cfgErr.message); setSaving(false); return; }
     if (cfgData) setCompanyConfig(cfgData);
 
     // 2 — storage types: update existing rows, insert missing ones
