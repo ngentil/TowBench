@@ -42,7 +42,7 @@ export default function PricingTab({ companyConfig, setCompanyConfig, companyId,
   const initPv = (cfg) => {
     const pv = cfg?.pv_config || {};
     return {
-      markupEnabled:  pv.markup_enabled  ?? false,
+      markupEnabled:  pv.markup_enabled  ?? true,
       markupPct:      String(pv.markup_pct ?? '20'),
       itemsEnabled:   pv.items_enabled   ?? false,
       items:          pv.items           ?? [{ name: 'Priority dispatch fee', amount: '25' }, { name: 'Fuel levy', amount: '15' }],
@@ -77,7 +77,7 @@ export default function PricingTab({ companyConfig, setCompanyConfig, companyId,
     setAhStartWE(companyConfig.after_hours_start_weekend ?? '18:00');
     setAhEndWE(companyConfig.after_hours_end_weekend     ?? '06:00');
     const pv = companyConfig.pv_config || {};
-    setPvMarkupEnabled(pv.markup_enabled   ?? false);
+    setPvMarkupEnabled(pv.markup_enabled   ?? true);
     setPvMarkupPct(String(pv.markup_pct    ?? '20'));
     setPvItemsEnabled(pv.items_enabled     ?? false);
     setPvItems(pv.items                    ?? [{ name: 'Priority dispatch fee', amount: '25' }, { name: 'Fuel levy', amount: '15' }]);

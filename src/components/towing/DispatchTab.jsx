@@ -544,41 +544,61 @@ export function DispatchModal({ feature, trucks, depots, companyConfig, companyI
                           ✓ {pvConfig.manager_label || 'Manager approved'}
                         </span>
                       )}
-                      {!pvManagerApplied && displayTotal != null && totalFee != null && displayTotal > totalFee + 0.01 && (
-                        <span style={{ fontSize: 7, color: MUT }}>
-                          floor ${totalFee.toFixed(2)}
-                        </span>
-                      )}
                     </div>
                   )}
                 </div>
 
                 {/* Perceived value controls */}
                 {pvAnyEnabled && price != null && (
-                  <div style={{ marginTop: 8, borderTop: '1px solid #1a1a1a', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 7 }}>
+                  <div style={{ marginTop: 8, borderTop: '1px solid #1a1a1a', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
 
-                    {/* Droppable line items */}
-                    {pvConfig.items_enabled && (pvConfig.items || []).length > 0 && !pvManagerApplied && (
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                        {(pvConfig.items || []).map((item, i) => (
-                          <label key={i} style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', userSelect: 'none' }}>
-                            <input type="checkbox"
-                              checked={pvItemsChecked[i] !== false}
-                              onChange={e => setPvItemsChecked(prev => { const n = [...prev]; n[i] = e.target.checked; return n; })}
-                              style={{ accentColor: ORANGE, width: 11, height: 11, flexShrink: 0 }} />
-                            <span style={{ fontSize: 8, color: pvItemsChecked[i] !== false ? TXT : '#444' }}>
-                              {item.name}
-                            </span>
-                            <span style={{ fontSize: 8, color: ORANGE }}>+${parseFloat(item.amount).toFixed(2)}</span>
-                          </label>
-                        ))}
-                      </div>
-                    )}
+                    {/* Itemized breakdown */}
+                    {!pvManagerApplied && (() => {
+                      const markupPct    = parseFloat(pvConfig.markup_pct) || 20;
+                      const sliderFactor = pvConfig.slider_enabled ? pvSliderVal / 100 : 1;
+                      const markupAmt    = pvConfig.markup_enabled ? (totalFee ?? 0) * (markupPct / 100) * sliderFactor : 0;
+                      return (
+                        <>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 8, fontFamily: "'IBM Plex Mono',monospace" }}>
+                            <span style={{ color: '#444' }}>Real cost</span>
+                            <span style={{ color: '#444' }}>+${(totalFee ?? 0).toFixed(2)}</span>
+                          </div>
+                          {pvConfig.markup_enabled && markupAmt > 0 && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 8, fontFamily: "'IBM Plex Mono',monospace" }}>
+                              <span style={{ color: MUT }}>
+                                {pvConfig.slider_enabled
+                                  ? `List markup (${Math.round(markupPct * sliderFactor)}%)`
+                                  : `List markup (${markupPct}%)`}
+                              </span>
+                              <span style={{ color: ORANGE }}>+${markupAmt.toFixed(2)}</span>
+                            </div>
+                          )}
+                          {pvConfig.items_enabled && (pvConfig.items || []).map((item, i) => (
+                            <label key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', userSelect: 'none' }}>
+                              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <input type="checkbox"
+                                  checked={pvItemsChecked[i] !== false}
+                                  onChange={e => setPvItemsChecked(prev => { const n = [...prev]; n[i] = e.target.checked; return n; })}
+                                  style={{ accentColor: ORANGE, width: 10, height: 10, flexShrink: 0 }} />
+                                <span style={{ fontSize: 8, color: pvItemsChecked[i] !== false ? TXT : '#444', fontFamily: "'IBM Plex Mono',monospace" }}>
+                                  {item.name}
+                                </span>
+                              </span>
+                              <span style={{ fontSize: 8, color: pvItemsChecked[i] !== false ? ORANGE : '#333',
+                                textDecoration: pvItemsChecked[i] === false ? 'line-through' : 'none',
+                                fontFamily: "'IBM Plex Mono',monospace" }}>
+                                +${parseFloat(item.amount).toFixed(2)}
+                              </span>
+                            </label>
+                          ))}
+                        </>
+                      );
+                    })()}
 
-                    {/* Sliding scale */}
+                    {/* Slider */}
                     {pvConfig.slider_enabled && pvConfig.markup_enabled && !pvManagerApplied && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontSize: 7, color: MUT, whiteSpace: 'nowrap' }}>Standard rate</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                        <span style={{ fontSize: 7, color: MUT, whiteSpace: 'nowrap' }}>Standard</span>
                         <input type="range" min={0} max={100} value={pvSliderVal}
                           onChange={e => setPvSliderVal(Number(e.target.value))}
                           style={{ flex: 1, accentColor: ORANGE, cursor: 'pointer' }} />
@@ -590,7 +610,7 @@ export function DispatchModal({ feature, trucks, depots, companyConfig, companyI
                     {pvConfig.manager_enabled && !pvManagerApplied && (
                       <button
                         onClick={() => { setPvManagerApplied(true); setPvSliderVal(0); setPvItemsChecked(Array(pvItemCount).fill(false)); }}
-                        style={{ alignSelf: 'flex-start', fontSize: 8, padding: '4px 10px',
+                        style={{ alignSelf: 'flex-start', fontSize: 8, padding: '4px 10px', marginTop: 2,
                           background: ACC + '15', border: `1px solid ${ACC}55`, color: ACC,
                           borderRadius: 2, cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace" }}>
                         📞 {pvConfig.manager_label || 'Manager approved'}
